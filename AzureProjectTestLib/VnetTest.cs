@@ -237,8 +237,8 @@ public class VnetTests
         Assert.AreEqual("*", allowAllTcpOutbound.DestinationAddressPrefix);
     }
 
-    [GameTask("Can you add 2 Network Security Rules to subnet 10.1.1.0/24? " +
-"First rule allows HTTP cross vent in bound from 10.1.0.0/24 with priority 201." +
+    [GameTask("Can you add 2 Network Security Rules to subnet 10.0.0.0/24? " +
+"First rule allows HTTP cross vnet in bound from 10.1.0.0/24 with priority 201." +
 "Second rule allows all TCP outbound to anywhere with priority 100.", 5, 10)]
     [Test]
     public void Test14_Vnet1PrivateSubnetNetworkSecurityGroup()

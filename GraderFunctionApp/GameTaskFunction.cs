@@ -23,15 +23,15 @@ namespace GraderFunctionApp
         private static readonly ObjectCache TokenCache = MemoryCache.Default;
         private static async Task<string> Rephrases(string sentence)
         {
-            var rnd = new Random();
-            var version = rnd.Next(1, 3);
-            var cacheKey = sentence + version;
+                var rnd = new Random();
+                var version = rnd.Next(1, 3);
+                var cacheKey = sentence + version;
 
-            var tokenContents = TokenCache.GetCacheItem(cacheKey);
-            if (tokenContents != null)
-            {
-                return tokenContents.Value.ToString();
-            }
+                var tokenContents = TokenCache.GetCacheItem(cacheKey);
+                if (tokenContents != null)
+                {
+                    return tokenContents.Value.ToString();
+                }
 
             var azureOpenAiEndpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
             var azureOpenAiApiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY");
