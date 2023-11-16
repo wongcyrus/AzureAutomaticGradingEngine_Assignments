@@ -28,7 +28,9 @@
 				"ms-python.python",
 				"ms-python.autopep8",
 				"ms-python.pylint",
-				"emeraldwalk.runonsave"
+				"emeraldwalk.runonsave",
+				"github.copilot",
+				"github.copilot-chat"
 			]
 		}
 	}
