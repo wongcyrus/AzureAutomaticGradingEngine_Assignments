@@ -9,7 +9,7 @@
 		<PackageReference Include="System.Runtime.Caching" Version="7.0.0" />
 	</ItemGroup>
 	<ItemGroup>
-	  <ProjectReference Include="..\AzureProjectTestLib\AzureProjectTestLib.csproj" />
+		<ProjectReference Include="..\AzureProjectTestLib\AzureProjectTestLib.csproj" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Update="host.json">

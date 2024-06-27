@@ -41,7 +41,14 @@ AZURE_OPENAI_API_KEY=
 DEPLOYMENT_OR_MODEL_NAME=gpt-35-turbo
 ```
 
+Login Azure and set subscription
 ```
+az login --use-device-code --tenant XXX
+az account set --subscription "YYY"
+```
+
+```
+npm install --global cdktf-cli@latest
 npm i
 cdktf deploy --auto-approve
 ```

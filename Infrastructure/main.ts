@@ -2,9 +2,8 @@ import { AzureFunctionFileSharePublisherConstruct } from "azure-common-construct
 import { AzureFunctionWindowsConstruct } from "azure-common-construct/patterns/AzureFunctionWindowsConstruct";
 import { PublishMode } from "azure-common-construct/patterns/PublisherConstruct";
 import { App, TerraformOutput, TerraformStack } from "cdktf";
-import { AzurermProvider } from "cdktf-azure-providers/.gen/providers/azurerm/azurerm-provider";
+import { AzurermProvider } from "cdktf-azure-providers/.gen/providers/azurerm/provider";
 import { ResourceGroup } from "cdktf-azure-providers/.gen/providers/azurerm/resource-group";
-
 import { Resource } from "cdktf-azure-providers/.gen/providers/null/resource";
 import { Construct } from "constructs";
 import path = require("path");
@@ -64,8 +63,7 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
           command: "dotnet publish -p:PublishProfile=FolderProfile"
         },
       },
-    ]);
-
+    ]); 
     const testOutputFolder = path.join(__dirname, "..", "/AzureProjectTest/bin/Release/net6.0/publish/win-x64/");
     const azureFunctionFileSharePublisherConstruct = new AzureFunctionFileSharePublisherConstruct(this, prefix + "AzureFunctionFileSharePublisherConstruct", {
       functionApp: azureFunctionConstruct.functionApp,
