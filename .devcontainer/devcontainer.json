@@ -1,44 +1,53 @@
 {
-  "image": "mcr.microsoft.com/devcontainers/universal:2",
-  "features": {
-	  "ghcr.io/devcontainers-contrib/features/terraform-asdf:2": {},
-	   "ghcr.io/devcontainers/features/dotnet:2": {}
-  },
-  // Configure tool-specific properties.
-	"customizations": {
-		// Configure properties specific to VS Code.
-		"vscode": {
-			// Set *default* container specific settings.json values on container create.
-			"settings": {
-				"python.defaultInterpreterPath": "~/.python/current/bin/python3",			
-				"pylint.enabled": true,
-				"pylint.path": ["/usr/local/py-utils/bin/pylint"],
-				"flake8.enabled": true,
-				"flake8.path": ["/usr/local/py-utils/bin/flake8"],				
-				"python.testing.pytestArgs": [],
-				"python.testing.unittestEnabled": false,
-				"python.testing.pytestEnabled": true,
-				"python.analysis.extraPaths": [
-					"./tests/unit_test_helper"
-				],
-				"pylint.args": [
-					"--disable=C0111"
-				]
-			},
-			// Add the IDs of extensions you want installed when the container is created.
-			"extensions": [
-				"ms-python.python",
-				"ms-python.autopep8",
-				"ms-python.pylint",
-				"emeraldwalk.runonsave",
-				"github.copilot",
-				"github.copilot-chat",
-				"ms-dotnettools.csharp",
-			        "ms-dotnettools.csdevkit",
-			        "editorconfig.editorconfig",			       
-			        "formulahendry.dotnet-test-explorer",
-			        "esbenp.prettier-vscode"
-			]
-		}
-	}
+   "image":"mcr.microsoft.com/devcontainers/universal:2",
+   "features":{
+      "ghcr.io/devcontainers-contrib/features/terraform-asdf:2":{
+         
+      },
+      "ghcr.io/devcontainers/features/dotnet:2":{
+         
+      }
+   },
+   "hostRequirements":{
+      "memory":"8gb"
+   },
+   "customizations":{
+      "vscode":{
+         "settings":{
+            "python.defaultInterpreterPath":"~/.python/current/bin/python3",
+            "pylint.enabled":true,
+            "pylint.path":[
+               "/usr/local/py-utils/bin/pylint"
+            ],
+            "flake8.enabled":true,
+            "flake8.path":[
+               "/usr/local/py-utils/bin/flake8"
+            ],
+            "python.testing.pytestArgs":[
+               
+            ],
+            "python.testing.unittestEnabled":false,
+            "python.testing.pytestEnabled":true,
+            "python.analysis.extraPaths":[
+               "./tests/unit_test_helper"
+            ],
+            "pylint.args":[
+               "--disable=C0111"
+            ]
+         },
+         "extensions":[
+            "ms-python.python",
+            "ms-python.autopep8",
+            "ms-python.pylint",
+            "emeraldwalk.runonsave",
+            "github.copilot",
+            "github.copilot-chat",
+            "ms-dotnettools.csharp",
+            "ms-dotnettools.csdevkit",
+            "editorconfig.editorconfig",
+            "formulahendry.dotnet-test-explorer",
+            "esbenp.prettier-vscode"
+         ]
+      }
+   }
 }
