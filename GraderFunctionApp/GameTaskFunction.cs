@@ -11,10 +11,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Azure;
-using Azure.AI.OpenAI;
+using OpenAI.Chat;
 using AzureProjectTestLib.Helper;
 
 using System.Runtime.Caching;
+using Azure.AI.OpenAI;
 
 namespace GraderFunctionApp
 {
@@ -23,15 +24,15 @@ namespace GraderFunctionApp
         private static readonly ObjectCache TokenCache = MemoryCache.Default;
         private static async Task<string> Rephrases(string sentence)
         {
-                var rnd = new Random();
-                var version = rnd.Next(1, 3);
-                var cacheKey = sentence + version;
+            var rnd = new Random();
+            var version = rnd.Next(1, 3);
+            var cacheKey = sentence + version;
 
-                var tokenContents = TokenCache.GetCacheItem(cacheKey);
-                if (tokenContents != null)
-                {
-                    return tokenContents.Value.ToString();
-                }
+            var tokenContents = TokenCache.GetCacheItem(cacheKey);
+            if (tokenContents != null)
+            {
+                return tokenContents.Value.ToString();
+            }
 
             var azureOpenAiEndpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
             var azureOpenAiApiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY");
@@ -40,52 +41,49 @@ namespace GraderFunctionApp
             if (azureOpenAiEndpoint == null || azureOpenAiApiKey == null || deploymentOrModelName == null)
                 return sentence;
 
-            var openAiClient = new OpenAIClient(
+            AzureOpenAIClient openAiClient = new(
                 new Uri(azureOpenAiEndpoint),
-                new AzureKeyCredential(azureOpenAiApiKey)
-            );
-            var chatCompletionsOptions = new ChatCompletionsOptions
-            {
-                Messages =
-                {
-                    new ChatMessage(ChatRole.System, "You are a Microsoft Azure game dialogue designer,Good at designing lively and interesting dialogue." +
-                                                     "You only reply to instruction to ask the player setup something in Microsoft Azure."),
-                    new ChatMessage(ChatRole.User,
-                        $"You need to help me rewrite a sentence with the following rule:" +
-                        $"1. Keep all technical teams and Noun. " +
-                        $"2. It is instructions to ask player to complete tasks." +
-                        $"3. In a funny style to the brave (勇者) with some emojis" +
-                        $"4. In both English and Traditional Chinese." +
-                        $"5. English goes first, and Chinese goes next." +
-                        $"6. Only reply to the rewritten sentence, and don't answer anything else." +
-                        $"Rewrite the following sentence:\n\n\n{sentence}\n"
-                        ),
-                },
-                Temperature = (float)0.9,
-                MaxTokens = 800,
-                NucleusSamplingFactor = (float)0.95,
-                FrequencyPenalty = 0,
-                PresencePenalty = 0,
-            };
-            var chatCompletionsResponse = await openAiClient.GetChatCompletionsAsync(
-                deploymentOrModelName,
-                chatCompletionsOptions
-            );
+                new AzureKeyCredential(azureOpenAiApiKey));
+            ChatClient client = openAiClient.GetChatClient(deploymentOrModelName);
 
-            var chatMessage = chatCompletionsResponse.Value.Choices[0].Message;
+            var messages = new List<ChatMessage>(){
+            new SystemChatMessage("You are a Microsoft Azure game dialogue designer,Good at designing lively and interesting dialogue." +
+                                  "You only reply to instruction to ask the player setup something in Microsoft Azure."),
+            new UserChatMessage(
+                $"You need to help me rewrite a sentence with the following rule:" +
+                $"1. Keep all technical teams and Noun. " +
+                $"2. It is instructions to ask player to complete tasks." +
+                $"3. In a funny style to the brave (勇者) with some emojis" +
+                $"4. In both English and Traditional Chinese." +
+                $"5. English goes first, and Chinese goes next." +
+                $"6. Only reply to the rewritten sentence, and don't answer anything else." +
+                $"Rewrite the following sentence:\n\n\n{sentence}\n")
+            };
+            ChatCompletion response = await client.CompleteChatAsync(messages,
+                new ChatCompletionOptions()
+                {
+                    IncludeLogProbabilities = true,
+                    TopLogProbabilityCount = 3,
+                    MaxTokens = 800,
+                    Temperature = 0.9f,
+                    FrequencyPenalty = 0,
+                    PresencePenalty = 0
+                });
+
+            var chatMessage = response.Content[0].Text;
             var policy = new CacheItemPolicy
             {
                 Priority = CacheItemPriority.Default,
                 // Setting expiration timing for the cache
                 AbsoluteExpiration = DateTimeOffset.Now.AddMinutes(15)
             };
-            tokenContents = new CacheItem(cacheKey, chatMessage.Content);
+            tokenContents = new CacheItem(cacheKey, chatMessage);
             TokenCache.Set(tokenContents, policy);
-            return chatMessage.Content;
+            return chatMessage;
         }
 
         [FunctionName("GameTaskFunction")]
-        public static async Task<IActionResult> Run(
+        public static IActionResult Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
             ILogger log)
         {
