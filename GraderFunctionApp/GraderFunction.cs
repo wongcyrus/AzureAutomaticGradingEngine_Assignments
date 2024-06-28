@@ -54,7 +54,7 @@ namespace GraderFunctionApp
         Azure Credentials<br/>
         <textarea name='credentials' required  rows='15' cols='100'></textarea>
         <br/>
-        NUnit Test filter<br/>
+        NUnit Test Name<br/>
         <input type='text' id='filter' name='filter' size='50'/><br/>
         <button type='submit'>Run Test</button>
     </form>
