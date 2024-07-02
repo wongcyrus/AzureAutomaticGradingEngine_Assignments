@@ -1,14 +1,8 @@
-﻿using System;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using Azure;
 using OpenAI.Chat;
@@ -16,20 +10,27 @@ using AzureProjectTestLib.Helper;
 
 using System.Runtime.Caching;
 using Azure.AI.OpenAI;
+using Microsoft.Azure.Functions.Worker;
 
 namespace GraderFunctionApp
 {
-    public static class GameTaskFunction
+    public class GameTaskFunction
     {
+        private readonly ILogger _logger;
         private static readonly ObjectCache TokenCache = MemoryCache.Default;
-        private static async Task<string> Rephrases(string sentence)
+        public GameTaskFunction(ILoggerFactory loggerFactory)
+        {
+            _logger = loggerFactory.CreateLogger<GameTaskFunction>();
+        }
+
+        private static async Task<string?> Rephrases(string sentence)
         {
             var rnd = new Random();
             var version = rnd.Next(1, 3);
             var cacheKey = sentence + version;
 
-            var tokenContents = TokenCache.GetCacheItem(cacheKey);
-            if (tokenContents != null)
+            var tokenContents = TokenCache?.GetCacheItem(cacheKey);
+            if (tokenContents != null && tokenContents.Value != null)
             {
                 return tokenContents.Value.ToString();
             }
@@ -78,14 +79,13 @@ namespace GraderFunctionApp
                 AbsoluteExpiration = DateTimeOffset.Now.AddMinutes(15)
             };
             tokenContents = new CacheItem(cacheKey, chatMessage);
-            TokenCache.Set(tokenContents, policy);
+            TokenCache?.Set(tokenContents, policy);
             return chatMessage;
         }
 
-        [FunctionName("GameTaskFunction")]
-        public static IActionResult Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
-            ILogger log)
+        [Function("GameTaskFunction")]
+        public IActionResult Run(
+            [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req)
         {
             var json = GetTasksJson(true);
             return new ContentResult { Content = json, ContentType = "application/json", StatusCode = 200 };
@@ -94,7 +94,7 @@ namespace GraderFunctionApp
         public static string GetTasksJson(bool rephrases)
         {
             {
-                var assembly = Assembly.GetAssembly(type: typeof(GameClassAttribute));
+                var assembly = Assembly.GetAssembly(type: typeof(GameClassAttribute))!;
                 var allTasks = new List<Task<GameTaskData>>();
                 foreach (var testClass in GetTypesWithHelpAttribute(assembly))
                 {
@@ -106,9 +106,9 @@ namespace GraderFunctionApp
                         .Select(async c => new GameTaskData()
                         {
                             Name = testClass.FullName + "." + c.Name,
-                            Tests = new[] { testClass.FullName + "." + c.Name },
+                            Tests = [testClass.FullName + "." + c.Name],
                             GameClassOrder = gameClass!.Order,
-                            Instruction = rephrases ? await Rephrases(c.GameTask.Instruction) : c.GameTask.Instruction,
+                            Instruction = rephrases ? await Rephrases(c.GameTask.Instruction) ?? c.GameTask.Instruction : c.GameTask.Instruction,
                             Filter = "test=" + testClass.FullName + "." + c.Name,
                             Reward = c.GameTask.Reward,
                             TimeLimit = c.GameTask.TimeLimit
@@ -123,7 +123,7 @@ namespace GraderFunctionApp
                                 Name = string.Join(" ", c.Select(a => testClass.FullName + "." + a.Name)),
                                 Tests = c.Select(a => testClass.FullName + "." + a.Name).ToArray(),
                                 GameClassOrder = gameClass!.Order,
-                                Instruction = rephrases ? await Rephrases(string.Join("", c.Select(a => a.GameTask.Instruction))) : string.Join("", c.Select(a => a.GameTask.Instruction)),
+                                Instruction = rephrases ? await Rephrases(string.Join("", c.Select(a => a.GameTask.Instruction))) ?? string.Join("", c.Select(a => a.GameTask.Instruction)) : string.Join("", c.Select(a => a.GameTask.Instruction)),
                                 Filter =
                                     string.Join("||", c.Select(a => "test==\"" + testClass.FullName + "." + a.Name + "\"")),
                                 Reward = c.Sum(a => a.GameTask.Reward),
