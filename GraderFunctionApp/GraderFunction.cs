@@ -1,41 +1,38 @@
-using System;
 using System.Diagnostics;
-using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.Azure.Functions.Worker;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using ExecutionContext = Microsoft.Azure.WebJobs.ExecutionContext;
-using System.Collections.Generic;
-using System.Linq;
 using System.Xml;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 
 namespace GraderFunctionApp
 {
-    public static class GraderFunction
+    public class GraderFunction
     {
 
         public class RequestBodyModel
         {
-            public string Trace { get; set; }
-            public string Credentials { get; set; }
-            public string Filter { get; set; }
+            public required string Trace { get; set; }
+            public required string Credentials { get; set; }
+            public required string Filter { get; set; }
         }
 
-
-        [FunctionName(nameof(AzureGraderFunction))]
-        public static async Task<IActionResult> AzureGraderFunction(
-             [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
-             ILogger log, ExecutionContext context)
+        private readonly ILogger _logger;
+        public GraderFunction(ILoggerFactory loggerFactory)
         {
-            log.LogInformation("Start AzureGraderFunction");
+            _logger = loggerFactory.CreateLogger<GraderFunction>();
+        }
+
+        [Function(nameof(AzureGraderFunction))]
+        public async Task<IActionResult> AzureGraderFunction(
+             [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
+             ExecutionContext context)
+        {
+            _logger.LogInformation("Start AzureGraderFunction");
 
 
             if (req.Method == "GET")
@@ -54,7 +51,7 @@ namespace GraderFunctionApp
         Azure Credentials<br/>
         <textarea name='credentials' required  rows='15' cols='100'></textarea>
         <br/>
-        NUnit Test filter<br/>
+        NUnit Test Name<br/>
         <input type='text' id='filter' name='filter' size='50'/><br/>
         <button type='submit'>Run Test</button>
     </form>
@@ -73,21 +70,21 @@ namespace GraderFunctionApp
                     };
                 }
 
-                string credentials = req.Query["credentials"];
-                string filter = req.Query["filter"];
+                string credentials = req.Query["credentials"]!;
+                string filter = req.Query["filter"]!;
 
-                string xml;
+                string? xml;
                 if (req.Query.ContainsKey("trace"))
                 {
-                    string trace = req.Query["trace"];
+                    string trace = req.Query["trace"]!;
                     var email = ExtractEmail(trace);
-                    log.LogInformation("start:" + trace);
-                    xml = await RunUnitTestProcess(context, log, credentials, email, filter);
-                    log.LogInformation("end:" + trace);
+                    _logger.LogInformation("start:" + trace);
+                    xml = await RunUnitTestProcess(context, _logger, credentials, email, filter);
+                    _logger.LogInformation("end:" + trace);
                 }
                 else
                 {
-                    xml = await RunUnitTestProcess(context, log, credentials, "Anonymous", filter);
+                    xml = await RunUnitTestProcess(context, _logger, credentials, "Anonymous", filter);
                 }
                 return new ContentResult { Content = xml, ContentType = "application/xml", StatusCode = 200 };
 
@@ -95,10 +92,10 @@ namespace GraderFunctionApp
 
             if (req.Method == "POST")
             {
-                log.LogInformation("POST Request");
-                string needXml = req.Query["xml"];
-                string credentials = req.Form["credentials"];
-                string filter = req.Form["filter"];
+                _logger.LogInformation("POST Request");
+                string needXml = req.Query["xml"]!;
+                string credentials = req.Form["credentials"]!;
+                string filter = req.Form["filter"]!;
                 if (credentials == null)
                 {
                     return new ContentResult
@@ -108,10 +105,10 @@ namespace GraderFunctionApp
                         StatusCode = 422
                     };
                 }
-                var xml = await RunUnitTestProcess(context, log, credentials, "Anonymous", filter);
+                var xml = await RunUnitTestProcess(context, _logger, credentials, "Anonymous", filter);
                 if (string.IsNullOrEmpty(needXml))
                 {
-                    var result = ParseNUnitTestResult(xml);
+                    var result = ParseNUnitTestResult(xml!);
                     return new JsonResult(result);
                 }
                 return new ContentResult { Content = xml, ContentType = "application/xml", StatusCode = 200 };
@@ -120,12 +117,12 @@ namespace GraderFunctionApp
             return new OkObjectResult("ok");
         }
 
-        private static async Task<string> RunUnitTestProcess(ExecutionContext context, ILogger log, string credentials, string trace, string filter)
+        private static async Task<string?> RunUnitTestProcess(ExecutionContext context, ILogger log, string credentials, string trace, string filter)
         {
             var tempDir = GetTemporaryDirectory(trace);
             var tempCredentialsFilePath = Path.Combine(tempDir, "azureauth.json");
 
-            await File.WriteAllLinesAsync(tempCredentialsFilePath, new string[] { credentials });
+            await File.WriteAllLinesAsync(tempCredentialsFilePath, [credentials]);
 
             string workingDirectoryInfo = Environment.ExpandEnvironmentVariables(@"%HOME%\data\Functions\Tests");
             string exeLocation = Path.Combine(workingDirectoryInfo, "AzureProjectTest.exe");
@@ -262,9 +259,9 @@ namespace GraderFunctionApp
         {
             var testCases = xmlDoc.SelectNodes("/test-run/test-suite/test-suite/test-suite/test-case");
             var result = new Dictionary<string, int>();
-            foreach (XmlNode node in testCases)
+            foreach (XmlNode node in testCases!)
             {
-                result.Add(node.Attributes?["fullname"].Value, node.Attributes?["result"].Value == "Passed" ? 1 : 0);
+                result.Add(node?.Attributes?["fullname"]?.Value!, node?.Attributes?["result"]?.Value == "Passed" ? 1 : 0);
             }
 
             return result;
