@@ -51,16 +51,20 @@ az account set --subscription "YYY"
 cd Infrastructure/
 npm install --global cdktf-cli@latest
 npm i
+mkdir -p /workspaces/AzureAutomaticGradingEngine_Assignments/AzureProjectTest/bin/Release/net8.0/win-x64
 cdktf deploy --auto-approve
 ```
 
 ## Package UnitTest into exe
-Go to the \AzureProjectGrader\AzureProjectGrader path and run.
 ```
+cd AzureProjectTest
 dotnet publish -r win-x64 -c Release
 ```
 Use Microsoft Azure Storage Explorer 
 Upload all files in ```\AzureProjectTest\bin\Release\net6.0\win-x64``` to the storage account file share ```data/Functions/Tests```.
+```
+azcopy copy '/workspaces/AzureAutomaticGradingEngine_Assignments/AzureProjectTest/bin/Release/net8.0/win-x64/publish/*' 'https://eh4nl.file.core.windows.net/graderfunctionapp-3cd8data/Functions/Tests?<SAS Token>' --recursive=true
+```
 
 
 ## Contributing to Samples

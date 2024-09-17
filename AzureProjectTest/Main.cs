@@ -9,11 +9,13 @@ internal class Run
 {
     private static int Main(string[] args)
     {
-        //var trace = "trace";
-        //var tempDir = @"C:\Users\developer\Documents\test";
-        //var tempCredentialsFilePath = @"C:\Users\developer\Documents\debug.json";
-        //var where = "";
-        //var where = "test==\"AzureProjectTestLib.VnetTests.Test01_Have2VnetsIn2Regions\"||test==\"AzureProjectTestLib.VnetTests.Test02_VnetAddressSpace\"";
+        // var trace = "trace";
+        // var tempDir = @"/workspaces/AzureAutomaticGradingEngine_Assignments/testing";
+        // var tempCredentialsFilePath = @"/workspaces/AzureAutomaticGradingEngine_Assignments/testing/sp.json";
+        // var where = "";
+        // var where = "test==\"AzureProjectTestLib.VnetTests.Test01_Have2VnetsIn2Regions\"||test==\"AzureProjectTestLib.VnetTests.Test02_VnetAddressSpace\"";
+        // var where = "test==\"AzureProjectTestLib.AppServiceTest.Test04_FunctionAppSettings\"";
+
 
         var tempCredentialsFilePath = args[0];
         var tempDir = args[1];
