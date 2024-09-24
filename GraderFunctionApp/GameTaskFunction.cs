@@ -76,7 +76,7 @@ namespace GraderFunctionApp
             {
                 Priority = CacheItemPriority.Default,
                 // Setting expiration timing for the cache
-                AbsoluteExpiration = DateTimeOffset.Now.AddMinutes(15)
+                AbsoluteExpiration = DateTimeOffset.Now.AddHours(1)
             };
             tokenContents = new CacheItem(cacheKey, chatMessage);
             TokenCache?.Set(tokenContents, policy);
