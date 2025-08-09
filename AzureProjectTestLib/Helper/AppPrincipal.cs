@@ -6,8 +6,8 @@ namespace AzureProjectTestLib.Helper;
 [DataContract]
 public class AppPrincipal : JsonBase<AppPrincipal>
 {
-    [DataMember] public string appId;
-    [DataMember] public string displayName;
-    [DataMember] public string password;
-    [DataMember] public string tenant;
+    [DataMember] public string appId = string.Empty;
+    [DataMember] public string displayName = string.Empty;
+    [DataMember] public string password = string.Empty;
+    [DataMember] public string tenant = string.Empty;
 }

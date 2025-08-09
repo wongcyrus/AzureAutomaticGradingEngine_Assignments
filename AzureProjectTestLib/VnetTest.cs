@@ -71,8 +71,8 @@ public class VnetTests
     public void Test06_Vnet1PublicSubnetsRoutes()
     {
         using var scope = new TestScope();
-        var publicSubnet = scope.GetVnet1PublicSubnet();
-        publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, publicSubnet.Name,
+    var publicSubnet = scope.GetVnet1PublicSubnet();
+    publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, publicSubnet!.Name,
             "RouteTable");
 
         var localRoute =
@@ -91,8 +91,8 @@ public class VnetTests
     public void Test07_Vnet2PublicSubnetsRoutes()
     {
         using var scope = new TestScope();
-        var publicSubnet = scope.GetVnet2PublicSubnet();
-        publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet2.Name, publicSubnet.Name,
+    var publicSubnet = scope.GetVnet2PublicSubnet();
+    publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet2.Name, publicSubnet!.Name,
             "RouteTable");
 
         var localRoute =
@@ -111,8 +111,8 @@ public class VnetTests
     public void Test08_Vnet1PrivateSubnetsRoutes()
     {
         using var scope = new TestScope();
-        var privateSubnet = scope.GetVnet1PrivateSubnet();
-        privateSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, privateSubnet.Name,
+    var privateSubnet = scope.GetVnet1PrivateSubnet();
+    privateSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, privateSubnet!.Name,
             "RouteTable");
 
         var localRoute =
@@ -127,8 +127,8 @@ public class VnetTests
     public void Test09_Vnet2PrivateSubnetsRoutes()
     {
         using var scope = new TestScope();
-        var privateSubnet = scope.GetVnet2PrivateSubnet();
-        privateSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet2.Name, privateSubnet.Name,
+    var privateSubnet = scope.GetVnet2PrivateSubnet();
+    privateSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet2.Name, privateSubnet!.Name,
             "RouteTable");
 
         var localRoute =
@@ -143,8 +143,8 @@ public class VnetTests
     public void Test10_Vnet1PublicSubnetsNatGateway()
     {
         using var scope = new TestScope();
-        var publicSubnet = scope.GetVnet1PublicSubnet();
-        publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, publicSubnet.Name,
+    var publicSubnet = scope.GetVnet1PublicSubnet();
+    publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, publicSubnet!.Name,
             "NatGateway");
         Assert.IsNotNull(publicSubnet.NatGateway);
         var natGatewayId = publicSubnet.NatGateway.Id;
@@ -177,8 +177,8 @@ public class VnetTests
     public void Test12_Vnet1PublicSubnetNetworkSecurityGroup()
     {
         using var scope = new TestScope();
-        var publicSubnet = scope.GetVnet1PublicSubnet();
-        publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, publicSubnet.Name,
+    var publicSubnet = scope.GetVnet1PublicSubnet();
+    publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, publicSubnet!.Name,
             "NetworkSecurityGroup");
         var networkSecurityGroup = publicSubnet.NetworkSecurityGroup;
         Assert.IsNotNull(networkSecurityGroup);
@@ -211,8 +211,8 @@ public class VnetTests
     public void Test13_Vnet2PublicSubnetNetworkSecurityGroup()
     {
         using var scope = new TestScope();
-        var publicSubnet = scope.GetVnet2PublicSubnet();
-        publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet2.Name, publicSubnet.Name,
+    var publicSubnet = scope.GetVnet2PublicSubnet();
+    publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet2.Name, publicSubnet!.Name,
             "NetworkSecurityGroup");
         var networkSecurityGroup = publicSubnet.NetworkSecurityGroup;
         Assert.IsNotNull(networkSecurityGroup);
@@ -244,8 +244,8 @@ public class VnetTests
     public void Test14_Vnet1PrivateSubnetNetworkSecurityGroup()
     {
         using var scope = new TestScope();
-        var privateSubnet1 = scope.GetVnet1PrivateSubnet();
-        privateSubnet1 = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, privateSubnet1.Name,
+    var privateSubnet1 = scope.GetVnet1PrivateSubnet();
+    privateSubnet1 = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, privateSubnet1!.Name,
             "NetworkSecurityGroup");
         var networkSecurityGroup = privateSubnet1.NetworkSecurityGroup;
         Assert.IsNotNull(networkSecurityGroup);
@@ -260,7 +260,7 @@ public class VnetTests
         Assert.AreEqual("*", allowAllTcpOutbound.DestinationAddressPrefix);
 
         var crossVnetInbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c =>
-            c.SourceAddressPrefix == scope.GetVnet2PrivateSubnet().AddressPrefix);
+            c.SourceAddressPrefix == scope.GetVnet2PrivateSubnet()!.AddressPrefix);
         Assert.AreEqual("Allow", crossVnetInbound!.Access);
         Assert.AreEqual("Inbound", crossVnetInbound.Direction);
         Assert.AreEqual("*", crossVnetInbound.SourcePortRange);
@@ -278,8 +278,8 @@ public class VnetTests
     public void Test15_Vnet2PrivateSubnetNetworkSecurityGroup()
     {
         using var scope = new TestScope();
-        var privateSubnet2 = scope.GetVnet2PrivateSubnet();
-        privateSubnet2 = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet2.Name, privateSubnet2.Name,
+    var privateSubnet2 = scope.GetVnet2PrivateSubnet();
+    privateSubnet2 = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet2.Name, privateSubnet2!.Name,
             "NetworkSecurityGroup");
         var networkSecurityGroup = privateSubnet2.NetworkSecurityGroup;
         Assert.IsNotNull(networkSecurityGroup);
@@ -294,7 +294,7 @@ public class VnetTests
         Assert.AreEqual("*", allowAllTcpOutbound.DestinationAddressPrefix);
 
         var crossVnetInbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c =>
-            c.SourceAddressPrefix == scope.GetVnet1PrivateSubnet().AddressPrefix);
+            c.SourceAddressPrefix == scope.GetVnet1PrivateSubnet()!.AddressPrefix);
         Assert.AreEqual("Allow", crossVnetInbound!.Access);
         Assert.AreEqual("Inbound", crossVnetInbound.Direction);
         Assert.AreEqual("*", crossVnetInbound.SourcePortRange);
@@ -325,23 +325,23 @@ public class VnetTests
             Client.Dispose();
         }
 
-        public Subnet GetVnet1PublicSubnet()
+    public Subnet? GetVnet1PublicSubnet()
         {
             return Vnet1.Subnets.FirstOrDefault(c => c.AddressPrefix == "10.0.1.0/24");
         }
 
 
-        public Subnet GetVnet2PublicSubnet()
+    public Subnet? GetVnet2PublicSubnet()
         {
             return Vnet2.Subnets.FirstOrDefault(c => c.AddressPrefix == "10.1.1.0/24");
         }
 
-        public Subnet GetVnet1PrivateSubnet()
+    public Subnet? GetVnet1PrivateSubnet()
         {
             return Vnet1.Subnets.FirstOrDefault(c => c.AddressPrefix == "10.0.0.0/24");
         }
 
-        public Subnet GetVnet2PrivateSubnet()
+    public Subnet? GetVnet2PrivateSubnet()
         {
             return Vnet2.Subnets.FirstOrDefault(c => c.AddressPrefix == "10.1.0.0/24");
         }

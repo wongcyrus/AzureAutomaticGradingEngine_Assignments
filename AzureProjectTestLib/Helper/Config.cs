@@ -12,7 +12,8 @@ public class Config
         var azureAuthFilePath = TestContext.Parameters.Get("AzureCredentialsPath", null);
         var trace = TestContext.Parameters.Get("trace", null);
         TestContext.Out.WriteLine(trace);
-        var appPrincipal = AppPrincipal.FromJson(File.ReadAllText(azureAuthFilePath!));
+    var appPrincipal = AppPrincipal.FromJson(File.ReadAllText(azureAuthFilePath!))
+               ?? throw new InvalidOperationException("Failed to parse AppPrincipal from Azure credentials file.");
         Credentials = SdkContext.AzureCredentialsFactory.FromServicePrincipal(appPrincipal.appId, appPrincipal.password,
             appPrincipal.tenant, AzureEnvironment.AzureGlobalCloud);
         var authenticated = Microsoft.Azure.Management.Fluent.Azure.Configure().Authenticate(Credentials);

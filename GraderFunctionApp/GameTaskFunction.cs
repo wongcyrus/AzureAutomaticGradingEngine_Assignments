@@ -63,9 +63,7 @@ namespace GraderFunctionApp
             ChatCompletion response = await client.CompleteChatAsync(messages,
                 new ChatCompletionOptions()
                 {
-                    IncludeLogProbabilities = true,
-                    TopLogProbabilityCount = 3,
-                    MaxTokens = 800,
+                    MaxOutputTokenCount = 800,
                     Temperature = 0.9f,
                     FrequencyPenalty = 0,
                     PresencePenalty = 0
