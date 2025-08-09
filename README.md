@@ -49,11 +49,16 @@ az account set --subscription "YYY"
 
 ```
 cd Infrastructure/
+git submodule update --init --recursive
 npm install --global cdktf-cli@latest
 npm i
 mkdir -p /workspaces/AzureAutomaticGradingEngine_Assignments/AzureProjectTest/bin/Release/net8.0/win-x64
 cdktf deploy --auto-approve
 ```
+
+Notes on submodules:
+- If you cloned without submodules, run: `git submodule update --init --recursive`
+- To pull latest from the submodule remote later: `git submodule update --remote --merge Infrastructure/azure-common-construct`
 
 ## Package UnitTest into exe
 ```
