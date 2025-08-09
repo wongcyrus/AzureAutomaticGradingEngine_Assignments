@@ -86,6 +86,10 @@ namespace GraderFunctionApp
                 {
                     xml = await RunUnitTestProcess(context, _logger, credentials, "Anonymous", filter);
                 }
+                if (string.IsNullOrEmpty(xml))
+                {
+                    return new ContentResult { Content = "<error>Failed to run tests or no results produced.</error>", ContentType = "application/xml", StatusCode = 500 };
+                }
                 return new ContentResult { Content = xml, ContentType = "application/xml", StatusCode = 200 };
 
             }
@@ -96,7 +100,7 @@ namespace GraderFunctionApp
                 string needXml = req.Query["xml"]!;
                 string credentials = req.Form["credentials"]!;
                 string filter = req.Form["filter"]!;
-                if (credentials == null)
+                if (string.IsNullOrWhiteSpace(credentials))
                 {
                     return new ContentResult
                     {
@@ -106,6 +110,10 @@ namespace GraderFunctionApp
                     };
                 }
                 var xml = await RunUnitTestProcess(context, _logger, credentials, "Anonymous", filter);
+                if (string.IsNullOrEmpty(xml))
+                {
+                    return new ContentResult { Content = "<error>Failed to run tests or no results produced.</error>", ContentType = "application/xml", StatusCode = 500 };
+                }
                 if (string.IsNullOrEmpty(needXml))
                 {
                     var result = ParseNUnitTestResult(xml!);
@@ -122,39 +130,64 @@ namespace GraderFunctionApp
             var tempDir = GetTemporaryDirectory(trace);
             var tempCredentialsFilePath = Path.Combine(tempDir, "azureauth.json");
 
-            await File.WriteAllLinesAsync(tempCredentialsFilePath, [credentials]);
+            await File.WriteAllTextAsync(tempCredentialsFilePath, credentials);
 
-            string workingDirectoryInfo = Environment.ExpandEnvironmentVariables(@"%HOME%\data\Functions\Tests");
-            string exeLocation = Path.Combine(workingDirectoryInfo, "AzureProjectTest.exe");
-            log.LogInformation("Unit Test Exe Location: " + exeLocation);
+            var workingDirectoryInfo = GetTestsWorkingDirectory();
+            var exeLocation = Path.Combine(workingDirectoryInfo, "AzureProjectTest.exe");
+            var dllLocation = Path.Combine(workingDirectoryInfo, "AzureProjectTest.dll");
+            log.LogInformation("Unit Test Runner Location: exe={exeLocation} dll={dllLocation}", exeLocation, dllLocation);
 
 
-            if (string.IsNullOrEmpty(filter))
+            if (string.IsNullOrWhiteSpace(filter))
+            {
                 filter = "test==AzureProjectTestLib";
+            }
             else
             {
-                var serializerSettings = new JsonSerializerSettings
+                try
                 {
-                    ContractResolver = new CamelCasePropertyNamesContractResolver()
-                };
-                var jsonText = GameTaskFunction.GetTasksJson(false);
-                var json = JsonConvert.DeserializeObject<List<GameTaskData>>(jsonText, serializerSettings);
-                filter = json.First(c => c.Name == filter).Filter;
+                    var serializerSettings = new JsonSerializerSettings
+                    {
+                        ContractResolver = new CamelCasePropertyNamesContractResolver()
+                    };
+                    var jsonText = GameTaskFunction.GetTasksJson(false);
+                    var json = JsonConvert.DeserializeObject<List<GameTaskData>>(jsonText, serializerSettings);
+                    var mapped = json?.FirstOrDefault(c => string.Equals(c.Name, filter, StringComparison.OrdinalIgnoreCase))?.Filter;
+                    if (!string.IsNullOrWhiteSpace(mapped))
+                    {
+                        filter = mapped!;
+                    }
+                    else
+                    {
+                        log.LogWarning("Filter name '{filter}' not found in tasks mapping. Using provided filter as-is.", filter);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log.LogWarning(ex, "Failed to map filter name. Using provided filter as-is.");
+                }
             }
 
             log.LogInformation($@"{tempCredentialsFilePath} {tempDir} {trace} {filter}");
             try
             {
                 using var process = new Process();
+                var useDotnet = !File.Exists(exeLocation) && File.Exists(dllLocation);
                 var info = new ProcessStartInfo
                 {
                     WorkingDirectory = workingDirectoryInfo,
-                    FileName = exeLocation,
+                    FileName = useDotnet ? "dotnet" : exeLocation,
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                 };
+
+                // On non-Windows, prefer running the DLL via dotnet if the EXE is unavailable
+                if (useDotnet)
+                {
+                    info.ArgumentList.Add(dllLocation);
+                }
 
                 // Use named flags supported by the test runner to avoid positional/quoting issues
                 // --credentials, --work, --trace, --where
@@ -208,13 +241,23 @@ namespace GraderFunctionApp
                     //log.LogInformation(output.ToString());
 
                     var errorLog = error.ToString();
-                    log.LogError(errorLog);
-                    if (!string.IsNullOrEmpty(errorLog)) return null;
+                    if (!string.IsNullOrWhiteSpace(errorLog))
+                    {
+                        // Some runners write warnings to stderr; log but don't fail solely on stderr content
+                        log.LogWarning("Test runner stderr: {stderr}", errorLog);
+                    }
 
-                    var xml = await File.ReadAllTextAsync(Path.Combine(tempDir, "TestResult.xml"));
-                    Directory.Delete(tempDir, true);
-
-                    return xml;
+                    var resultPath = Path.Combine(tempDir, "TestResult.xml");
+                    if (File.Exists(resultPath))
+                    {
+                        var xml = await File.ReadAllTextAsync(resultPath);
+                        return xml;
+                    }
+                    else
+                    {
+                        log.LogError("TestResult.xml not found in work directory: {dir}", tempDir);
+                        return null;
+                    }
                 }
                 else
                 {
@@ -226,6 +269,20 @@ namespace GraderFunctionApp
             {
                 log.LogError(ex.ToString());
             }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(tempDir))
+                    {
+                        Directory.Delete(tempDir, true);
+                    }
+                }
+                catch (Exception cleanupEx)
+                {
+                    log.LogWarning(cleanupEx, "Failed to cleanup temp directory.");
+                }
+            }
             return null;
         }
 
@@ -235,6 +292,18 @@ namespace GraderFunctionApp
             Directory.CreateDirectory(tempDirectory);
             return tempDirectory;
         }
+        private static string GetTestsWorkingDirectory()
+        {
+            // Cross-platform: prefer HOME or UserProfile, then combine path segments
+            var home = Environment.GetEnvironmentVariable("HOME");
+            if (string.IsNullOrWhiteSpace(home))
+            {
+                home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            }
+            var dir = Path.Combine(home!, "data", "Functions", "Tests");
+            return dir;
+        }
+
         public static string ExtractEmail(string content)
         {
             const string matchEmailPattern =
@@ -249,8 +318,11 @@ namespace GraderFunctionApp
 
             // Find matches.
             var matches = rx.Matches(content);
-
-            return matches[0].Value;
+            if (matches.Count > 0)
+            {
+                return matches[0].Value;
+            }
+            return "Anonymous";
 
         }
 
@@ -263,11 +335,15 @@ namespace GraderFunctionApp
 
         private static Dictionary<string, int> ParseNUnitTestResult(XmlDocument xmlDoc)
         {
-            var testCases = xmlDoc.SelectNodes("/test-run/test-suite/test-suite/test-suite/test-case");
+            // More robust: select all test-case nodes anywhere in the tree
+            var testCases = xmlDoc.SelectNodes("//test-case");
             var result = new Dictionary<string, int>();
             foreach (XmlNode node in testCases!)
             {
-                result.Add(node?.Attributes?["fullname"]?.Value!, node?.Attributes?["result"]?.Value == "Passed" ? 1 : 0);
+                var fullName = node?.Attributes?["fullname"]?.Value;
+                if (string.IsNullOrEmpty(fullName)) continue;
+                var passed = string.Equals(node?.Attributes?["result"]?.Value, "Passed", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+                result[fullName!] = passed;
             }
 
             return result;
