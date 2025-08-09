@@ -16,11 +16,16 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     super(scope, name);
 
     new AzurermProvider(this, "AzureRm", {
-      features: {
-        resourceGroup: {
-          preventDeletionIfContainsResources: false
-        }
-      }
+      subscriptionId: process.env.AZURE_SUBSCRIPTION_ID,
+      features: [
+        {
+          resourceGroup: [
+            {
+              preventDeletionIfContainsResources: false,
+            },
+          ],
+        },
+      ],
     })
 
 

@@ -63,7 +63,7 @@ dotnet publish -r win-x64 -c Release
 Use Microsoft Azure Storage Explorer 
 Upload all files in ```\AzureProjectTest\bin\Release\net6.0\win-x64``` to the storage account file share ```data/Functions/Tests```.
 ```
-azcopy copy '/workspaces/AzureAutomaticGradingEngine_Assignments/AzureProjectTest/bin/Release/net8.0/win-x64/publish/*' 'https://eh4nl.file.core.windows.net/graderfunctionapp-3cd8data/Functions/Tests?<SAS Token>' --recursive=true
+azcopy copy '/workspaces/AzureAutomaticGradingEngine_Assignments/AzureProjectTest/bin/Release/net8.0/win-x64/publish/*' 'https://<ID>.file.core.windows.net/graderfunctionapp2025-1568/data/Functions/Tests?<SAS Token>' --recursive=true
 ```
 
 

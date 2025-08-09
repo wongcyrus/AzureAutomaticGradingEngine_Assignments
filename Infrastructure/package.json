@@ -19,19 +19,19 @@
   "engines": {
     "node": ">=14.0"
   },
-  "dependencies": {
-    "azure-common-construct": "^0.0.74",
-    "cdktf": "^0.20.8",
-    "cdktf-azure-providers": "^0.0.12",  
-    "constructs": "^10.3.0",
-    "dotenv": "^16.4.5"
+  "dependencies": {    
+    "azure-common-construct": "^0.0.75",
+    "cdktf": "^0.21.0",
+    "cdktf-azure-providers": "^0.0.14",
+    "constructs": "^10.4.2",
+    "dotenv": "^17.2.1"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.13",
-    "@types/node": "^22.5.4",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.2.5",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.2.1",
+    "jest": "^30.0.5",
+    "ts-jest": "^29.4.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5.6.2"
+    "typescript": "^5.9.2"
   }
 }
