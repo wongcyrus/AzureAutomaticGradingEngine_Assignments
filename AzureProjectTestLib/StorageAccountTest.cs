@@ -124,7 +124,7 @@ internal class StorageAccountTest
         Assert.AreEqual("This is error page.", error);
     }
 
-    [GameTask("I need a Blog container named 'code' in Storage account tagged 'usage' with 'logic'. Can you help?", 2,
+    [GameTask("I need a Blob container named 'code' in Storage account tagged 'usage' with 'logic'. Can you help?", 2,
         10)]
     [Test]
     public void Test05_StorageAccountCodeContainer()

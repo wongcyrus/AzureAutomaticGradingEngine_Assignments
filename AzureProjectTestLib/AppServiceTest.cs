@@ -45,7 +45,7 @@ internal class AppServiceTest
     }
 
     [GameTask(
-        "Can you a Azure Function App v4 in Hong Kong for node.js 16? I want to use Windows in Consumption plan. " +
+        "Can you create an Azure Function App v4 in Hong Kong for Node.js 16? Use Windows in the Consumption plan. " +
         "Tag the AppServicePlan with {key:AppServicePlan}." +
         "Tag the FunctionApps with {key:FunctionApp}.",
     10, 20, 1)]
@@ -96,8 +96,7 @@ internal class AppServiceTest
     }
 
     [GameTask(
-"I want to set and confirm app settings:" +
-     "APPINSIGHTS_INSTRUMENTATIONKEY to the ApplicationInsights InstrumentationKey.",
+"I want to set and confirm app settings: APPINSIGHTS_INSTRUMENTATIONKEY to the Application Insights InstrumentationKey.",
 5, 10)]
     [Test]
     public void Test05_FunctionAppSettingsInstrumentationKey()
@@ -109,7 +108,7 @@ internal class AppServiceTest
     }
 
     [GameTask(
-"Create a node.js Azure function with binding: " +
+"Create a Node.js Azure Function with the exact binding JSON: " +
  "{\"disabled\":false,\"bindings\":[{\"type\":\"httpTrigger\",\"name\":\"req\",\"direction\":\"in\",\"dataType\":\"string\",\"authLevel\":\"anonymous\",\"methods\":[\"get\"]},{\"type\":\"http\",\"direction\":\"out\",\"name\":\"res\"},{\"type\":\"queue\",\"name\":\"jobQueue\",\"queueName\":\"job\",\"direction\":\"out\",\"connection\":\"StorageConnectionAppSetting\"},{\"tableName\":\"message\",\"name\":\"messageTable\",\"type\":\"table\",\"direction\":\"out\",\"connection\":\"StorageConnectionAppSetting\"}]}",
 5, 10)]
     [Test]
@@ -123,8 +122,7 @@ internal class AppServiceTest
         Assert.AreEqual(expected, actual);
     }
     [GameTask(
-        "Update a node.js Azure function source code " +
-        "When receive a get request ?user=tester&message=abcd, then return 'Hello, tester and I received your message: abcd'",
+        "Update a Node.js Azure Function source code: when receiving a GET request ?user=tester&message=<value>, return 'Hello, tester and I received your message: <value>'",
 10, 10)]
     [Test]
     public async Task Test05_AzureFunctionCallWithHttpResponse()
@@ -138,8 +136,7 @@ internal class AppServiceTest
     }
 
     [GameTask(
-    "Update a node.js Azure function source code " +
-    "When receive a get request ?user=tester&message=abcd, then save pk 'tester', row key 'abcd' into Azure Storage table named 'message'.",
+    "Update a Node.js Azure Function source code: when receiving a GET request ?user=tester&message=<value>, then save PartitionKey 'tester' and RowKey '<value>' into Azure Table 'message'.",
 10, 10)]
     [Test]
     public async Task Test06_AzureFunctionCallSaveDataToAzureTable()
@@ -162,8 +159,7 @@ internal class AppServiceTest
     }
 
     [GameTask(
-"Update a node.js Azure function source code " +
-"When receive a get request ?user=tester&message=abcd, then put message {'user':'tester','message': 'abcd','time':'<current time>'} into Azure Storage queue named 'job'.",
+"Update a Node.js Azure Function source code: when receiving a GET request ?user=tester&message=<value>, then put a JSON message {'user':'tester','message':'<value>','time':'<current time>'} into Azure Storage queue 'job'.",
 10, 10)]
     [Test]
     public async Task Test07_AzureFunctionCallPutMessageToQueue()

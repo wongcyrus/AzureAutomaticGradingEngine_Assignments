@@ -35,7 +35,7 @@ internal class ApplicationInsightTest
     }
 
     [GameTask(
-    "Can you a ApplicationInsight in Hong Kong? Type is 'other', keeps log for 30 days, and tag name is 'key' with value 'ApplicationInsights'.",    
+    "Can you create an Application Insights in Hong Kong? Type is 'other', keep logs for 30 days, and add tag 'key'='ApplicationInsights'.",    
     3, 10, 1)]
     [Test]
     public void Test01_AppServicePlanWithTag()
