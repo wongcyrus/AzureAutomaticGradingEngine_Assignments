@@ -11,11 +11,27 @@
             "preLaunchTask": "build AzureProjectTest",
             "program": "${workspaceFolder}/AzureProjectTest/bin/Debug/net8.0/AzureProjectTest.dll",
             "args": [
-                // args are optional; Main.cs currently uses hardcoded paths
-                "${workspaceFolder}/testing/sp.json",
-                "${workspaceFolder}/testing",
-                "trace",
-                ""
+                "--creds=${workspaceFolder}/testing/sp.json",
+                "--work=${workspaceFolder}/testing",
+                "--trace=trace"
+                // To filter tests, add: "--where=test==\"Full.Namespace.Class.TestName\""
+            ],
+            "cwd": "${workspaceFolder}/AzureProjectTest",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "justMyCode": true
+        },
+        {
+            "name": ".NET: Run AzureProjectTest (filtered)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build AzureProjectTest",
+            "program": "${workspaceFolder}/AzureProjectTest/bin/Debug/net8.0/AzureProjectTest.dll",
+            "args": [
+                "--creds=${workspaceFolder}/testing/sp.json",
+                "--work=${workspaceFolder}/testing",
+                "--trace=trace",
+                "--where=test==\"AzureProjectTestLib.VnetTests.Test01_Have2VnetsIn2Regions\""
             ],
             "cwd": "${workspaceFolder}/AzureProjectTest",
             "console": "integratedTerminal",

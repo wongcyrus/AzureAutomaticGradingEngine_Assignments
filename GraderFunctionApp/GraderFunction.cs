@@ -150,12 +150,18 @@ namespace GraderFunctionApp
                 {
                     WorkingDirectory = workingDirectoryInfo,
                     FileName = exeLocation,
-                    Arguments = $@"{tempCredentialsFilePath} {tempDir} {trace} {filter}",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                 };
+
+                // Use named flags supported by the test runner to avoid positional/quoting issues
+                // --credentials, --work, --trace, --where
+                info.ArgumentList.Add($"--credentials={tempCredentialsFilePath}");
+                info.ArgumentList.Add($"--work={tempDir}");
+                info.ArgumentList.Add($"--trace={trace}");
+                info.ArgumentList.Add($"--where={filter}");
 
                 process.StartInfo = info;
 
