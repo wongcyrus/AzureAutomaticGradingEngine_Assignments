@@ -66,6 +66,43 @@ Upload all files in ```\AzureProjectTest\bin\Release\net6.0\win-x64``` to the st
 azcopy copy '/workspaces/AzureAutomaticGradingEngine_Assignments/AzureProjectTest/bin/Release/net8.0/win-x64/publish/*' 'https://<ID>.file.core.windows.net/graderfunctionapp2025-1568/data/Functions/Tests?<SAS Token>' --recursive=true
 ```
 
+## Create or reuse Service Principal (Azure Cloud Shell)
+
+Use the helper script to create or reuse a single Service Principal with the exact roles required by the tests, and output credentials to a JSON file the tests consume.
+
+What it does:
+- Reuses an existing SP by name (or creates it if missing) and refreshes its secret.
+- Assigns roles:
+    - Reader at the subscription scope
+    - Website Contributor at the resource group scope (via roleDefinitionId GUID)
+- Writes credentials JSON with: appId, displayName, password, tenant
+
+Run in Azure Cloud Shell (Bash):
+
+```bash
+chmod +x scripts/create-sp-cloudshell.sh
+
+# Reuse a single SP and write credentials to sp.json (defaults: -g projProd, -n grading-engine-sp, -o sp.json)
+scripts/create-sp-cloudshell.sh -s <subscriptionId>
+```
+
+Notes:
+- Idempotent: reruns reuse the same SP and re-assign roles only if missing.
+- Website Contributor roleDefinitionId used: de139f84-1756-47ae-9be6-808fbbe84772
+
+Optional cleanup (delete previous SP by appId from the generated file):
+
+```bash
+az ad sp delete --id "$(jq -r '.appId' testing/sp.json)"
+```
+
+Run tests locally using the generated credentials:
+
+```bash
+dotnet run --project AzureProjectTest/AzureProjectTest.csproj --configuration Debug -- \
+    $(pwd)/testing/sp.json $(pwd)/testing trace ""
+```
+
 
 ## Contributing to Samples
 
