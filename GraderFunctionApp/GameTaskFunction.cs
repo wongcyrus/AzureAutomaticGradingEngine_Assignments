@@ -11,6 +11,7 @@ using AzureProjectTestLib.Helper;
 using System.Runtime.Caching;
 using Azure.AI.OpenAI;
 using Microsoft.Azure.Functions.Worker;
+using System.Linq;
 
 namespace GraderFunctionApp
 {
@@ -23,7 +24,7 @@ namespace GraderFunctionApp
             _logger = loggerFactory.CreateLogger<GameTaskFunction>();
         }
 
-        private static async Task<string?> Rephrases(string sentence)
+    private static async Task<string?> Rephrases(string sentence)
         {
             var rnd = new Random();
             var version = rnd.Next(1, 3);
@@ -42,43 +43,51 @@ namespace GraderFunctionApp
             if (azureOpenAiEndpoint == null || azureOpenAiApiKey == null || deploymentOrModelName == null)
                 return sentence;
 
-            AzureOpenAIClient openAiClient = new(
-                new Uri(azureOpenAiEndpoint),
-                new AzureKeyCredential(azureOpenAiApiKey));
-            ChatClient client = openAiClient.GetChatClient(deploymentOrModelName);
-
-            var messages = new List<ChatMessage>(){
-            new SystemChatMessage("You are a Microsoft Azure game dialogue designer,Good at designing lively and interesting dialogue." +
-                                  "You only reply to instruction to ask the player setup something in Microsoft Azure."),
-            new UserChatMessage(
-                $"You need to help me rewrite a sentence with the following rule:" +
-                $"1. Keep all technical teams and Noun. " +
-                $"2. It is instructions to ask player to complete tasks." +
-                $"3. In a funny style to the brave (勇者) with some emojis" +
-                $"4. In both English and Traditional Chinese." +
-                $"5. English goes first, and Chinese goes next." +
-                $"6. Only reply to the rewritten sentence, and don't answer anything else." +
-                $"Rewrite the following sentence:\n\n\n{sentence}\n")
-            };
-            ChatCompletion response = await client.CompleteChatAsync(messages,
-                new ChatCompletionOptions()
-                {
-                    MaxOutputTokenCount = 800,
-                    Temperature = 0.9f,
-                    FrequencyPenalty = 0,
-                    PresencePenalty = 0
-                });
-
-            var chatMessage = response.Content[0].Text;
-            var policy = new CacheItemPolicy
+            try
             {
-                Priority = CacheItemPriority.Default,
-                // Setting expiration timing for the cache
-                AbsoluteExpiration = DateTimeOffset.Now.AddHours(1)
-            };
-            tokenContents = new CacheItem(cacheKey, chatMessage);
-            TokenCache?.Set(tokenContents, policy);
-            return chatMessage;
+                AzureOpenAIClient openAiClient = new(
+                    new Uri(azureOpenAiEndpoint),
+                    new AzureKeyCredential(azureOpenAiApiKey));
+                ChatClient client = openAiClient.GetChatClient(deploymentOrModelName);
+
+                var messages = new List<ChatMessage>(){
+                    new SystemChatMessage("You are a Microsoft Azure game dialogue designer,Good at designing lively and interesting dialogue." +
+                                          "You only reply to instruction to ask the player setup something in Microsoft Azure."),
+                    new UserChatMessage(
+                        $"You need to help me rewrite a sentence with the following rule:" +
+                        $"1. Keep all technical teams and Noun. " +
+                        $"2. It is instructions to ask player to complete tasks." +
+                        $"3. In a funny style to the brave (勇者) with some emojis" +
+                        $"4. In both English and Traditional Chinese." +
+                        $"5. English goes first, and Chinese goes next." +
+                        $"6. Only reply to the rewritten sentence, and don't answer anything else." +
+                        $"Rewrite the following sentence:\n\n\n{sentence}\n")
+                };
+                ChatCompletion response = await client.CompleteChatAsync(messages,
+                    new ChatCompletionOptions()
+                    {
+                        MaxOutputTokenCount = 800,
+                        Temperature = 0.9f,
+                        FrequencyPenalty = 0,
+                        PresencePenalty = 0
+                    });
+
+                var chatMessage = response.Content[0].Text;
+                var policy = new CacheItemPolicy
+                {
+                    Priority = CacheItemPriority.Default,
+                    // Setting expiration timing for the cache
+                    AbsoluteExpiration = DateTimeOffset.Now.AddHours(1)
+                };
+                tokenContents = new CacheItem(cacheKey, chatMessage);
+                TokenCache?.Set(tokenContents, policy);
+                return chatMessage;
+            }
+            catch
+            {
+                // In case of any failure talking to OpenAI, just return the original sentence
+                return sentence;
+            }
         }
 
         [Function("GameTaskFunction")]
@@ -91,57 +100,54 @@ namespace GraderFunctionApp
 
         public static string GetTasksJson(bool rephrases)
         {
+            var assembly = Assembly.GetAssembly(type: typeof(GameClassAttribute))!;
+            var pendingTasks = new List<Task<GameTaskData>>();
+            foreach (var testClass in GetTypesWithHelpAttribute(assembly))
             {
-                var assembly = Assembly.GetAssembly(type: typeof(GameClassAttribute))!;
-                var allTasks = new List<Task<GameTaskData>>();
-                foreach (var testClass in GetTypesWithHelpAttribute(assembly))
-                {
-                    var gameClass = testClass.GetCustomAttribute<GameClassAttribute>();
-                    var tasks = testClass.GetMethods().Where(m => m.GetCustomAttribute<GameTaskAttribute>() != null)
-                        .Select(c => new { c.Name, GameTask = c.GetCustomAttribute<GameTaskAttribute>()! });
+                var gameClass = testClass.GetCustomAttribute<GameClassAttribute>();
+                var tasks = testClass.GetMethods().Where(m => m.GetCustomAttribute<GameTaskAttribute>() != null)
+                    .Select(c => new { c.Name, GameTask = c.GetCustomAttribute<GameTaskAttribute>()! });
 
-                    var independentTests = tasks.Where(c => c.GameTask.GroupNumber == -1)
-                        .Select(async c => new GameTaskData()
+                var independentTests = tasks.Where(c => c.GameTask.GroupNumber == -1)
+                    .Select(async c => new GameTaskData()
+                    {
+                        Name = testClass.FullName + "." + c.Name,
+                        Tests = [testClass.FullName + "." + c.Name],
+                        GameClassOrder = gameClass!.Order,
+                        Instruction = rephrases ? await Rephrases(c.GameTask.Instruction) ?? c.GameTask.Instruction : c.GameTask.Instruction,
+                        Filter = "test=" + testClass.FullName + "." + c.Name,
+                        Reward = c.GameTask.Reward,
+                        TimeLimit = c.GameTask.TimeLimit
+                    });
+
+
+                var groupedTests = tasks.Where(c => c.GameTask.GroupNumber != -1)
+                    .GroupBy(c => c.GameTask.GroupNumber)
+                    .Select(async c =>
+                        new GameTaskData()
                         {
-                            Name = testClass.FullName + "." + c.Name,
-                            Tests = [testClass.FullName + "." + c.Name],
+                            Name = string.Join(" ", c.Select(a => testClass.FullName + "." + a.Name)),
+                            Tests = c.Select(a => testClass.FullName + "." + a.Name).ToArray(),
                             GameClassOrder = gameClass!.Order,
-                            Instruction = rephrases ? await Rephrases(c.GameTask.Instruction) ?? c.GameTask.Instruction : c.GameTask.Instruction,
-                            Filter = "test=" + testClass.FullName + "." + c.Name,
-                            Reward = c.GameTask.Reward,
-                            TimeLimit = c.GameTask.TimeLimit
-                        }).ToList();
+                            Instruction = rephrases ? await Rephrases(string.Join("", c.Select(a => a.GameTask.Instruction))) ?? string.Join("", c.Select(a => a.GameTask.Instruction)) : string.Join("", c.Select(a => a.GameTask.Instruction)),
+                            Filter = string.Join("||", c.Select(a => "test==\"" + testClass.FullName + "." + a.Name + "\"")),
+                            Reward = c.Sum(a => a.GameTask.Reward),
+                            TimeLimit = c.Sum(a => a.GameTask.TimeLimit),
+                        }
+                    );
 
-
-                    var groupedTasks = tasks.Where(c => c.GameTask.GroupNumber != -1)
-                        .GroupBy(c => c.GameTask.GroupNumber)
-                        .Select(async c =>
-                            new GameTaskData()
-                            {
-                                Name = string.Join(" ", c.Select(a => testClass.FullName + "." + a.Name)),
-                                Tests = c.Select(a => testClass.FullName + "." + a.Name).ToArray(),
-                                GameClassOrder = gameClass!.Order,
-                                Instruction = rephrases ? await Rephrases(string.Join("", c.Select(a => a.GameTask.Instruction))) ?? string.Join("", c.Select(a => a.GameTask.Instruction)) : string.Join("", c.Select(a => a.GameTask.Instruction)),
-                                Filter =
-                                    string.Join("||", c.Select(a => "test==\"" + testClass.FullName + "." + a.Name + "\"")),
-                                Reward = c.Sum(a => a.GameTask.Reward),
-                                TimeLimit = c.Sum(a => a.GameTask.TimeLimit),
-                            }
-                        ).ToList();
-
-                    allTasks.AddRange(independentTests);
-                    allTasks.AddRange(groupedTasks);
-                }
-
-                var allCompletedTask = allTasks.Select(t => t.Result).ToList();
-                var serializerSettings = new JsonSerializerSettings
-                {
-                    ContractResolver = new CamelCasePropertyNamesContractResolver()
-                };
-                allCompletedTask = allCompletedTask.OrderBy(c => c.GameClassOrder).ThenBy(c => c.Tests.First()).ToList();
-                var json = JsonConvert.SerializeObject(allCompletedTask.ToArray(), serializerSettings);
-                return json;
+                pendingTasks.AddRange(independentTests);
+                pendingTasks.AddRange(groupedTests);
             }
+
+            var completed = Task.WhenAll(pendingTasks).GetAwaiter().GetResult();
+            var serializer = new JsonSerializerSettings
+            {
+                ContractResolver = new CamelCasePropertyNamesContractResolver()
+            };
+            var ordered = completed.OrderBy(c => c.GameClassOrder).ThenBy(c => c.Tests.First()).ToList();
+            var json = JsonConvert.SerializeObject(ordered.ToArray(), serializer);
+            return json;
 
             static IEnumerable<Type> GetTypesWithHelpAttribute(Assembly assembly)
             {

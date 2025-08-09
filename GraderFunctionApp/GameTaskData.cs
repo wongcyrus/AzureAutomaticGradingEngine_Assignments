@@ -16,7 +16,8 @@ namespace GraderFunctionApp
 
         public override string ToString()
         {
-            return Name + "," + GameClassOrder + "," + TimeLimit + "," + Reward + "," + Filter + "=>" + Instruction.Substring(0, 30);
+            var preview = Instruction == null ? string.Empty : (Instruction.Length > 30 ? Instruction.Substring(0, 30) : Instruction);
+            return Name + "," + GameClassOrder + "," + TimeLimit + "," + Reward + "," + Filter + "=>" + preview;
         }
     }
 

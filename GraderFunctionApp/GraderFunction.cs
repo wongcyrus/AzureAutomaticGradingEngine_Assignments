@@ -295,6 +295,11 @@ namespace GraderFunctionApp
         private static string GetTestsWorkingDirectory()
         {
             // Cross-platform: prefer HOME or UserProfile, then combine path segments
+            var overrideDir = Environment.GetEnvironmentVariable("TESTS_WORK_DIR");
+            if (!string.IsNullOrWhiteSpace(overrideDir))
+            {
+                return overrideDir!;
+            }
             var home = Environment.GetEnvironmentVariable("HOME");
             if (string.IsNullOrWhiteSpace(home))
             {
