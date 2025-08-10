@@ -2,7 +2,7 @@
 
 using System.Reflection;
 using AzureProjectTestLib.Helper;
-using GraderFunctionApp;
+using GraderFunctionApp.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 

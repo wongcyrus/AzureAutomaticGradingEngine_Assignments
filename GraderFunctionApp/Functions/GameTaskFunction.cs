@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -7,13 +7,12 @@ using System.Reflection;
 using Azure;
 using OpenAI.Chat;
 using AzureProjectTestLib.Helper;
-
 using System.Runtime.Caching;
 using Azure.AI.OpenAI;
 using Microsoft.Azure.Functions.Worker;
-using System.Linq;
+using GraderFunctionApp.Models;
 
-namespace GraderFunctionApp
+namespace GraderFunctionApp.Functions
 {
     public class GameTaskFunction
     {
@@ -24,7 +23,7 @@ namespace GraderFunctionApp
             _logger = loggerFactory.CreateLogger<GameTaskFunction>();
         }
 
-    private static async Task<string?> Rephrases(string sentence)
+        private static async Task<string?> Rephrases(string sentence)
         {
             var rnd = new Random();
             var version = rnd.Next(1, 3);
@@ -76,7 +75,6 @@ namespace GraderFunctionApp
                 var policy = new CacheItemPolicy
                 {
                     Priority = CacheItemPriority.Default,
-                    // Setting expiration timing for the cache
                     AbsoluteExpiration = DateTimeOffset.Now.AddHours(1)
                 };
                 tokenContents = new CacheItem(cacheKey, chatMessage);
@@ -85,7 +83,6 @@ namespace GraderFunctionApp
             }
             catch
             {
-                // In case of any failure talking to OpenAI, just return the original sentence
                 return sentence;
             }
         }
@@ -119,7 +116,6 @@ namespace GraderFunctionApp
                         Reward = c.GameTask.Reward,
                         TimeLimit = c.GameTask.TimeLimit
                     });
-
 
                 var groupedTests = tasks.Where(c => c.GameTask.GroupNumber != -1)
                     .GroupBy(c => c.GameTask.GroupNumber)

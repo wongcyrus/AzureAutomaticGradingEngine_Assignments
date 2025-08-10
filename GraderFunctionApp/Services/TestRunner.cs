@@ -1,10 +1,11 @@
 using System.Diagnostics;
 using System.Text;
-using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using GraderFunctionApp.Helpers;
+using GraderFunctionApp.Functions;
+using GraderFunctionApp.Models;
 
 namespace GraderFunctionApp.Services
 {

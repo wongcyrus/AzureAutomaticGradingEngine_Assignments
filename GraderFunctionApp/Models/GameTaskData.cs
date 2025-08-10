@@ -1,6 +1,6 @@
-﻿using System.Runtime.Serialization;
+using System.Runtime.Serialization;
 
-namespace GraderFunctionApp
+namespace GraderFunctionApp.Models
 {
     [DataContract]
     public class GameTaskData
@@ -20,6 +20,4 @@ namespace GraderFunctionApp
             return Name + "," + GameClassOrder + "," + TimeLimit + "," + Reward + "," + Filter + "=>" + preview;
         }
     }
-
-
 }
