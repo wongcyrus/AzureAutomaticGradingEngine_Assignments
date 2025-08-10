@@ -1,3 +1,0 @@
-[submodule "Infrastructure/azure-common-construct"]
-	path = Infrastructure/azure-common-construct
-	url = https://github.com/wongcyrus/azure-common-construct
