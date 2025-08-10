@@ -36,6 +36,17 @@
         "formulahendry.dotnet-test-explorer",
         "esbenp.prettier-vscode"
       ]
+    },
+    "codespaces": {
+      "repositories": {
+        "wongcyrus/azure-common-construct": {
+          "permissions": {
+            "contents": "write",
+            "metadata": "read",
+            "pull_requests": "write"
+          }
+        }
+      }
     }
   }
 }
