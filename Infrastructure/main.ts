@@ -58,7 +58,7 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     const buildTestProjectResource = new Resource(this, prefix + "BuildFunctionAppResource",
       {
         triggers: { build_hash: "${timestamp()}" },
-        dependsOn: [azureFunctionConstruct.functionApp]
+        dependsOn: [azureFunctionConstruct.publisher!.publishResource!]
       })
 
     buildTestProjectResource.addOverride("provisioner", [
