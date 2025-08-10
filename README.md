@@ -43,17 +43,18 @@ DEPLOYMENT_OR_MODEL_NAME=gpt-35-turbo
 
 Login Azure and set subscription
 ```
-az login --use-device-code --tenant XXX
-az account set --subscription "YYY"
+az login --use-device-code
 ```
 
 ```
 cd Infrastructure/
 npm install --global cdktf-cli@latest
 npm i
-mkdir -p /workspaces/AzureAutomaticGradingEngine_Assignments/AzureProjectTest/bin/Release/net8.0/win-x64
+mkdir -p /workspaces/AzureAutomaticGradingEngine_Assignments/AzureProjectTest/bin/Release/net8.0/publish/win-x64
+cdktf deploy --auto-approve
 cdktf deploy --auto-approve
 ```
+The second time of deployment will upload the Azure tests libray.
 
 ## Package UnitTest into exe
 ```
