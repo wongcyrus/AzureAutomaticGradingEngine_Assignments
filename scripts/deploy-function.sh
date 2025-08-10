@@ -61,13 +61,14 @@ log_success "Publish completed"
 
 # Step 4: Create deployment package
 log_info "Creating deployment package..."
-cd bin/Release/publish
-if [ -f "../deployment.zip" ]; then
-    rm "../deployment.zip"
+DEPLOYMENT_ZIP="$PROJECT_PATH/deployment.zip"
+if [ -f "$DEPLOYMENT_ZIP" ]; then
+    rm "$DEPLOYMENT_ZIP"
 fi
-zip -r "../deployment.zip" . > /dev/null 2>&1
+cd bin/Release/publish
+zip -r "$DEPLOYMENT_ZIP" . > /dev/null 2>&1
 cd ../../..
-log_success "Deployment package created"
+log_success "Deployment package created at: $DEPLOYMENT_ZIP"
 
 # Step 5: Check if Function App exists
 log_info "Checking if Function App exists..."
@@ -88,7 +89,7 @@ log_info "Deploying to Azure Function App..."
 az functionapp deployment source config-zip \
     --resource-group "$RESOURCE_GROUP" \
     --name "$FUNCTION_APP_NAME" \
-    --src "bin/Release/deployment.zip" \
+    --src "$DEPLOYMENT_ZIP" \
     --timeout 600
 if [ $? -ne 0 ]; then
     log_error "Deployment failed"
@@ -137,6 +138,13 @@ echo ""
 log_info "Showing recent deployment logs..."
 echo "Recent logs (last 50 lines):"
 az functionapp logs tail --name "$FUNCTION_APP_NAME" --resource-group "$RESOURCE_GROUP" --max-lines 50 || log_warning "Could not retrieve logs"
+
+# Step 11: Cleanup
+log_info "Cleaning up deployment package..."
+if [ -f "$DEPLOYMENT_ZIP" ]; then
+    rm "$DEPLOYMENT_ZIP"
+    log_success "Deployment package cleaned up"
+fi
 
 echo ""
 log_success "Fast deployment script completed! 🚀"
