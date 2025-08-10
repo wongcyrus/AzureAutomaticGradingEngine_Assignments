@@ -69,7 +69,17 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
         },
       },
     ]); 
-    const testOutputFolder = path.join(__dirname, "..", "/AzureProjectTest/bin/Release/net8.0/win-x64");
+    // Upload the published test artifacts (self-contained) to the file share
+    const testOutputFolder = path.join(
+      __dirname,
+      "..",
+      "AzureProjectTest",
+      "bin",
+      "Release",
+      "net8.0",
+      "publish",
+      "win-x64"
+    );
     const azureFunctionFileSharePublisherConstruct = new AzureFunctionFileSharePublisherConstruct(this, prefix + "AzureFunctionFileSharePublisherConstruct", {
       functionApp: azureFunctionConstruct.functionApp,
       functionFolder: "Tests",

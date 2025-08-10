@@ -171,98 +171,118 @@ namespace GraderFunctionApp
             log.LogInformation($@"{tempCredentialsFilePath} {tempDir} {trace} {filter}");
             try
             {
-                using var process = new Process();
-                var useDotnet = !File.Exists(exeLocation) && File.Exists(dllLocation);
-                var info = new ProcessStartInfo
+                // Local function to execute the runner once
+                async Task<(bool ok, string? xml)> RunOnceAsync(string fileName, IEnumerable<string> initialArgs)
                 {
-                    WorkingDirectory = workingDirectoryInfo,
-                    FileName = useDotnet ? "dotnet" : exeLocation,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                };
+                    using var process = new Process();
+                    var info = new ProcessStartInfo
+                    {
+                        // Don't set WorkingDirectory to app directory for framework-dependent apps
+                        // WorkingDirectory = workingDirectoryInfo,
+                        FileName = fileName,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                    };
 
-                // On non-Windows, prefer running the DLL via dotnet if the EXE is unavailable
-                if (useDotnet)
-                {
-                    info.ArgumentList.Add(dllLocation);
+                    foreach (var a in initialArgs)
+                    {
+                        info.ArgumentList.Add(a);
+                    }
+                    // Common named flags
+                    info.ArgumentList.Add($"--credentials={tempCredentialsFilePath}");
+                    info.ArgumentList.Add($"--work={tempDir}");
+                    info.ArgumentList.Add($"--trace={trace}");
+                    info.ArgumentList.Add($"--where={filter}");
+
+                    process.StartInfo = info;
+
+                    log.LogInformation("Refresh start.");
+                    process.Refresh();
+                    log.LogInformation("Process start. Command: {cmd} {args}", fileName, string.Join(' ', info.ArgumentList));
+                    var output = new StringBuilder();
+                    var error = new StringBuilder();
+                    using AutoResetEvent outputWaitHandle = new(false);
+                    using AutoResetEvent errorWaitHandle = new(false);
+                    process.OutputDataReceived += (sender, e) =>
+                    {
+                        if (e.Data == null)
+                        {
+                            outputWaitHandle.Set();
+                        }
+                        else
+                        {
+                            output.AppendLine(e.Data);
+                        }
+                    };
+                    process.ErrorDataReceived += (sender, e) =>
+                    {
+                        if (e.Data == null)
+                        {
+                            errorWaitHandle.Set();
+                        }
+                        else
+                        {
+                            error.AppendLine(e.Data);
+                        }
+                    };
+                    process.Start();
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
+
+                    const int timeout = 5 * 60 * 1000;
+                    if (process.WaitForExit(timeout) &&
+                        outputWaitHandle.WaitOne(timeout) &&
+                        errorWaitHandle.WaitOne(timeout))
+                    {
+                        log.LogInformation("Process Ended. ExitCode={code}", process.ExitCode);
+                        var errorLog = error.ToString();
+                        if (!string.IsNullOrWhiteSpace(errorLog))
+                        {
+                            log.LogWarning("Test runner stderr: {stderr}", errorLog);
+                        }
+
+                        var resultPath = Path.Combine(tempDir, "TestResult.xml");
+                        if (File.Exists(resultPath))
+                        {
+                            var xml = await File.ReadAllTextAsync(resultPath);
+                            return (true, xml);
+                        }
+                        else
+                        {
+                            log.LogError("TestResult.xml not found in work directory: {dir}", tempDir);
+                            return (false, null);
+                        }
+                    }
+                    else
+                    {
+                        log.LogInformation("Process Timed out.");
+                        return (false, null);
+                    }
                 }
 
-                // Use named flags supported by the test runner to avoid positional/quoting issues
-                // --credentials, --work, --trace, --where
-                info.ArgumentList.Add($"--credentials={tempCredentialsFilePath}");
-                info.ArgumentList.Add($"--work={tempDir}");
-                info.ArgumentList.Add($"--trace={trace}");
-                info.ArgumentList.Add($"--where={filter}");
-
-                process.StartInfo = info;
-
-                log.LogInformation("Refresh start.");
-                process.Refresh();
-                log.LogInformation("Process start.");
-                var output = new StringBuilder();
-                var error = new StringBuilder();
-                using AutoResetEvent outputWaitHandle = new(false);
-                using AutoResetEvent errorWaitHandle = new(false);
-                process.OutputDataReceived += (sender, e) =>
+                // Prefer EXE if available (self-contained), otherwise try dotnet + DLL
+                if (File.Exists(exeLocation))
                 {
-                    if (e.Data == null)
+                    var (ok, xml) = await RunOnceAsync(exeLocation, Array.Empty<string>());
+                    if (ok && !string.IsNullOrWhiteSpace(xml))
                     {
-                        outputWaitHandle.Set();
-                    }
-                    else
-                    {
-                        output.AppendLine(e.Data);
-                    }
-                };
-                process.ErrorDataReceived += (sender, e) =>
-                {
-                    if (e.Data == null)
-                    {
-                        errorWaitHandle.Set();
-                    }
-                    else
-                    {
-                        error.AppendLine(e.Data);
-                    }
-                };
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
-                const int timeout = 5 * 60 * 1000;
-                if (process.WaitForExit(timeout) &&
-                    outputWaitHandle.WaitOne(timeout) &&
-                    errorWaitHandle.WaitOne(timeout))
-                {
-                    // Process completed. Check process.ExitCode here.
-                    log.LogInformation("Process Ended.");
-                    //log.LogInformation(output.ToString());
-
-                    var errorLog = error.ToString();
-                    if (!string.IsNullOrWhiteSpace(errorLog))
-                    {
-                        // Some runners write warnings to stderr; log but don't fail solely on stderr content
-                        log.LogWarning("Test runner stderr: {stderr}", errorLog);
-                    }
-
-                    var resultPath = Path.Combine(tempDir, "TestResult.xml");
-                    if (File.Exists(resultPath))
-                    {
-                        var xml = await File.ReadAllTextAsync(resultPath);
                         return xml;
                     }
-                    else
-                    {
-                        log.LogError("TestResult.xml not found in work directory: {dir}", tempDir);
-                        return null;
-                    }
+                    log.LogWarning("EXE run did not produce results. Will attempt DLL with dotnet if available.");
                 }
-                else
+                if (File.Exists(dllLocation))
                 {
-                    // Timed out.
-                    log.LogInformation("Process Timed out.");
+                    var dotnetPath = ResolveDotnetExecutable(log);
+                    if (!string.IsNullOrWhiteSpace(dotnetPath))
+                    {
+                        var (ok, xml) = await RunOnceAsync(dotnetPath!, new[] { dllLocation });
+                        if (ok && !string.IsNullOrWhiteSpace(xml))
+                        {
+                            return xml;
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -284,6 +304,66 @@ namespace GraderFunctionApp
                 }
             }
             return null;
+        }
+
+        private static string? ResolveDotnetExecutable(ILogger log)
+        {
+            try
+            {
+                // If DOTNET_ROOT is set, prefer it
+                var dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT");
+                if (!string.IsNullOrWhiteSpace(dotnetRoot))
+                {
+                    var candidate = Path.Combine(dotnetRoot!, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+                    if (File.Exists(candidate))
+                    {
+                        log.LogInformation("Using dotnet from DOTNET_ROOT: {path}", candidate);
+                        return candidate;
+                    }
+                }
+
+                if (OperatingSystem.IsWindows())
+                {
+                    var candidates = new[]
+                    {
+                        @"D:\\Program Files\\dotnet\\dotnet.exe",
+                        @"C:\\Program Files\\dotnet\\dotnet.exe"
+                    };
+                    foreach (var c in candidates)
+                    {
+                        if (File.Exists(c))
+                        {
+                            log.LogInformation("Using dotnet at: {path}", c);
+                            return c;
+                        }
+                    }
+                }
+                else
+                {
+                    var candidates = new[] { 
+                        "/usr/bin/dotnet", 
+                        "/usr/local/bin/dotnet", 
+                        "/opt/dotnet/dotnet" 
+                    };
+                    foreach (var c in candidates)
+                    {
+                        if (File.Exists(c))
+                        {
+                            log.LogInformation("Using dotnet at: {path}", c);
+                            return c;
+                        }
+                    }
+                }
+
+                // Fall back to just "dotnet" and hope it's on PATH
+                log.LogInformation("Falling back to invoking 'dotnet' from PATH.");
+                return "dotnet";
+            }
+            catch (Exception ex)
+            {
+                log.LogWarning(ex, "Failed to resolve dotnet executable.");
+                return null;
+            }
         }
 
         private static string GetTemporaryDirectory(string trace)

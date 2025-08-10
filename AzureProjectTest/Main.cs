@@ -81,6 +81,7 @@ internal class Run
             "--work=" + tempDir,
             "--output=" + tempDir,
             "--err=" + tempDir,
+            "--result=" + Path.Combine(tempDir, "TestResult.xml") + ";format=nunit3",
             "--params:AzureCredentialsPath=" + tempCredentialsFilePath + ";trace=" + trace
         };
         if (!string.IsNullOrWhiteSpace(where))
