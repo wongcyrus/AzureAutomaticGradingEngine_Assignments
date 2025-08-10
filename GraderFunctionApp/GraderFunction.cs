@@ -22,9 +22,17 @@ namespace GraderFunctionApp
         }
 
         private readonly ILogger _logger;
+        private readonly StorageService _storageService;
+
         public GraderFunction(ILoggerFactory loggerFactory)
         {
             _logger = loggerFactory.CreateLogger<GraderFunction>();
+            var connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+            if (string.IsNullOrEmpty(connectionString))
+            {
+                throw new InvalidOperationException("AzureWebJobsStorage connection string not found");
+            }
+            _storageService = new StorageService(connectionString, _logger);
         }
 
         [Function(nameof(AzureGraderFunction))]
@@ -72,24 +80,32 @@ namespace GraderFunctionApp
 
                 string credentials = req.Query["credentials"]!;
                 string filter = req.Query["filter"]!;
+                string taskName = filter; // Preserve original task name before it gets mapped to NUnit filter
+                string email = "Anonymous";
+
+                _logger.LogInformation("GET Request - filter: '{filter}', taskName: '{taskName}'", filter, taskName);
 
                 string? xml;
                 if (req.Query.ContainsKey("trace"))
                 {
                     string trace = req.Query["trace"]!;
-                    var email = ExtractEmail(trace);
+                    email = ExtractEmail(trace);
                     _logger.LogInformation("start:" + trace);
                     xml = await RunUnitTestProcess(context, _logger, credentials, email, filter);
                     _logger.LogInformation("end:" + trace);
                 }
                 else
                 {
-                    xml = await RunUnitTestProcess(context, _logger, credentials, "Anonymous", filter);
+                    xml = await RunUnitTestProcess(context, _logger, credentials, email, filter);
                 }
                 if (string.IsNullOrEmpty(xml))
                 {
                     return new ContentResult { Content = "<error>Failed to run tests or no results produced.</error>", ContentType = "application/xml", StatusCode = 500 };
                 }
+
+                // Save test results to storage
+                await SaveTestResultsToStorage(email, taskName, xml);
+
                 return new ContentResult { Content = xml, ContentType = "application/xml", StatusCode = 200 };
 
             }
@@ -100,6 +116,10 @@ namespace GraderFunctionApp
                 string needXml = req.Query["xml"]!;
                 string credentials = req.Form["credentials"]!;
                 string filter = req.Form["filter"]!;
+                string taskName = filter; // Preserve original task name before it gets mapped to NUnit filter
+                
+                _logger.LogInformation("POST Request - filter: '{filter}', taskName: '{taskName}'", filter, taskName);
+                
                 if (string.IsNullOrWhiteSpace(credentials))
                 {
                     return new ContentResult
@@ -114,6 +134,10 @@ namespace GraderFunctionApp
                 {
                     return new ContentResult { Content = "<error>Failed to run tests or no results produced.</error>", ContentType = "application/xml", StatusCode = 500 };
                 }
+
+                // Save test results to storage
+                await SaveTestResultsToStorage("Anonymous", taskName, xml);
+
                 if (string.IsNullOrEmpty(needXml))
                 {
                     var result = ParseNUnitTestResult(xml!);
@@ -432,6 +456,31 @@ namespace GraderFunctionApp
             }
 
             return result;
+        }
+
+        private async Task SaveTestResultsToStorage(string email, string taskName, string xml)
+        {
+            try
+            {
+                _logger.LogInformation("SaveTestResultsToStorage called with email: {email}", email);
+                
+                // Parse test results
+                var testResults = ParseNUnitTestResult(xml);
+                
+                // Save XML to blob storage (no task name needed)
+                await _storageService.SaveTestResultXmlAsync(email, xml);
+                
+                // Save pass and fail test records to tables (task name not stored in entities)
+                await _storageService.SavePassTestRecordAsync(email, taskName, testResults);
+                await _storageService.SaveFailTestRecordAsync(email, taskName, testResults);
+                
+                _logger.LogInformation("Test results saved to storage for email: {email}", email);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save test results to storage for email: {email}", email);
+                // Don't throw - we don't want storage failures to break the test execution
+            }
         }
     }
 }

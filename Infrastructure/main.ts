@@ -4,6 +4,8 @@ import { PublishMode } from "azure-common-construct/patterns/PublisherConstruct"
 import { App, TerraformOutput, TerraformStack } from "cdktf";
 import { AzurermProvider } from "cdktf-azure-providers/.gen/providers/azurerm/provider";
 import { ResourceGroup } from "cdktf-azure-providers/.gen/providers/azurerm/resource-group";
+import { StorageContainer } from "cdktf-azure-providers/.gen/providers/azurerm/storage-container";
+import { StorageTable } from "cdktf-azure-providers/.gen/providers/azurerm/storage-table";
 import { Resource } from "cdktf-azure-providers/.gen/providers/null/resource";
 import { Construct } from "constructs";
 import path = require("path");
@@ -54,6 +56,30 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       functionNames: ["AzureGraderFunction", "GameTaskFunction"]
     })
     azureFunctionConstruct.functionApp.siteConfig.cors.allowedOrigins = ["*"];
+
+    // Create blob container for test result XML files
+    const testResultsBlobContainer = new StorageContainer(this, prefix + "TestResultsContainer", {
+      name: "test-results",
+      storageAccountName: azureFunctionConstruct.storageAccount.name,
+      containerAccessType: "private"
+    });
+
+    // Create table for pass test records (email + task -> current time)
+    const passTestTable = new StorageTable(this, prefix + "PassTestTable", {
+      name: "PassTests",
+      storageAccountName: azureFunctionConstruct.storageAccount.name
+    });
+
+    // Create table for fail test records (email + task + time)
+    const failTestTable = new StorageTable(this, prefix + "FailTestTable", {
+      name: "FailTests",
+      storageAccountName: azureFunctionConstruct.storageAccount.name
+    });
+
+    // Add dependency to ensure tables are created before function deployment
+    azureFunctionConstruct.node.addDependency(testResultsBlobContainer);
+    azureFunctionConstruct.node.addDependency(passTestTable);
+    azureFunctionConstruct.node.addDependency(failTestTable);
 
     const buildTestProjectResource = new Resource(this, prefix + "BuildFunctionAppResource",
       {
