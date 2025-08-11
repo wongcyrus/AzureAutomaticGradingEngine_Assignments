@@ -80,7 +80,7 @@ namespace GraderFunctionApp
                 var timestamp = DateTimeOffset.UtcNow;
                 var partitionKey = SanitizeKey(email);
                 LogIfNoEmail(partitionKey, email, nameof(SavePassTestRecordAsync));
-                foreach (var test in testResults.Where(t => t.Value >= 0))
+                foreach (var test in testResults.Where(static t => t.Value >= 0))
                 {
                     await SaveTestEntityAsync(tableClient, partitionKey, email, test.Key, timestamp, true, test.Value);
                 }
@@ -106,7 +106,7 @@ namespace GraderFunctionApp
                 var timestamp = DateTimeOffset.UtcNow;
                 var partitionKey = SanitizeKey(email);
                 LogIfNoEmail(partitionKey, email, nameof(SaveFailTestRecordAsync));
-                foreach (var test in testResults.Where(t => t.Value == 0))
+                foreach (var test in testResults.Where(static t => t.Value == 0))
                 {
                     await SaveTestEntityAsync(tableClient, partitionKey, email, test.Key, timestamp, false);
                 }

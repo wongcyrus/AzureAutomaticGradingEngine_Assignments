@@ -14,12 +14,10 @@ namespace GraderFunctionApp.Functions
         private readonly ILogger _logger;
         private readonly StorageService _storageService;
 
-        public GraderFunction(ILoggerFactory loggerFactory)
+        public GraderFunction(ILoggerFactory loggerFactory, StorageService storageService)
         {
             _logger = loggerFactory.CreateLogger<GraderFunction>();
-            var connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage")
-                ?? throw new InvalidOperationException("AzureWebJobsStorage connection string not found");
-            _storageService = new StorageService(connectionString, _logger);
+            _storageService = storageService;
         }
 
         [Function(nameof(AzureGraderFunction))]

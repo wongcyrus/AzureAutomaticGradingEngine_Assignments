@@ -10,12 +10,10 @@ namespace GraderFunctionApp.Functions
         private readonly ILogger _logger;
         private readonly StorageService _storageService;
 
-        public PassTaskFunction(ILoggerFactory loggerFactory)
+        public PassTaskFunction(ILoggerFactory loggerFactory, StorageService storageService)
         {
             _logger = loggerFactory.CreateLogger<PassTaskFunction>();
-            var connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage")
-                ?? throw new InvalidOperationException("AzureWebJobsStorage connection string not found");
-            _storageService = new StorageService(connectionString, _logger);
+            _storageService = storageService;
         }
 
         [Function(nameof(GetPassTaskFunction))]
@@ -35,12 +33,12 @@ namespace GraderFunctionApp.Functions
             try
             {
                 var passedTasks = await _storageService.GetPassedTasksAsync(email);
-                var totalMarks = passedTasks.Sum(task => task.Mark);
+                var totalMarks = passedTasks.Sum(static task => task.Mark);
 
                 var result = new
                 {
                     TotalMarks = totalMarks,
-                    PassedTasks = passedTasks.Select(task => new { task.Name, task.Mark })
+                    PassedTasks = passedTasks.Select(static task => new { task.Name, task.Mark })
                 };
 
                 return new JsonResult(result);

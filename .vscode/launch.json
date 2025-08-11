@@ -23,7 +23,7 @@
       "preLaunchTask": "build AzureProjectTest",
       "program": "${workspaceFolder}/AzureProjectTest/bin/Debug/net8.0/AzureProjectTest.dll",
       "args": [
-        "--creds=${workspaceFolder}/testing/sp.json",
+        "--creds=${workspaceFolder}/scripts/sp.json",
         "--work=${workspaceFolder}/testing",
         "--trace=trace"
         // To filter tests, add: "--where=test==\"Full.Namespace.Class.TestName\""
@@ -40,7 +40,7 @@
       "preLaunchTask": "build AzureProjectTest",
       "program": "${workspaceFolder}/AzureProjectTest/bin/Debug/net8.0/AzureProjectTest.dll",
       "args": [
-        "--creds=${workspaceFolder}/testing/sp.json",
+        "--creds=${workspaceFolder}/scripts/sp.json",
         "--work=${workspaceFolder}/testing",
         "--trace=trace",
         "--where=test==\"AzureProjectTestLib.VnetTests.Test01_Have2VnetsIn2Regions\""
