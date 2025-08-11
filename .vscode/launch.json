@@ -1,43 +1,54 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": ".NET: Run AzureProjectTest",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "build AzureProjectTest",
-            "program": "${workspaceFolder}/AzureProjectTest/bin/Debug/net8.0/AzureProjectTest.dll",
-            "args": [
-                "--creds=${workspaceFolder}/testing/sp.json",
-                "--work=${workspaceFolder}/testing",
-                "--trace=trace"
-                // To filter tests, add: "--where=test==\"Full.Namespace.Class.TestName\""
-            ],
-            "cwd": "${workspaceFolder}/AzureProjectTest",
-            "console": "integratedTerminal",
-            "stopAtEntry": false,
-            "justMyCode": true
-        },
-        {
-            "name": ".NET: Run AzureProjectTest (filtered)",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "build AzureProjectTest",
-            "program": "${workspaceFolder}/AzureProjectTest/bin/Debug/net8.0/AzureProjectTest.dll",
-            "args": [
-                "--creds=${workspaceFolder}/testing/sp.json",
-                "--work=${workspaceFolder}/testing",
-                "--trace=trace",
-                "--where=test==\"AzureProjectTestLib.VnetTests.Test01_Have2VnetsIn2Regions\""
-            ],
-            "cwd": "${workspaceFolder}/AzureProjectTest",
-            "console": "integratedTerminal",
-            "stopAtEntry": false,
-            "justMyCode": true
-        }
-
-    ]
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C#: TaskRunnerTest Debug",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build TaskRunnerTest",
+      "program": "${workspaceFolder}/TaskRunnerTest/bin/Debug/net9.0/TaskRunnerTest.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/TaskRunnerTest", // ✅ ensures .env is found
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "justMyCode": true
+    },
+    {
+      "name": ".NET: Run AzureProjectTest",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build AzureProjectTest",
+      "program": "${workspaceFolder}/AzureProjectTest/bin/Debug/net8.0/AzureProjectTest.dll",
+      "args": [
+        "--creds=${workspaceFolder}/testing/sp.json",
+        "--work=${workspaceFolder}/testing",
+        "--trace=trace"
+        // To filter tests, add: "--where=test==\"Full.Namespace.Class.TestName\""
+      ],
+      "cwd": "${workspaceFolder}/AzureProjectTest",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "justMyCode": true
+    },
+    {
+      "name": ".NET: Run AzureProjectTest (filtered)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build AzureProjectTest",
+      "program": "${workspaceFolder}/AzureProjectTest/bin/Debug/net8.0/AzureProjectTest.dll",
+      "args": [
+        "--creds=${workspaceFolder}/testing/sp.json",
+        "--work=${workspaceFolder}/testing",
+        "--trace=trace",
+        "--where=test==\"AzureProjectTestLib.VnetTests.Test01_Have2VnetsIn2Regions\""
+      ],
+      "cwd": "${workspaceFolder}/AzureProjectTest",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "justMyCode": true
+    }
+  ]
 }

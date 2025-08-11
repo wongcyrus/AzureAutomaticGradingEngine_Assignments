@@ -60,4 +60,4 @@ allTasks = allTasks.OrderBy(c => c.GameClassOrder).ThenBy(c => c.Tests.First()).
 var json = JsonConvert.SerializeObject(allTasks.ToArray(), serializerSettings);
 Console.WriteLine(json);
 File.WriteAllText(@"tasks.json", json);
-File.WriteAllText(@"..\..\..\..\AzureProjectTest\tasks.json", json);
+File.WriteAllText(Path.Combine("..", "..", "..", "..", "TaskRunnerTest", "tasks.json"), json);

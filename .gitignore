@@ -362,3 +362,5 @@ notebooks/marks.csv
 notebooks/pass_at.xlsx
 **/sp.json
 testing/*
+**/*.env
+TaskRunnerTest/report/*

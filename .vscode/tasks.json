@@ -1,25 +1,37 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"type": "dotnet",
-			"task": "build",
-			"group": "build",
-			"problemMatcher": [],
-			"label": "dotnet: build"
-		},
-		{
-			"label": "build AzureProjectTest",
-			"type": "process",
-			"command": "dotnet",
-			"args": [
-				"build",
-				"${workspaceFolder}/AzureProjectTest/AzureProjectTest.csproj",
-				"/property:GenerateFullPaths=true",
-				"/consoleloggerparameters:NoSummary"
-			],
-			"group": "build",
-			"problemMatcher": "$msCompile"
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "dotnet",
+      "task": "build",
+      "group": "build",
+      "problemMatcher": [],
+      "label": "dotnet: build"
+    },
+    {
+      "label": "build AzureProjectTest",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/AzureProjectTest/AzureProjectTest.csproj",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
+      "group": "build",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build TaskRunnerTest",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/TaskRunnerTest/TaskRunnerTest.csproj",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
+      "group": "build"
+    }
+  ]
 }
