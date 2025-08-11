@@ -28,35 +28,35 @@ namespace GraderFunctionApp
             try
             {
                 _logger.LogInformation("SaveTestResultXmlAsync called with email: '{email}', xml length: {xmlLength}", email, xml?.Length ?? 0);
-                
+
                 if (string.IsNullOrEmpty(email))
                 {
                     _logger.LogWarning("SaveTestResultXmlAsync: email is null or empty - this should not happen");
                 }
-                
+
                 if (string.IsNullOrEmpty(xml))
                 {
                     _logger.LogWarning("SaveTestResultXmlAsync: xml is null or empty - this should not happen");
                     xml = "<empty/>";
                 }
-                
+
                 var containerClient = _blobServiceClient.GetBlobContainerClient(TestResultsContainerName);
-                
+
                 // Create blob name: email_timestamp.xml
                 var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
                 var sanitizedEmail = SanitizeFileName(email);
                 var blobName = $"{sanitizedEmail}_{timestamp}.xml";
-                
+
                 if (sanitizedEmail == "noemail")
                 {
                     _logger.LogWarning("SaveTestResultXmlAsync: Using 'noemail' for email in blob name. Original email: '{email}' - this means no valid email was provided", email);
                 }
-                
+
                 var blobClient = containerClient.GetBlobClient(blobName);
-                
+
                 using var stream = new MemoryStream(Encoding.UTF8.GetBytes(xml));
                 await blobClient.UploadAsync(stream, overwrite: true);
-                
+
                 _logger.LogInformation("Test result XML saved to blob: {blobName}", blobName);
                 return blobName;
             }
@@ -164,14 +164,36 @@ namespace GraderFunctionApp
         private async Task SaveTestEntityAsync(TableClient tableClient, string partitionKey, string email, string testName, DateTimeOffset timestamp, bool isPass, int mark = 0)
         {
             var cleanTestName = CleanTestName(testName);
-            var rowKey = $"{cleanTestName}_{timestamp:yyyyMMddHHmmss}";
+            var rowKey = isPass 
+                ? cleanTestName 
+                : $"{cleanTestName}_{timestamp:yyyyMMddHHmmss}";
             if (cleanTestName == "invalidtest")
             {
                 _logger.LogError($"{(isPass ? nameof(SavePassTestRecordAsync) : nameof(SaveFailTestRecordAsync))}: Using 'invalidtest' for test name in row key. Original test name: '{{testName}}' - this indicates a problem with test name parsing", testName);
             }
+
+            if (isPass)
+            {
+                // Check if record already exists
+                try
+                {
+                    var existing = await tableClient.GetEntityAsync<Models.PassTestEntity>(partitionKey, rowKey);
+                    if (existing != null)
+                    {
+                        _logger.LogInformation("Pass record already exists for PartitionKey: {partitionKey}, RowKey: {rowKey}. Skipping insert.", partitionKey, rowKey);
+                        return;
+                    }
+                }
+                catch (Azure.RequestFailedException ex) when (ex.Status == 404)
+                {
+                    // Not found, proceed to insert
+                }
+            }
+
             ITableEntity entity = isPass
-                ? new Models.PassTestEntity { PartitionKey = partitionKey, RowKey = rowKey, Email = email, TestName = testName, PassedAt = timestamp, Mark = mark, ETag = Azure.ETag.All }
-                : new Models.FailTestEntity { PartitionKey = partitionKey, RowKey = rowKey, Email = email, TestName = testName, FailedAt = timestamp, ETag = Azure.ETag.All };
+            ? new Models.PassTestEntity { PartitionKey = partitionKey, RowKey = rowKey, Email = email, TestName = testName, PassedAt = timestamp, Mark = mark, ETag = Azure.ETag.All }
+            : new Models.FailTestEntity { PartitionKey = partitionKey, RowKey = rowKey, Email = email, TestName = testName, FailedAt = timestamp, ETag = Azure.ETag.All };
+
             _logger.LogDebug($"{(isPass ? nameof(SavePassTestRecordAsync) : nameof(SaveFailTestRecordAsync))}: Saving test - PartitionKey: '{{partitionKey}}', RowKey: '{{rowKey}}', TestName: '{{testName}}'", partitionKey, rowKey, testName);
             await tableClient.UpsertEntityAsync(entity);
         }
@@ -209,19 +231,19 @@ namespace GraderFunctionApp
             // Azure Table keys cannot contain certain characters
             var invalidChars = new[] { '/', '\\', '#', '?', '\t', '\n', '\r' };
             var sanitized = input.Trim(); // Remove leading/trailing whitespace
-            
+
             foreach (var c in invalidChars)
             {
                 sanitized = sanitized.Replace(c, '_');
             }
-            
+
             // If sanitization resulted in empty string, use a safe fallback
             if (string.IsNullOrEmpty(sanitized))
             {
                 _logger.LogWarning("SanitizeKey resulted in empty string after sanitization. Original input: '{input}'. This means the input contained only invalid characters. Using 'sanitized'", input);
                 return "sanitized";
             }
-                
+
             return sanitized;
         }
 

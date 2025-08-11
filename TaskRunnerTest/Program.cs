@@ -85,7 +85,7 @@ class Program
 
             // Save individual response to file in report folder
             string safeTaskName = string.Join("_", (task.Name ?? "").Split(Path.GetInvalidFileNameChars()));
-            string taskFileName = Path.Combine(reportDir, $"response_{safeTaskName}_{DateTime.Now:yyyyMMdd_HHmmss}.xml");
+            string taskFileName = Path.Combine(reportDir, $"response_{safeTaskName}_{DateTime.Now:yyyyMMdd_HHmmss}.json");
             await File.WriteAllTextAsync(taskFileName, result);
 
             report.Add(new ReportRow
