@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 
 var host = new HostBuilder()
     .ConfigureFunctionsWebApplication()
+    .ConfigureFunctionsWorkerDefaults()
     .ConfigureServices(static services =>
     {
         services.AddApplicationInsightsTelemetryWorkerService();
