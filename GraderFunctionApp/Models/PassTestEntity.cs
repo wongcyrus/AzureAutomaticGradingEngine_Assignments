@@ -11,5 +11,6 @@ namespace GraderFunctionApp.Models
         public DateTimeOffset PassedAt { get; set; }
         public DateTimeOffset? Timestamp { get; set; }
         public Azure.ETag ETag { get; set; }
+        public int Mark { get; set; }
     }
 }

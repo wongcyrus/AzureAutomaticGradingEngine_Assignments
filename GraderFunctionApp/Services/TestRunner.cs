@@ -37,7 +37,7 @@ namespace GraderFunctionApp.Services
                     };
                     var jsonText = GameTaskFunction.GetTasksJson(false);
                     var json = JsonConvert.DeserializeObject<List<GameTaskData>>(jsonText, serializerSettings);
-                    var mapped = json?.FirstOrDefault(c => string.Equals(c.Name, filter, StringComparison.OrdinalIgnoreCase))?.Filter;
+                    var mapped = json?.FirstOrDefault(c => string.Equals(c.Filter, filter, StringComparison.OrdinalIgnoreCase))?.Filter;
                     if (!string.IsNullOrWhiteSpace(mapped))
                     {
                         filter = mapped!;
@@ -45,6 +45,7 @@ namespace GraderFunctionApp.Services
                     else
                     {
                         log.LogWarning("Filter name '{filter}' not found in tasks mapping. Using provided filter as-is.", filter);
+                        return null;
                     }
                 }
                 catch (Exception ex)

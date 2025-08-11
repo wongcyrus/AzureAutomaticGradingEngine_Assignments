@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using GraderFunctionApp.Services;
 using GraderFunctionApp.Helpers;
 using GraderFunctionApp.Constants;
+using GraderFunctionApp.Models;
 
 namespace GraderFunctionApp.Functions
 {
@@ -121,7 +122,17 @@ namespace GraderFunctionApp.Functions
                 _logger.LogInformation("SaveTestResultsToStorage called with email: {email}", email);
                 var testResults = TestResultParser.ParseNUnitTestResult(xml);
                 await _storageService.SaveTestResultXmlAsync(email, xml);
-                await _storageService.SavePassTestRecordAsync(email, taskName, testResults);
+
+                // Load all tasks and their rewards
+                var tasksJson = GameTaskFunction.GetTasksJson(false);
+                var allTasks = Newtonsoft.Json.JsonConvert.DeserializeObject<List<GameTaskData>>(tasksJson);
+                var rewardMap = allTasks?.SelectMany(t => t.Tests.Select(test => new { test, t.Reward })).ToDictionary(x => x.test, x => x.Reward) ?? new Dictionary<string, int>();
+
+                // Build pass dictionary with mark
+                var passDict = testResults.Where(kv => kv.Value == 1)
+                    .ToDictionary(kv => kv.Key, kv => rewardMap.ContainsKey(kv.Key) ? rewardMap[kv.Key] : 0);
+
+                await _storageService.SavePassTestRecordAsync(email, taskName, passDict);
                 await _storageService.SaveFailTestRecordAsync(email, taskName, testResults);
                 _logger.LogInformation("Test results saved to storage for email: {email}", email);
             }
@@ -131,4 +142,6 @@ namespace GraderFunctionApp.Functions
             }
         }
     }
+
+    // PassTaskFunction moved to PassTaskFunction.cs
 }

@@ -80,9 +80,9 @@ namespace GraderFunctionApp
                 var timestamp = DateTimeOffset.UtcNow;
                 var partitionKey = SanitizeKey(email);
                 LogIfNoEmail(partitionKey, email, nameof(SavePassTestRecordAsync));
-                foreach (var test in testResults.Where(t => t.Value == 1))
+                foreach (var test in testResults.Where(t => t.Value >= 0))
                 {
-                    await SaveTestEntityAsync(tableClient, partitionKey, email, test.Key, timestamp, true);
+                    await SaveTestEntityAsync(tableClient, partitionKey, email, test.Key, timestamp, true, test.Value);
                 }
                 _logger.LogInformation("Pass test records saved for email: {email}", email);
             }
@@ -119,6 +119,33 @@ namespace GraderFunctionApp
             }
         }
 
+        public async Task<List<(string Name, int Mark)>> GetPassedTasksAsync(string email)
+        {
+            try
+            {
+                _logger.LogInformation("GetPassedTasksAsync called with email: {email}", email);
+
+                var tableClient = _tableServiceClient.GetTableClient(PassTestTableName);
+                var partitionKey = SanitizeKey(email);
+
+                var queryResults = tableClient.QueryAsync<PassTestEntity>(e => e.PartitionKey == partitionKey);
+                var passedTasks = new List<(string Name, int Mark)>();
+
+                await foreach (var entity in queryResults)
+                {
+                    passedTasks.Add((entity.TestName, entity.Mark));
+                }
+
+                _logger.LogInformation("Fetched {count} passed tasks for email: {email}", passedTasks.Count, email);
+                return passedTasks;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to fetch passed tasks for email: {email}", email);
+                throw;
+            }
+        }
+
         private async Task<TableClient> PrepareTableAsync(string tableName)
         {
             var tableClient = _tableServiceClient.GetTableClient(tableName);
@@ -134,7 +161,7 @@ namespace GraderFunctionApp
             }
         }
 
-        private async Task SaveTestEntityAsync(TableClient tableClient, string partitionKey, string email, string testName, DateTimeOffset timestamp, bool isPass)
+        private async Task SaveTestEntityAsync(TableClient tableClient, string partitionKey, string email, string testName, DateTimeOffset timestamp, bool isPass, int mark = 0)
         {
             var cleanTestName = CleanTestName(testName);
             var rowKey = $"{cleanTestName}_{timestamp:yyyyMMddHHmmss}";
@@ -143,7 +170,7 @@ namespace GraderFunctionApp
                 _logger.LogError($"{(isPass ? nameof(SavePassTestRecordAsync) : nameof(SaveFailTestRecordAsync))}: Using 'invalidtest' for test name in row key. Original test name: '{{testName}}' - this indicates a problem with test name parsing", testName);
             }
             ITableEntity entity = isPass
-                ? new Models.PassTestEntity { PartitionKey = partitionKey, RowKey = rowKey, Email = email, TestName = testName, PassedAt = timestamp, ETag = Azure.ETag.All }
+                ? new Models.PassTestEntity { PartitionKey = partitionKey, RowKey = rowKey, Email = email, TestName = testName, PassedAt = timestamp, Mark = mark, ETag = Azure.ETag.All }
                 : new Models.FailTestEntity { PartitionKey = partitionKey, RowKey = rowKey, Email = email, TestName = testName, FailedAt = timestamp, ETag = Azure.ETag.All };
             _logger.LogDebug($"{(isPass ? nameof(SavePassTestRecordAsync) : nameof(SaveFailTestRecordAsync))}: Saving test - PartitionKey: '{{partitionKey}}', RowKey: '{{rowKey}}', TestName: '{{testName}}'", partitionKey, rowKey, testName);
             await tableClient.UpsertEntityAsync(entity);
