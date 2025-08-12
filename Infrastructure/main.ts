@@ -17,148 +17,128 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
     super(scope, name);
 
-    new AzurermProvider(this, "AzureRm", {
-      subscriptionId: process.env.AZURE_SUBSCRIPTION_ID,
-      features: [
-        {
-          resourceGroup: [
-            {
-              preventDeletionIfContainsResources: false,
-            },
-          ],
-        },
-      ],
-    });
+    this.configureProvider();
 
     const prefix = "GradingEngineAssignment";
     const environment = "dev";
 
-    const resourceGroup = new ResourceGroup(this, prefix + "ResourceGroup", {
+    const resourceGroup = new ResourceGroup(this, `${prefix}ResourceGroup`, {
       location: "EastAsia",
-      name: prefix + "ResourceGroup",
+      name: `${prefix}ResourceGroup`,
     });
 
+    const azureFunctionConstruct = this.createAzureFunction(
+      prefix,
+      environment,
+      resourceGroup
+    );
+
+    const {
+      testResultsBlobContainer,
+      subscriptionTable,
+      credentialTable,
+      passTestTable,
+      failTestTable,
+    } = this.createStorageResources(prefix, azureFunctionConstruct.storageAccount.name);
+
+    // Ensure dependencies
+    [testResultsBlobContainer, subscriptionTable, credentialTable, passTestTable, failTestTable].forEach(
+      (dep) => azureFunctionConstruct.node.addDependency(dep)
+    );
+
+    const buildTestProjectResource = this.createBuildResource(prefix, azureFunctionConstruct);
+
+    this.createFileSharePublisher(
+      prefix,
+      azureFunctionConstruct,
+      buildTestProjectResource
+    );
+
+    this.createOutputs(prefix, azureFunctionConstruct);
+  }
+
+  private configureProvider() {
+    new AzurermProvider(this, "AzureRm", {
+      subscriptionId: process.env.AZURE_SUBSCRIPTION_ID,
+      features: [{ resourceGroup: [{ preventDeletionIfContainsResources: false }] }],
+    });
+  }
+
+  private createAzureFunction(prefix: string, environment: string, resourceGroup: ResourceGroup) {
     const appSettings = {
       AZURE_OPENAI_ENDPOINT: process.env.AZURE_OPENAI_ENDPOINT!,
       AZURE_OPENAI_API_KEY: process.env.AZURE_OPENAI_API_KEY!,
       DEPLOYMENT_OR_MODEL_NAME: process.env.DEPLOYMENT_OR_MODEL_NAME!,
     };
 
-    const azureFunctionConstruct = new AzureFunctionWindowsConstruct(
-      this,
-      prefix + "AzureFunctionConstruct",
-      {
-        functionAppName: process.env.FUNCTION_APP_NAME!,
-        environment,
-        prefix,
-        resourceGroup,
-        appSettings,
-        vsProjectPath: path.join(__dirname, "..", "GraderFunctionApp/"),
-        publishMode: PublishMode.Always,
-        functionNames: [
-          "AzureGraderFunction",
-          "GameTaskFunction",
-          "PassTaskFunction",
-        ],
-      }
-    );
+    const azureFunctionConstruct = new AzureFunctionWindowsConstruct(this, `${prefix}AzureFunctionConstruct`, {
+      functionAppName: process.env.FUNCTION_APP_NAME!,
+      environment,
+      prefix,
+      resourceGroup,
+      appSettings,
+      vsProjectPath: path.join(__dirname, "..", "GraderFunctionApp/"),
+      publishMode: PublishMode.Always,
+      functionNames: ["AzureGraderFunction", "GameTaskFunction", "PassTaskFunction"],
+    });
     azureFunctionConstruct.functionApp.siteConfig.cors.allowedOrigins = ["*"];
+    return azureFunctionConstruct;
+  }
 
-    // Create blob container for test result XML files
-    const testResultsBlobContainer = new StorageContainer(
-      this,
-      prefix + "TestResultsContainer",
-      {
-        name: "test-results",
-        storageAccountName: azureFunctionConstruct.storageAccount.name,
-        containerAccessType: "private",
-      }
-    );
-
-    const subscriptionTable = new StorageTable(this, prefix + "SubscriptionTable", {
-      name: "Subscription",
-      storageAccountName: azureFunctionConstruct.storageAccount.name,
+  private createStorageTable(prefix: string, name: string, storageAccountName: string) {
+    return new StorageTable(this, `${prefix}${name}Table`, {
+      name,
+      storageAccountName,
     });
-    // Create table for lab credentials
-    const credentialTable = new StorageTable(
-      this,
-      prefix + "CredentialTable",
-      {
-        name: "Credential",
-        storageAccountName: azureFunctionConstruct.storageAccount.name,
-      }
-    );
+  }
 
-    // Create table for pass test records (email + task -> current time)
-    const passTestTable = new StorageTable(this, prefix + "PassTestTable", {
-      name: "PassTests",
-      storageAccountName: azureFunctionConstruct.storageAccount.name,
+  private createStorageResources(prefix: string, storageAccountName: string) {
+    const testResultsBlobContainer = new StorageContainer(this, `${prefix}TestResultsContainer`, {
+      name: "test-results",
+      storageAccountName,
+      containerAccessType: "private",
     });
 
-    // Create table for fail test records (email + task + time)
-    const failTestTable = new StorageTable(this, prefix + "FailTestTable", {
-      name: "FailTests",
-      storageAccountName: azureFunctionConstruct.storageAccount.name,
+    const subscriptionTable = this.createStorageTable(prefix, "Subscription", storageAccountName);
+    const credentialTable = this.createStorageTable(prefix, "Credential", storageAccountName);
+    const passTestTable = this.createStorageTable(prefix, "PassTests", storageAccountName);
+    const failTestTable = this.createStorageTable(prefix, "FailTests", storageAccountName);
+
+    return { testResultsBlobContainer, subscriptionTable, credentialTable, passTestTable, failTestTable };
+  }
+
+  private createBuildResource(prefix: string, azureFunctionConstruct: AzureFunctionWindowsConstruct) {
+    const buildTestProjectResource = new Resource(this, `${prefix}BuildFunctionAppResource`, {
+      triggers: { build_hash: "${timestamp()}" },
+      dependsOn: [azureFunctionConstruct.publisher!.publishResource!],
     });
 
-    // Add dependency to ensure tables are created before function deployment
-    azureFunctionConstruct.node.addDependency(testResultsBlobContainer);
-    azureFunctionConstruct.node.addDependency(subscriptionTable);
-    azureFunctionConstruct.node.addDependency(credentialTable);
-    azureFunctionConstruct.node.addDependency(passTestTable);
-    azureFunctionConstruct.node.addDependency(failTestTable);
-
-    const buildTestProjectResource = new Resource(
-      this,
-      prefix + "BuildFunctionAppResource",
-      {
-        triggers: { build_hash: "${timestamp()}" },
-        dependsOn: [azureFunctionConstruct.publisher!.publishResource!],
-      }
-    );
-
-    buildTestProjectResource.addOverride("provisioner", [
-      {
-        "local-exec": {
-          working_dir: path.join(__dirname, "..", "AzureProjectTest/"),
-          command: "dotnet publish -p:PublishProfile=FolderProfile",
-        },
+    buildTestProjectResource.addOverride("provisioner", [{
+      "local-exec": {
+        working_dir: path.join(__dirname, "..", "AzureProjectTest/"),
+        command: "dotnet publish -p:PublishProfile=FolderProfile",
       },
-    ]);
-    // Upload the published test artifacts (self-contained) to the file share
-    const testOutputFolder = path.join(
-      __dirname,
-      "..",
-      "AzureProjectTest",
-      "bin",
-      "Release",
-      "net8.0",
-      "publish",
-      "win-x64"
-    );
-    const azureFunctionFileSharePublisherConstruct =
-      new AzureFunctionFileSharePublisherConstruct(
-        this,
-        prefix + "AzureFunctionFileSharePublisherConstruct",
-        {
-          functionApp: azureFunctionConstruct.functionApp,
-          functionFolder: "Tests",
-          localFolder: testOutputFolder,
-          storageAccount: azureFunctionConstruct.storageAccount,
-        }
-      );
-    azureFunctionFileSharePublisherConstruct.node.addDependency(
-      buildTestProjectResource
-    );
+    }]);
+    return buildTestProjectResource;
+  }
 
-    new TerraformOutput(this, prefix + "AzureGraderFunctionUrl", {
-      value: azureFunctionConstruct.functionUrls!["AzureGraderFunction"],
+  private createFileSharePublisher(prefix: string, azureFunctionConstruct: AzureFunctionWindowsConstruct, buildResource: Resource) {
+    const testOutputFolder = path.join(__dirname, "..", "AzureProjectTest", "bin", "Release", "net8.0", "publish", "win-x64");
+    const publisher = new AzureFunctionFileSharePublisherConstruct(this, `${prefix}AzureFunctionFileSharePublisherConstruct`, {
+      functionApp: azureFunctionConstruct.functionApp,
+      functionFolder: "Tests",
+      localFolder: testOutputFolder,
+      storageAccount: azureFunctionConstruct.storageAccount,
     });
-    new TerraformOutput(this, prefix + "GameTaskFunctionUrl", {
-      value: azureFunctionConstruct.functionUrls!["GameTaskFunction"],
-    });
-    new TerraformOutput(this, prefix + "PassTaskFunctionUrl", {
-      value: azureFunctionConstruct.functionUrls!["PassTaskFunction"],
+    publisher.node.addDependency(buildResource);
+    return publisher;
+  }
+
+  private createOutputs(prefix: string, azureFunctionConstruct: AzureFunctionWindowsConstruct) {
+    ["AzureGraderFunction", "GameTaskFunction", "PassTaskFunction"].forEach(fn => {
+      new TerraformOutput(this, `${prefix}${fn}Url`, {
+        value: azureFunctionConstruct.functionUrls![fn],
+      });
     });
   }
 }
