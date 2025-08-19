@@ -10,6 +10,16 @@
     "memory": "8gb"
   },
   "customizations": {
+    "codespaces": {
+      "repositories": {
+        "wongcyrus/azure-isekai": {
+          "permissions": {
+            "contents": "write",
+            "issues": "write"
+          }
+        }
+      }
+    },
     "vscode": {
       "settings": {
         "python.defaultInterpreterPath": "~/.python/current/bin/python3",

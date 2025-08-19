@@ -1,0 +1,3 @@
+[submodule "azure-isekai"]
+	path = azure-isekai
+	url = https://github.com/wongcyrus/azure-isekai
