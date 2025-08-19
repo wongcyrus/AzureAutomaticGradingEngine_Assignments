@@ -3,88 +3,45 @@ import { AzureFunctionWindowsConstruct } from "azure-common-construct/patterns/A
 import { PublishMode } from "azure-common-construct/patterns/PublisherConstruct";
 import { App, TerraformOutput, TerraformStack } from "cdktf";
 import { AzurermProvider } from "cdktf-azure-providers/.gen/providers/azurerm/provider";
+import { AzureadProvider } from "./.gen/providers/azuread/provider";
+import { AzapiProvider } from "./.gen/providers/azapi/provider";
+import { Application } from "./.gen/providers/azuread/application";
+import { ApplicationPasswordA } from "./.gen/providers/azuread/application-password";
+import { ActionsSecret } from "./.gen/providers/github/actions-secret";
+import { GithubProvider } from "./.gen/providers/github/provider";
 import { ResourceGroup } from "cdktf-azure-providers/.gen/providers/azurerm/resource-group";
 import { StorageContainer } from "cdktf-azure-providers/.gen/providers/azurerm/storage-container";
 import { StorageTable } from "cdktf-azure-providers/.gen/providers/azurerm/storage-table";
 import { Resource } from "cdktf-azure-providers/.gen/providers/null/resource";
 import { StaticWebApp } from "cdktf-azure-providers/.gen/providers/azurerm/static-web-app";
-import { GithubProvider } from "./.gen/providers/github/provider";
 import { Construct } from "constructs";
 import path = require("path");
 
 import * as dotenv from "dotenv";
 dotenv.config({ path: __dirname + "/.env" });
 
+// Extract constants for reuse
+const PREFIX = "GradingEngineAssignment";
+const ENVIRONMENT = "dev";
+const LOCATION = "EastAsia";
+
 class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
     super(scope, name);
-
     this.configureProvider();
 
-    const prefix = "GradingEngineAssignment";
-    const environment = "dev";
+    const resourceGroup = this.createResourceGroup();
+    const staticSite = this.createStaticWebApp(resourceGroup);
+    const { application, applicationPassword } = this.createAzureADApplication(staticSite);
+    this.configureGitHubSecrets(application, applicationPassword, staticSite);
 
-    const resourceGroup = new ResourceGroup(this, `${prefix}ResourceGroup`, {
-      location: "EastAsia",
-      name: `${prefix}ResourceGroup`,
-    });
+    const azureFunctionConstruct = this.createAzureFunction(PREFIX, ENVIRONMENT, resourceGroup);
+    const storageResources = this.createStorageResources(PREFIX, azureFunctionConstruct.storageAccount.name);
+    Object.values(storageResources).forEach(dep => azureFunctionConstruct.node.addDependency(dep));
 
-    // Add GitHub provider
-    const githubProvider = new GithubProvider(this, `${prefix}GithubProvider`, {
-      token: process.env.GITHUB_TOKEN || "",      
-    });
-
-    // Add Azure Static WebApp resource
-    new StaticWebApp(this, `${prefix}StaticWebApp`, {
-      name: `${prefix}StaticWebApp`,
-      resourceGroupName: resourceGroup.name,
-      location: resourceGroup.location,
-      skuTier: "Standard",
-      provider: githubProvider,
-      repositoryUrl: process.env.STATIC_WEBAPP_REPO_URL,
-      repositoryBranch: "main"
-    });
-
-
-
-    const azureFunctionConstruct = this.createAzureFunction(
-      prefix,
-      environment,
-      resourceGroup
-    );
-
-    const {
-      testResultsBlobContainer,
-      subscriptionTable,
-      credentialTable,
-      passTestTable,
-      failTestTable,
-    } = this.createStorageResources(
-      prefix,
-      azureFunctionConstruct.storageAccount.name
-    );
-
-    // Ensure dependencies
-    [
-      testResultsBlobContainer,
-      subscriptionTable,
-      credentialTable,
-      passTestTable,
-      failTestTable,
-    ].forEach((dep) => azureFunctionConstruct.node.addDependency(dep));
-
-    const buildTestProjectResource = this.createBuildResource(
-      prefix,
-      azureFunctionConstruct
-    );
-
-    this.createFileSharePublisher(
-      prefix,
-      azureFunctionConstruct,
-      buildTestProjectResource
-    );
-
-    this.createOutputs(prefix, azureFunctionConstruct);
+    const buildTestProjectResource = this.createBuildResource(PREFIX, azureFunctionConstruct);
+    this.createFileSharePublisher(PREFIX, azureFunctionConstruct, buildTestProjectResource);
+    this.createOutputs(PREFIX, azureFunctionConstruct);
   }
 
   private configureProvider() {
@@ -93,6 +50,69 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       features: [
         { resourceGroup: [{ preventDeletionIfContainsResources: false }] },
       ],
+    });
+
+    new AzureadProvider(this, "azuread", {});
+    new AzapiProvider(this, "azapi", {});
+  }
+
+  private createResourceGroup() {
+    return new ResourceGroup(this, `${PREFIX}ResourceGroup`, {
+      location: LOCATION,
+      name: `${PREFIX}ResourceGroup`,
+    });
+  }
+
+  private createStaticWebApp(resourceGroup: ResourceGroup) {
+    return new StaticWebApp(this, `${PREFIX}StaticWebApp`, {
+      name: `${PREFIX}StaticWebApp`,
+      resourceGroupName: resourceGroup.name,
+      location: resourceGroup.location,
+      skuTier: "Free",
+      skuSize: "Free",
+      repositoryUrl: process.env.STATIC_WEBAPP_REPO_URL,
+      repositoryBranch: "main",
+      repositoryToken: process.env.GITHUB_TOKEN,
+    });
+  }
+
+  private createAzureADApplication(staticSite: StaticWebApp) {
+    const application = new Application(this, "Application", {
+      displayName: `${PREFIX}Application`,
+      signInAudience: "AzureADMyOrg",
+      web: {
+        redirectUris: [`https://${staticSite.defaultHostName}/.auth/login/aadb2c/callback`],
+        implicitGrant: { accessTokenIssuanceEnabled: true, idTokenIssuanceEnabled: true },
+      },
+    });
+
+    const applicationPassword = new ApplicationPasswordA(this, "ApplicationPwd", {
+      applicationId: application.id,
+      displayName: "Application cred",
+    });
+
+    return { application, applicationPassword };
+  }
+
+  private configureGitHubSecrets(application: Application, applicationPassword: ApplicationPasswordA, staticSite: StaticWebApp) {
+    const githubProvider = new GithubProvider(this, "GitHubProvider", {
+      owner: "wongcyrus",
+      token: process.env.GITHUB_TOKEN,
+    });
+
+    const secrets = [
+      { name: "AADB2C_PROVIDER_CLIENT_ID", value: application.id },
+      { name: "AADB2C_PROVIDER_CLIENT_SECRET", value: applicationPassword.value },
+      { name: "AZURE_STATIC_WEB_APPS_API_TOKEN", value: staticSite.apiKey },
+    ];
+
+    secrets.forEach(secret => {
+      new ActionsSecret(this, secret.name, {
+        repository: process.env.STATIC_WEBAPP_REPO!,
+        secretName: secret.name,
+        plaintextValue: secret.value,
+        provider: githubProvider,
+      });
     });
   }
 
@@ -117,7 +137,7 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
         resourceGroup,
         appSettings,
         vsProjectPath: path.join(__dirname, "..", "GraderFunctionApp/"),
-        publishMode: PublishMode.Always,
+        publishMode: PublishMode.AfterCodeChange,
         functionNames: [
           "AzureGraderFunction",
           "GameTaskFunction",

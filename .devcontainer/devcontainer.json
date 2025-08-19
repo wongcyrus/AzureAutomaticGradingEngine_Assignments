@@ -44,7 +44,9 @@
         "ms-dotnettools.csdevkit",
         "editorconfig.editorconfig",
         "formulahendry.dotnet-test-explorer",
-        "esbenp.prettier-vscode"
+        "esbenp.prettier-vscode",
+        "azuretools.vscode-azurestaticwebapps",
+        "ms-azuretools.vscode-azurefunctions"
       ]
     }
   }
