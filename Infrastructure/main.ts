@@ -26,22 +26,45 @@ const ENVIRONMENT = "dev";
 const LOCATION = "EastAsia";
 
 class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
+  private application!: Application;
+  private applicationPassword!: ApplicationPasswordA;
+  private resourceGroup!: ResourceGroup;
+  private staticWebApp!: StaticWebApp;
+  private azureFunctionConstruct!: AzureFunctionWindowsConstruct;
+  private storageResources!: ReturnType<AzureAutomaticGradingEngineGraderStack["createStorageResources"]>;
+
   constructor(scope: Construct, name: string) {
     super(scope, name);
     this.configureProvider();
 
-    const resourceGroup = this.createResourceGroup();
-    const staticSite = this.createStaticWebApp(resourceGroup);
-    const { application, applicationPassword } = this.createAzureADApplication(staticSite);
-    this.configureGitHubSecrets(application, applicationPassword, staticSite);
+    this.resourceGroup = this.createResourceGroup();
+    this.staticWebApp = this.createStaticWebApp(this.resourceGroup);
+    this.createAzureADApplication(this.staticWebApp);
+    this.configureGitHubSecrets();
 
-    const azureFunctionConstruct = this.createAzureFunction(PREFIX, ENVIRONMENT, resourceGroup);
-    const storageResources = this.createStorageResources(PREFIX, azureFunctionConstruct.storageAccount.name);
-    Object.values(storageResources).forEach(dep => azureFunctionConstruct.node.addDependency(dep));
+    this.azureFunctionConstruct = this.createAzureFunction(
+      PREFIX,
+      ENVIRONMENT,
+      this.resourceGroup
+    );
+    this.storageResources = this.createStorageResources(
+      PREFIX,
+      this.azureFunctionConstruct.storageAccount.name
+    );
+    Object.values(this.storageResources).forEach((dep) =>
+      this.azureFunctionConstruct.node.addDependency(dep)
+    );
 
-    const buildTestProjectResource = this.createBuildResource(PREFIX, azureFunctionConstruct);
-    this.createFileSharePublisher(PREFIX, azureFunctionConstruct, buildTestProjectResource);
-    this.createOutputs(PREFIX, azureFunctionConstruct);
+    const buildTestProjectResource = this.createBuildResource(
+      PREFIX,
+      this.azureFunctionConstruct
+    );
+    this.createFileSharePublisher(
+      PREFIX,
+      this.azureFunctionConstruct,
+      buildTestProjectResource
+    );
+    this.createOutputs(PREFIX);
   }
 
   private configureProvider() {
@@ -77,36 +100,46 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
   }
 
   private createAzureADApplication(staticSite: StaticWebApp) {
-    const application = new Application(this, "Application", {
+    this.application = new Application(this, "Application", {
       displayName: `${PREFIX}Application`,
       signInAudience: "AzureADMyOrg",
       web: {
-        redirectUris: [`https://${staticSite.defaultHostName}/.auth/login/aadb2c/callback`],
-        implicitGrant: { accessTokenIssuanceEnabled: true, idTokenIssuanceEnabled: true },
+        redirectUris: [
+          `https://${staticSite.defaultHostName}/.auth/login/aadb2c/callback`,
+        ],
+        implicitGrant: {
+          accessTokenIssuanceEnabled: true,
+          idTokenIssuanceEnabled: true,
+        },
       },
     });
 
-    const applicationPassword = new ApplicationPasswordA(this, "ApplicationPwd", {
-      applicationId: application.id,
-      displayName: "Application cred",
-    });
-
-    return { application, applicationPassword };
+    this.applicationPassword = new ApplicationPasswordA(
+      this,
+      "ApplicationPwd",
+      {
+        applicationId: this.application.id,
+        displayName: "Application cred",
+      }
+    );
   }
 
-  private configureGitHubSecrets(application: Application, applicationPassword: ApplicationPasswordA, staticSite: StaticWebApp) {
+  private configureGitHubSecrets() {
     const githubProvider = new GithubProvider(this, "GitHubProvider", {
       owner: "wongcyrus",
       token: process.env.GITHUB_TOKEN,
     });
 
     const secrets = [
-      { name: "AADB2C_PROVIDER_CLIENT_ID", value: application.id },
-      { name: "AADB2C_PROVIDER_CLIENT_SECRET", value: applicationPassword.value },
-      { name: "AZURE_STATIC_WEB_APPS_API_TOKEN", value: staticSite.apiKey },
+      { name: "AADB2C_PROVIDER_CLIENT_ID", value: this.application.id },
+      {
+        name: "AADB2C_PROVIDER_CLIENT_SECRET",
+        value: this.applicationPassword.value,
+      },
+      { name: "AZURE_STATIC_WEB_APPS_API_TOKEN", value: this.staticWebApp.apiKey },
     ];
 
-    secrets.forEach(secret => {
+    secrets.forEach((secret) => {
       new ActionsSecret(this, secret.name, {
         repository: process.env.STATIC_WEBAPP_REPO!,
         secretName: secret.name,
@@ -254,17 +287,37 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     return publisher;
   }
 
-  private createOutputs(
-    prefix: string,
-    azureFunctionConstruct: AzureFunctionWindowsConstruct
-  ) {
+  private createOutputs(prefix: string) {
     ["AzureGraderFunction", "GameTaskFunction", "PassTaskFunction"].forEach(
       (fn) => {
         new TerraformOutput(this, `${prefix}${fn}Url`, {
-          value: azureFunctionConstruct.functionUrls![fn],
+          value: this.azureFunctionConstruct.functionUrls![fn],
         });
       }
     );
+
+    new TerraformOutput(this, "Output_AADB2C_PROVIDER_CLIENT_ID", {
+      value: this.application.id,
+      sensitive: true,
+    }).overrideLogicalId("AADB2C_PROVIDER_CLIENT_ID");
+
+    new TerraformOutput(this, "Output_AADB2C_PROVIDER_CLIENT_SECRET", {
+      value: this.applicationPassword.value,
+      sensitive: true,
+    }).overrideLogicalId("AADB2C_PROVIDER_CLIENT_SECRET");
+
+    new TerraformOutput(this, "Output_AADB2C_PROVIDER_AUTHORITY", {
+      value: `https://${this.application.publisherDomain}.b2clogin.com/${this.application.publisherDomain}/v2.0/`,
+    }).overrideLogicalId("AADB2C_PROVIDER_AUTHORITY");
+
+    new TerraformOutput(this, "static_web_app_default_host_name", {
+      value: this.staticWebApp.defaultHostName,
+    });
+
+    new TerraformOutput(this, "static_web_app_api_key", {
+      value: this.staticWebApp.apiKey,
+      sensitive: true,
+    });
   }
 }
 

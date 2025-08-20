@@ -364,3 +364,4 @@ notebooks/pass_at.xlsx
 testing/*
 **/*.env
 TaskRunnerTest/report/*
+**/outputs.json
