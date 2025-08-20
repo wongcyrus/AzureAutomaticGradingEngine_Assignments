@@ -311,7 +311,7 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     }).overrideLogicalId("AADB2C_PROVIDER_AUTHORITY");
 
     new TerraformOutput(this, "static_web_app_default_host_name", {
-      value: this.staticWebApp.defaultHostName,
+      value: `https://${this.staticWebApp.defaultHostName}`,
     });
 
     new TerraformOutput(this, "static_web_app_api_key", {
