@@ -16,11 +16,11 @@ namespace GraderFunctionApp.Functions
             _storageService = storageService;
         }
 
-        [Function(nameof(GetPassTaskFunction))]
-        public async Task<IActionResult> GetPassTaskFunction(
+        [Function(nameof(PassTaskFunction))]
+        public async Task<IActionResult> Run(
              [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req)
         {
-            _logger.LogInformation("Start GetPassTaskFunction");
+            _logger.LogInformation("Start PassTaskFunction");
 
             if (!req.Query.ContainsKey("email"))
             {

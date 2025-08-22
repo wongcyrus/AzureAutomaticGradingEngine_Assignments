@@ -20,8 +20,8 @@ namespace GraderFunctionApp.Functions
             _storageService = storageService;
         }
 
-        [Function(nameof(AzureGraderFunction))]
-        public async Task<IActionResult> AzureGraderFunction(
+        [Function(nameof(GraderFunction))]
+        public async Task<IActionResult> Run(
              [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
              ExecutionContext context)
         {

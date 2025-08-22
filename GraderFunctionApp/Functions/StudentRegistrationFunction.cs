@@ -19,7 +19,7 @@ namespace GraderFunctionApp.Functions
             _logger = loggerFactory.CreateLogger<StudentRegistrationFunction>();
         }
 
-        [Function("StudentRegistrationFunction")]
+        [Function(nameof(StudentRegistrationFunction))]
         public async Task<IActionResult> RunAsync(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req)
         {

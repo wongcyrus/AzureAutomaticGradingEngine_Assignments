@@ -31,17 +31,15 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
   private resourceGroup!: ResourceGroup;
   private staticWebApp!: StaticWebApp;
   private azureFunctionConstruct!: AzureFunctionWindowsConstruct;
-  private storageResources!: ReturnType<AzureAutomaticGradingEngineGraderStack["createStorageResources"]>;
+  private storageResources!: ReturnType<
+    AzureAutomaticGradingEngineGraderStack["createStorageResources"]
+  >;
 
   constructor(scope: Construct, name: string) {
     super(scope, name);
     this.configureProvider();
 
     this.resourceGroup = this.createResourceGroup();
-    this.staticWebApp = this.createStaticWebApp(this.resourceGroup);
-    this.createAzureADApplication(this.staticWebApp);
-    this.configureGitHubSecrets();
-
     this.azureFunctionConstruct = this.createAzureFunction(
       PREFIX,
       ENVIRONMENT,
@@ -54,6 +52,10 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     Object.values(this.storageResources).forEach((dep) =>
       this.azureFunctionConstruct.node.addDependency(dep)
     );
+
+    this.staticWebApp = this.createStaticWebApp(this.resourceGroup);
+    this.createAzureADApplication(this.staticWebApp);
+    this.configureGitHubSecrets();
 
     const buildTestProjectResource = this.createBuildResource(
       PREFIX,
@@ -87,6 +89,15 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
   }
 
   private createStaticWebApp(resourceGroup: ResourceGroup) {
+    const urls = [
+      "AzureGraderFunction",
+      "GameTaskFunction",
+      "PassTaskFunction",
+    ].map((fn) => {
+      const functionUrls = this.azureFunctionConstruct?.functionUrls ?? {};
+      return { fn, url: functionUrls[fn] ?? "" };
+    });
+
     return new StaticWebApp(this, `${PREFIX}StaticWebApp`, {
       name: `${PREFIX}StaticWebApp`,
       resourceGroupName: resourceGroup.name,
@@ -96,6 +107,10 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       repositoryUrl: process.env.STATIC_WEBAPP_REPO_URL,
       repositoryBranch: "main",
       repositoryToken: process.env.GITHUB_TOKEN,
+      appSettings: urls.reduce((settings, { fn, url }) => {
+        settings[`${fn}Url`] = url;
+        return settings;
+      }, {} as Record<string, string>),
     });
   }
 
@@ -136,7 +151,10 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
         name: "AADB2C_PROVIDER_CLIENT_SECRET",
         value: this.applicationPassword.value,
       },
-      { name: "AZURE_STATIC_WEB_APPS_API_TOKEN", value: this.staticWebApp.apiKey },
+      {
+        name: "AZURE_STATIC_WEB_APPS_API_TOKEN",
+        value: this.staticWebApp.apiKey,
+      },
     ];
 
     secrets.forEach((secret) => {

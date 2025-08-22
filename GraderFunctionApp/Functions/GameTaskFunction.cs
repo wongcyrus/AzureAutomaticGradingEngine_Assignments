@@ -87,7 +87,7 @@ namespace GraderFunctionApp.Functions
             }
         }
 
-        [Function("GameTaskFunction")]
+        [Function(nameof(GameTaskFunction))]
         public IActionResult Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req)
         {
