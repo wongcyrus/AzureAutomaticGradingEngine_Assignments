@@ -24,6 +24,11 @@ dotenv.config({ path: __dirname + "/.env" });
 const PREFIX = "GradingEngineAssignment";
 const ENVIRONMENT = "dev";
 const LOCATION = "EastAsia";
+const FUNCTION_NAMES = [
+  "GraderFunction",
+  "GameTaskFunction",
+  "PassTaskFunction",
+];
 
 class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
   private application!: Application;
@@ -89,14 +94,12 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
   }
 
   private createStaticWebApp(resourceGroup: ResourceGroup) {
-    const urls = [
-      "AzureGraderFunction",
-      "GameTaskFunction",
-      "PassTaskFunction",
-    ].map((fn) => {
-      const functionUrls = this.azureFunctionConstruct?.functionUrls ?? {};
-      return { fn, url: functionUrls[fn] ?? "" };
-    });
+    const urls = [...FUNCTION_NAMES].map(
+      (fn) => {
+        const functionUrls = this.azureFunctionConstruct?.functionUrls ?? {};
+        return { fn, url: functionUrls[fn] ?? "" };
+      }
+    );
 
     return new StaticWebApp(this, `${PREFIX}StaticWebApp`, {
       name: `${PREFIX}StaticWebApp`,
@@ -188,12 +191,8 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
         resourceGroup,
         appSettings,
         vsProjectPath: path.join(__dirname, "..", "GraderFunctionApp/"),
-        publishMode: PublishMode.AfterCodeChange,
-        functionNames: [
-          "AzureGraderFunction",
-          "GameTaskFunction",
-          "PassTaskFunction",
-        ],
+        publishMode: PublishMode.Always,
+        functionNames: [...FUNCTION_NAMES],
       }
     );
     azureFunctionConstruct.functionApp.siteConfig.cors.allowedOrigins = ["*"];
@@ -306,7 +305,7 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
   }
 
   private createOutputs(prefix: string) {
-    ["AzureGraderFunction", "GameTaskFunction", "PassTaskFunction"].forEach(
+    [...FUNCTION_NAMES].forEach(
       (fn) => {
         new TerraformOutput(this, `${prefix}${fn}Url`, {
           value: this.azureFunctionConstruct.functionUrls![fn],
