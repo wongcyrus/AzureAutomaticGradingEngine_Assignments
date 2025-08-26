@@ -14,6 +14,7 @@ import { StorageContainer } from "cdktf-azure-providers/.gen/providers/azurerm/s
 import { StorageTable } from "cdktf-azure-providers/.gen/providers/azurerm/storage-table";
 import { Resource } from "cdktf-azure-providers/.gen/providers/null/resource";
 import { StaticWebApp } from "cdktf-azure-providers/.gen/providers/azurerm/static-web-app";
+import { ApplicationInsights } from "cdktf-azure-providers/.gen/providers/azurerm/application-insights";
 import { Construct } from "constructs";
 import path = require("path");
 
@@ -101,6 +102,13 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       }
     );
 
+    const appInsights = new ApplicationInsights(this, `${PREFIX}AppInsights`, {
+      name: `${PREFIX.toLowerCase()}-appinsights-staticwebapp`,
+      location: resourceGroup.location,
+      resourceGroupName: resourceGroup.name,
+      applicationType: "web",
+    });
+
     return new StaticWebApp(this, `${PREFIX}StaticWebApp`, {
       name: `${PREFIX}StaticWebApp`,
       resourceGroupName: resourceGroup.name,
@@ -110,10 +118,14 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       repositoryUrl: process.env.STATIC_WEBAPP_REPO_URL,
       repositoryBranch: "main",
       repositoryToken: process.env.GITHUB_TOKEN,
-      appSettings: urls.reduce((settings, { fn, url }) => {
-        settings[`${fn}Url`] = url;
-        return settings;
-      }, {} as Record<string, string>),
+      appSettings: {
+        ...urls.reduce((settings, { fn, url }) => {
+          settings[`${fn}Url`] = url;
+          return settings;
+        }, {} as Record<string, string>),
+        APPLICATIONINSIGHTS_CONNECTION_STRING: appInsights.connectionString,
+        APPINSIGHTS_INSTRUMENTATIONKEY: appInsights.instrumentationKey,
+      },
     });
   }
 
