@@ -285,5 +285,62 @@ namespace GraderFunctionApp.Services
             _logger.LogError("CleanTestName: All strategies failed for '{fullTestName}' - using 'invalidtest'", fullTestName);
             return "invalidtest";
         }
+
+        public async Task<Credential?> GetCredentialAsync(string email)
+        {
+            try
+            {
+                _logger.LogInformation("GetCredentialAsync called with email: '{email}'", email);
+
+                var tableClient = _tableServiceClient.GetTableClient(_options.CredentialTableName);
+                await tableClient.CreateIfNotExistsAsync();
+
+                var response = await tableClient.GetEntityIfExistsAsync<Credential>(email, email);
+                
+                if (response.HasValue)
+                {
+                    _logger.LogInformation("Found credential for email: '{email}'", email);
+                    return response.Value;
+                }
+                else
+                {
+                    _logger.LogWarning("No credential found for email: '{email}'", email);
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving credential for email: '{email}'", email);
+                return null;
+            }
+        }
+
+        public async Task<string?> GetCredentialJsonAsync(string email)
+        {
+            try
+            {
+                var credential = await GetCredentialAsync(email);
+                if (credential == null)
+                {
+                    return null;
+                }
+
+                var credentialJson = new
+                {
+                    appId = credential.AppId,
+                    displayName = credential.DisplayName,
+                    password = credential.Password,
+                    tenant = credential.Tenant,
+                    subscriptionId = credential.SubscriptionId
+                };
+
+                return System.Text.Json.JsonSerializer.Serialize(credentialJson);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating credential JSON for email: '{email}'", email);
+                return null;
+            }
+        }
     }
 }

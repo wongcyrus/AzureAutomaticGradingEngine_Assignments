@@ -3,7 +3,7 @@ using Microsoft.WindowsAzure.Storage.Table;
 using ITableEntity = Azure.Data.Tables.ITableEntity;
 namespace GraderFunctionApp.Models;
 
-internal class Credential : ITableEntity
+public class Credential : ITableEntity
 {
     public string? AppId { get; set; }
     public string? DisplayName { get; set; }

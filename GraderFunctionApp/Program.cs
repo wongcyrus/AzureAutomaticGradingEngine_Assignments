@@ -40,6 +40,17 @@ var host = new HostBuilder()
             return new StorageService(connectionString, logger, storageOptions);
         });
 
+        // Register GameStateService with TableServiceClient
+        services.AddSingleton<IGameStateService>(provider =>
+        {
+            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
+            var logger = loggerFactory.CreateLogger<GameStateService>();
+            var connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage")
+                ?? throw new InvalidOperationException("AzureWebJobsStorage connection string not found");
+            var tableServiceClient = new Azure.Data.Tables.TableServiceClient(connectionString);
+            return new GameStateService(tableServiceClient, logger);
+        });
+
         // Register other services
         services.AddSingleton<IAIService, AIService>();
         services.AddSingleton<ITestResultParser, TestResultParser>();

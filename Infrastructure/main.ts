@@ -253,6 +253,11 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       "FailTests",
       storageAccountName
     );
+    const gameStatesTable = this.createStorageTable(
+      prefix,
+      "GameStates",
+      storageAccountName
+    );
 
     return {
       testResultsBlobContainer,
@@ -260,6 +265,7 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       credentialTable,
       passTestTable,
       failTestTable,
+      gameStatesTable,
     };
   }
 

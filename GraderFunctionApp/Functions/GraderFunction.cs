@@ -16,19 +16,22 @@ namespace GraderFunctionApp.Functions
         private readonly IGameTaskService _gameTaskService;
         private readonly ITestRunner _testRunner;
         private readonly ITestResultParser _testResultParser;
+        private readonly IGameStateService _gameStateService;
 
         public GraderFunction(
             ILogger<GraderFunction> logger,
             IStorageService storageService,
             IGameTaskService gameTaskService,
             ITestRunner testRunner,
-            ITestResultParser testResultParser)
+            ITestResultParser testResultParser,
+            IGameStateService gameStateService)
         {
             _logger = logger;
             _storageService = storageService;
             _gameTaskService = gameTaskService;
             _testRunner = testRunner;
             _testResultParser = testResultParser;
+            _gameStateService = gameStateService;
         }
 
         [Function(nameof(GraderFunction))]
@@ -59,6 +62,12 @@ namespace GraderFunctionApp.Functions
 
         private async Task<IActionResult> HandleGetRequestAsync(HttpRequest req, ExecutionContext context)
         {
+            // Check if this is a game mode request
+            if (req.Query.ContainsKey("gameMode") && req.Query["gameMode"] == "true")
+            {
+                return await HandleGameModeRequestAsync(req);
+            }
+
             if (!req.Query.ContainsKey("credentials"))
             {
                 return new ContentResult
@@ -147,6 +156,30 @@ namespace GraderFunctionApp.Functions
             return new ContentResult { Content = xml, ContentType = "application/xml", StatusCode = 200 };
         }
 
+        private async Task<IActionResult> HandleGameModeRequestAsync(HttpRequest req)
+        {
+            try
+            {
+                var email = req.Query["email"].FirstOrDefault() ?? "unknown";
+                var game = req.Query["game"].FirstOrDefault() ?? "unknown";
+                var npc = req.Query["npc"].FirstOrDefault() ?? "unknown";
+
+                _logger.LogInformation("Game mode request: {email}, {game}, {npc}", email, game, npc);
+
+                // Credentials will be retrieved from storage in HandleGameGradingAsync
+                var gameResponse = await HandleGameGradingAsync(email, game, npc, "", "");
+                return new JsonResult(gameResponse);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in HandleGameModeRequestAsync");
+                return new ObjectResult(GameResponse.Error("Internal server error: " + ex.Message))
+                {
+                    StatusCode = 500
+                };
+            }
+        }
+
         private async Task SaveTestResultsToStorageAsync(string email, string taskName, string xml)
         {
             try
@@ -174,6 +207,145 @@ namespace GraderFunctionApp.Functions
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to save test results to storage for email: {email}", email);
+            }
+        }
+
+        public async Task<GameResponse> HandleGameGradingAsync(string email, string game, string npc, string phrase, string credentials)
+        {
+            try
+            {
+                _logger.LogInformation("HandleGameGradingAsync called for {email}, {game}, {npc}", email, game, npc);
+
+                // Get current game state for this NPC
+                var gameState = await _gameStateService.GetGameStateAsync(email, game, npc);
+                if (gameState == null)
+                {
+                    return GameResponse.Error("No active game session found. Please get a task first by talking to the NPC.");
+                }
+
+                // Check if there's a current task with THIS NPC
+                if (!gameState.HasActiveTask || string.IsNullOrEmpty(gameState.CurrentTaskName))
+                {
+                    // Check if user has an active task with a DIFFERENT NPC
+                    var allUserStates = await _gameStateService.GetAllGameStatesForUserAsync(email);
+                    var activeTaskWithOtherNPC = allUserStates.FirstOrDefault(s => 
+                        s.HasActiveTask && 
+                        !string.IsNullOrEmpty(s.CurrentTaskName) && 
+                        s.RowKey != $"{game}-{npc}");
+
+                    if (activeTaskWithOtherNPC != null)
+                    {
+                        var otherNpcName = activeTaskWithOtherNPC.RowKey.Split('-').LastOrDefault() ?? "another NPC";
+                        
+                        var casualGradingResponses = new[]
+                        {
+                            $"I can't grade work I didn't assign! You need to go back to {otherNpcName} for grading.",
+                            $"That's not my assignment to check! {otherNpcName} gave you that task, so they should grade it.",
+                            $"I'm not the right NPC for grading that work. Go back to {otherNpcName}!",
+                            $"Wrong NPC! {otherNpcName} assigned that task, so they need to check your work.",
+                            $"I can only grade my own assignments. {otherNpcName} is waiting to check your work!",
+                            "I can't help with grading work I didn't assign. Find the right NPC!",
+                            "That's not my task to grade! Go back to whoever gave you the assignment.",
+                            "I only grade my own assignments. You're talking to the wrong NPC!",
+                            "I can't check work I didn't assign. Find the NPC who gave you that task!",
+                            "Wrong teacher! I can only grade assignments I gave out myself."
+                        };
+
+                        var randomResponse = casualGradingResponses[new Random().Next(casualGradingResponses.Length)];
+                        return GameResponse.Success(randomResponse, "WRONG_NPC_FOR_GRADING");
+                    }
+
+                    return GameResponse.Error("No active task found. Please get a new task first by talking to the NPC.");
+                }
+
+                // Run the grading for the current task
+                return await RunTaskGradingAsync(email, game, npc, credentials, gameState);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in HandleGameGradingAsync");
+                return GameResponse.Error("Internal server error: " + ex.Message);
+            }
+        }
+
+        private async Task<GameResponse> RunTaskGradingAsync(string email, string game, string npc, string credentials, GameState gameState)
+        {
+            try
+            {
+                _logger.LogInformation("Running grading for task: {taskName}", gameState.CurrentTaskName);
+
+                // Retrieve credentials from storage if not provided
+                string credentialsToUse = credentials;
+                if (string.IsNullOrEmpty(credentialsToUse))
+                {
+                    _logger.LogInformation("No credentials provided, retrieving from storage for email: {email}", email);
+                    credentialsToUse = await _storageService.GetCredentialJsonAsync(email) ?? "";
+                    
+                    if (string.IsNullOrEmpty(credentialsToUse))
+                    {
+                        var errorMessage = "No Azure credentials found. Please register your credentials first.";
+                        return GameResponse.Error(errorMessage);
+                    }
+                }
+
+                // Run the unit tests
+                var xml = await _testRunner.RunUnitTestProcessAsync(null!, _logger, credentialsToUse, email, gameState.CurrentTaskFilter);
+                
+                if (string.IsNullOrEmpty(xml))
+                {
+                    return GameResponse.Error("Failed to run tests. Please check your Azure setup and try again.");
+                }
+
+                // Parse test results
+                var testResults = _testResultParser.ParseNUnitTestResult(xml);
+                await SaveTestResultsToStorageAsync(email, gameState.CurrentTaskName, xml);
+
+                // Check if all tests passed
+                var totalTests = testResults.Count;
+                var passedTests = testResults.Values.Count(v => v == 1);
+                var allTestsPassed = totalTests > 0 && passedTests == totalTests;
+
+                if (allTestsPassed)
+                {
+                    // Task completed successfully - mark as completed and ready for next task
+                    gameState = await _gameStateService.CompleteTaskAsync(email, game, npc, gameState.CurrentTaskName, gameState.CurrentTaskReward);
+                    
+                    var response = GameResponse.Success(gameState.LastMessage, "READY_FOR_NEXT");
+                    response.TaskCompleted = true;
+                    response.Score = gameState.TotalScore;
+                    response.CompletedTasks = gameState.CompletedTasks;
+                    response.TaskName = gameState.CurrentTaskName;
+                    response.ReportUrl = $"/api/report?email={email}&task={gameState.CurrentTaskName}";
+                    response.EasterEggUrl = "https://example.com/congratulations";
+                    
+                    return response;
+                }
+                else
+                {
+                    // Some tests failed - keep the same task active
+                    var failedTests = totalTests - passedTests;
+                    var message = $"Task '{gameState.CurrentTaskName}' not completed yet. {passedTests}/{totalTests} tests passed. Please fix the issues and try again.";
+                    
+                    gameState.LastMessage = message;
+                    await _gameStateService.CreateOrUpdateGameStateAsync(gameState);
+                    
+                    var response = GameResponse.Success(message, "TASK_ASSIGNED");
+                    response.Score = gameState.TotalScore;
+                    response.CompletedTasks = gameState.CompletedTasks;
+                    response.TaskName = gameState.CurrentTaskName;
+                    response.ReportUrl = $"/api/report?email={email}&task={gameState.CurrentTaskName}";
+                    response.AdditionalData["testResults"] = testResults;
+                    response.AdditionalData["passedTests"] = passedTests;
+                    response.AdditionalData["totalTests"] = totalTests;
+                    
+                    return response;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error running task grading");
+                var errorMessage = "Error occurred while checking your task. Please try again.";
+                return GameResponse.Error(errorMessage);
             }
         }
     }

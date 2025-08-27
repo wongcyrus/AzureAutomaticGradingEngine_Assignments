@@ -61,16 +61,8 @@ namespace GraderFunctionApp.Services
             {
                 _logger.LogDebug("Initializing Azure OpenAI client with endpoint: {endpoint}", azureOpenAiEndpoint);
                 
-                // Validate and potentially fix endpoint format
-                var correctedEndpoint = ValidateAndCorrectEndpoint(azureOpenAiEndpoint);
-                if (correctedEndpoint != azureOpenAiEndpoint)
-                {
-                    _logger.LogWarning("Corrected endpoint format from {original} to {corrected}", 
-                        azureOpenAiEndpoint, correctedEndpoint);
-                }
-                
                 // Follow the official SDK pattern from the documentation
-                var endpoint = new Uri(correctedEndpoint);
+                var endpoint = new Uri(azureOpenAiEndpoint);
                 var azureClient = new AzureOpenAIClient(endpoint, new AzureKeyCredential(azureOpenAiApiKey));
                 var chatClient = azureClient.GetChatClient(deploymentOrModelName);
                 
@@ -172,37 +164,6 @@ namespace GraderFunctionApp.Services
                     ex.GetType().Name, ex.Message);
                 return instruction;
             }
-        }
-
-        private string ValidateAndCorrectEndpoint(string endpoint)
-        {
-            if (string.IsNullOrEmpty(endpoint))
-                return endpoint;
-
-            // Remove trailing slash for processing
-            var cleanEndpoint = endpoint.TrimEnd('/');
-
-            // Check if it's using the old cognitiveservices.azure.com format
-            if (cleanEndpoint.Contains("cognitiveservices.azure.com"))
-            {
-                // Extract the resource name and convert to new format
-                var uri = new Uri(cleanEndpoint);
-                var hostParts = uri.Host.Split('.');
-                if (hostParts.Length > 0)
-                {
-                    var resourceName = hostParts[0];
-                    return $"https://{resourceName}.openai.azure.com/";
-                }
-            }
-
-            // Check if it's already in the correct format
-            if (cleanEndpoint.Contains(".openai.azure.com"))
-            {
-                return cleanEndpoint + "/";
-            }
-
-            // If it doesn't match expected patterns, return as-is with trailing slash
-            return cleanEndpoint + "/";
         }
     }
 }
