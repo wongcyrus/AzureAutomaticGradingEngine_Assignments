@@ -26,7 +26,6 @@ var host = new HostBuilder()
         services.ConfigureFunctionsApplicationInsights();
 
         // Configuration Options
-        services.Configure<AzureOpenAIOptions>(configuration.GetSection(AzureOpenAIOptions.SectionName));
         services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
         services.Configure<TestRunnerOptions>(configuration.GetSection(TestRunnerOptions.SectionName));
 

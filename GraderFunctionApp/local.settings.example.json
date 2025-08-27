@@ -1,0 +1,26 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "DefaultEndpointsProtocol=https;AccountName=yourstorageaccount;AccountKey=your-storage-key;EndpointSuffix=core.windows.net",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "Functions:Worker:HostEndpoint": "127.0.0.1:5001",
+    
+    "_comment1": "Replace with your actual Azure OpenAI resource endpoint",
+    "AZURE_OPENAI_ENDPOINT": "https://hkiitazureai.cognitiveservices.azure.com/",
+    
+    "_comment2": "Replace with your actual API key from Azure OpenAI resource",
+    "AZURE_OPENAI_API_KEY": "your-32-character-api-key-here",
+    
+    "_comment3": "Replace with your actual deployment name (same as model name typically)",
+    "DEPLOYMENT_OR_MODEL_NAME": "gpt-4o-mini"
+  },
+  "ConnectionStrings": {},
+  
+  "_instructions": {
+    "1": "Copy this file to local.settings.json",
+    "2": "Replace the placeholder values with your actual Azure OpenAI configuration",
+    "3": "Get your endpoint and API key from Azure Portal > Your OpenAI Resource > Keys and Endpoint",
+    "4": "Get your deployment name from Azure OpenAI Studio > Deployments",
+    "5": "Remove these instruction comments from your actual local.settings.json"
+  }
+}

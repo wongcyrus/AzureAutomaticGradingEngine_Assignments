@@ -1,10 +1,8 @@
 using Azure;
 using Azure.AI.OpenAI;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using OpenAI.Chat;
 using System.Runtime.Caching;
-using GraderFunctionApp.Configuration;
 using GraderFunctionApp.Interfaces;
 
 namespace GraderFunctionApp.Services
@@ -12,19 +10,18 @@ namespace GraderFunctionApp.Services
     public class AIService : IAIService
     {
         private readonly ILogger<AIService> _logger;
-        private readonly AzureOpenAIOptions _options;
         private static readonly ObjectCache TokenCache = MemoryCache.Default;
 
-        public AIService(ILogger<AIService> logger, IOptions<AzureOpenAIOptions> options)
+        public AIService(ILogger<AIService> logger)
         {
             _logger = logger;
-            _options = options.Value;
         }
 
         public async Task<string?> RephraseInstructionAsync(string instruction)
         {
             if (string.IsNullOrEmpty(instruction))
             {
+                _logger.LogDebug("Instruction is null or empty, returning as-is");
                 return instruction;
             }
 
@@ -35,24 +32,49 @@ namespace GraderFunctionApp.Services
             var tokenContents = TokenCache?.GetCacheItem(cacheKey);
             if (tokenContents != null && tokenContents.Value != null)
             {
+                _logger.LogDebug("Returning cached rephrased instruction");
                 return tokenContents.Value.ToString();
             }
 
-            if (string.IsNullOrEmpty(_options.Endpoint) || 
-                string.IsNullOrEmpty(_options.ApiKey) || 
-                string.IsNullOrEmpty(_options.DeploymentName))
+            // Use original environment variable names for backward compatibility
+            var azureOpenAiEndpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
+            var azureOpenAiApiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY");
+            var deploymentOrModelName = Environment.GetEnvironmentVariable("DEPLOYMENT_OR_MODEL_NAME");
+
+            _logger.LogDebug("Azure OpenAI Configuration - Endpoint: {hasEndpoint}, ApiKey: {hasApiKey}, DeploymentName: {deploymentName}", 
+                !string.IsNullOrEmpty(azureOpenAiEndpoint), 
+                !string.IsNullOrEmpty(azureOpenAiApiKey), 
+                deploymentOrModelName);
+
+            if (string.IsNullOrEmpty(azureOpenAiEndpoint) || 
+                string.IsNullOrEmpty(azureOpenAiApiKey) || 
+                string.IsNullOrEmpty(deploymentOrModelName))
             {
-                _logger.LogWarning("Azure OpenAI configuration is incomplete. Returning original instruction.");
+                _logger.LogWarning("Azure OpenAI configuration is incomplete. Endpoint: {hasEndpoint}, ApiKey: {hasApiKey}, DeploymentName: {hasDeployment}. Returning original instruction.", 
+                    !string.IsNullOrEmpty(azureOpenAiEndpoint), 
+                    !string.IsNullOrEmpty(azureOpenAiApiKey), 
+                    !string.IsNullOrEmpty(deploymentOrModelName));
                 return instruction;
             }
 
             try
             {
-                var openAiClient = new AzureOpenAIClient(
-                    new Uri(_options.Endpoint),
-                    new AzureKeyCredential(_options.ApiKey));
+                _logger.LogDebug("Initializing Azure OpenAI client with endpoint: {endpoint}", azureOpenAiEndpoint);
                 
-                var client = openAiClient.GetChatClient(_options.DeploymentName);
+                // Validate and potentially fix endpoint format
+                var correctedEndpoint = ValidateAndCorrectEndpoint(azureOpenAiEndpoint);
+                if (correctedEndpoint != azureOpenAiEndpoint)
+                {
+                    _logger.LogWarning("Corrected endpoint format from {original} to {corrected}", 
+                        azureOpenAiEndpoint, correctedEndpoint);
+                }
+                
+                // Follow the official SDK pattern from the documentation
+                var endpoint = new Uri(correctedEndpoint);
+                var azureClient = new AzureOpenAIClient(endpoint, new AzureKeyCredential(azureOpenAiApiKey));
+                var chatClient = azureClient.GetChatClient(deploymentOrModelName);
+                
+                _logger.LogDebug("Created chat client for deployment: {deployment}", deploymentOrModelName);
 
                 var messages = new List<ChatMessage>
                 {
@@ -69,16 +91,36 @@ namespace GraderFunctionApp.Services
                         $"Rewrite the following sentence:\n\n\n{instruction}\n")
                 };
 
-                var response = await client.CompleteChatAsync(messages,
-                    new ChatCompletionOptions()
-                    {
-                        MaxOutputTokenCount = 800,
-                        Temperature = 0.9f,
-                        FrequencyPenalty = 0,
-                        PresencePenalty = 0
-                    });
+                _logger.LogDebug("Sending request to Azure OpenAI with {messageCount} messages", messages.Count);
+
+                // Use the official SDK pattern with ChatCompletionOptions
+                var requestOptions = new ChatCompletionOptions()
+                {
+                    MaxOutputTokenCount = 800,
+                    Temperature = 0.9f,
+                    FrequencyPenalty = 0,
+                    PresencePenalty = 0
+                };
+
+                // Use the async method as recommended
+                var response = await chatClient.CompleteChatAsync(messages, requestOptions);
+
+                _logger.LogDebug("Received response from Azure OpenAI");
+
+                if (response?.Value?.Content == null || response.Value.Content.Count == 0)
+                {
+                    _logger.LogWarning("Azure OpenAI returned empty response");
+                    return instruction;
+                }
 
                 var chatMessage = response.Value.Content[0].Text;
+                
+                if (string.IsNullOrEmpty(chatMessage))
+                {
+                    _logger.LogWarning("Azure OpenAI returned empty text content");
+                    return instruction;
+                }
+
                 var policy = new CacheItemPolicy
                 {
                     Priority = CacheItemPriority.Default,
@@ -88,13 +130,79 @@ namespace GraderFunctionApp.Services
                 tokenContents = new CacheItem(cacheKey, chatMessage);
                 TokenCache?.Set(tokenContents, policy);
                 
+                _logger.LogInformation("Successfully rephrased instruction using Azure OpenAI. Original length: {originalLength}, Rephrased length: {rephrasedLength}", 
+                    instruction.Length, chatMessage.Length);
                 return chatMessage;
+            }
+            catch (RequestFailedException ex)
+            {
+                _logger.LogError(ex, "Azure OpenAI API request failed. Status: {status}, ErrorCode: {errorCode}, Message: {message}. " +
+                    "Check your API key, endpoint URL, and deployment name.", 
+                    ex.Status, ex.ErrorCode, ex.Message);
+                return instruction;
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogError(ex, "Invalid argument provided to Azure OpenAI client. " +
+                    "This might indicate a configuration issue with endpoint URL or deployment name: {message}", ex.Message);
+                return instruction;
+            }
+            catch (UriFormatException ex)
+            {
+                _logger.LogError(ex, "Invalid Azure OpenAI endpoint format: {endpoint}. " +
+                    "Expected format: https://your-resource.openai.azure.com/ - {message}", azureOpenAiEndpoint, ex.Message);
+                return instruction;
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "HTTP request to Azure OpenAI failed. " +
+                    "This might indicate network connectivity issues or service unavailability: {message}", ex.Message);
+                return instruction;
+            }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogError(ex, "Azure OpenAI request timed out. " +
+                    "The service might be overloaded or there are network issues: {message}", ex.Message);
+                return instruction;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while rephrasing instruction with Azure OpenAI.");
+                _logger.LogError(ex, "Unexpected error occurred while rephrasing instruction with Azure OpenAI. " +
+                    "Type: {exceptionType}, Message: {message}", 
+                    ex.GetType().Name, ex.Message);
                 return instruction;
             }
+        }
+
+        private string ValidateAndCorrectEndpoint(string endpoint)
+        {
+            if (string.IsNullOrEmpty(endpoint))
+                return endpoint;
+
+            // Remove trailing slash for processing
+            var cleanEndpoint = endpoint.TrimEnd('/');
+
+            // Check if it's using the old cognitiveservices.azure.com format
+            if (cleanEndpoint.Contains("cognitiveservices.azure.com"))
+            {
+                // Extract the resource name and convert to new format
+                var uri = new Uri(cleanEndpoint);
+                var hostParts = uri.Host.Split('.');
+                if (hostParts.Length > 0)
+                {
+                    var resourceName = hostParts[0];
+                    return $"https://{resourceName}.openai.azure.com/";
+                }
+            }
+
+            // Check if it's already in the correct format
+            if (cleanEndpoint.Contains(".openai.azure.com"))
+            {
+                return cleanEndpoint + "/";
+            }
+
+            // If it doesn't match expected patterns, return as-is with trailing slash
+            return cleanEndpoint + "/";
         }
     }
 }
