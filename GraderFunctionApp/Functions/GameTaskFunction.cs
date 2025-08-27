@@ -14,15 +14,18 @@ namespace GraderFunctionApp.Functions
         private readonly ILogger<GameTaskFunction> _logger;
         private readonly IGameTaskService _gameTaskService;
         private readonly IGameStateService _gameStateService;
+        private readonly IStorageService _storageService;
 
         public GameTaskFunction(
             ILogger<GameTaskFunction> logger, 
             IGameTaskService gameTaskService,
-            IGameStateService gameStateService)
+            IGameStateService gameStateService,
+            IStorageService storageService)
         {
             _logger = logger;
             _gameTaskService = gameTaskService;
             _gameStateService = gameStateService;
+            _storageService = storageService;
         }
 
         [Function(nameof(GameTaskFunction))]
@@ -91,6 +94,35 @@ namespace GraderFunctionApp.Functions
                     response.TaskName = gameState.CurrentTaskName;
                     response.Score = gameState.TotalScore;
                     response.CompletedTasks = gameState.CompletedTasks;
+                    
+                    return new JsonResult(response);
+                }
+
+                // Check if this NPC was the last one to assign a task
+                var lastTaskNPC = await _storageService.GetLastTaskNPCAsync(email);
+                if (!string.IsNullOrEmpty(lastTaskNPC) && lastTaskNPC == npc)
+                {
+                    var varietyResponses = new[]
+                    {
+                        "You just completed my task! Why don't you try talking to other trainers for some variety?",
+                        "I think you should explore what other NPCs have to offer before coming back to me!",
+                        "You've been working with me recently. Go see what challenges the other trainers have!",
+                        "Time to mix things up! Try getting a task from a different trainer this time.",
+                        "I just gave you a task recently. Let's give other trainers a chance to teach you something new!",
+                        "You should diversify your learning! Go talk to other NPCs for different perspectives.",
+                        "I've been keeping you busy lately. Why not see what the other trainers are up to?",
+                        "Let's spread the learning around! Try working with a different NPC for your next challenge.",
+                        "You've mastered my recent assignment. Time to learn from other experts around here!",
+                        "I think you'd benefit from working with different trainers. Go explore what others have to offer!"
+                    };
+
+                    var randomResponse = varietyResponses[new Random().Next(varietyResponses.Length)];
+                    
+                    var response = GameResponse.Success(randomResponse, "ENCOURAGE_VARIETY");
+                    response.Score = gameState.TotalScore;
+                    response.CompletedTasks = gameState.CompletedTasks;
+                    response.AdditionalData["lastTaskNPC"] = lastTaskNPC;
+                    response.AdditionalData["suggestion"] = "Try talking to a different NPC for variety";
                     
                     return new JsonResult(response);
                 }

@@ -180,11 +180,11 @@ namespace GraderFunctionApp.Functions
             }
         }
 
-        private async Task SaveTestResultsToStorageAsync(string email, string taskName, string xml)
+        private async Task SaveTestResultsToStorageAsync(string email, string taskName, string xml, string npc = "")
         {
             try
             {
-                _logger.LogInformation("SaveTestResultsToStorage called with email: {email}", email);
+                _logger.LogInformation("SaveTestResultsToStorage called with email: {email}, NPC: {npc}", email, npc);
                 
                 var testResults = _testResultParser.ParseNUnitTestResult(xml);
                 await _storageService.SaveTestResultXmlAsync(email, xml);
@@ -199,10 +199,25 @@ namespace GraderFunctionApp.Functions
                 var passDict = testResults.Where(kv => kv.Value == 1)
                     .ToDictionary(kv => kv.Key, kv => rewardMap.ContainsKey(kv.Key) ? rewardMap[kv.Key] : 0);
 
-                await _storageService.SavePassTestRecordAsync(email, taskName, passDict);
-                await _storageService.SaveFailTestRecordAsync(email, taskName, testResults);
+                if (!string.IsNullOrEmpty(npc))
+                {
+                    await _storageService.SavePassTestRecordAsync(email, taskName, passDict, npc);
+                }
+                else
+                {
+                    await _storageService.SavePassTestRecordAsync(email, taskName, passDict, "Unknown");
+                }
                 
-                _logger.LogInformation("Test results saved to storage for email: {email}", email);
+                if (!string.IsNullOrEmpty(npc))
+                {
+                    await _storageService.SaveFailTestRecordAsync(email, taskName, testResults, npc);
+                }
+                else
+                {
+                    await _storageService.SaveFailTestRecordAsync(email, taskName, testResults, "Unknown");
+                }
+                
+                _logger.LogInformation("Test results saved to storage for email: {email}, NPC: {npc}", email, npc);
             }
             catch (Exception ex)
             {
@@ -298,7 +313,7 @@ namespace GraderFunctionApp.Functions
 
                 // Parse test results
                 var testResults = _testResultParser.ParseNUnitTestResult(xml);
-                await SaveTestResultsToStorageAsync(email, gameState.CurrentTaskName, xml);
+                await SaveTestResultsToStorageAsync(email, gameState.CurrentTaskName, xml, npc);
 
                 // Check if all tests passed
                 var totalTests = testResults.Count;

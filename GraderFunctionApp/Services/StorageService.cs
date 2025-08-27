@@ -70,11 +70,11 @@ namespace GraderFunctionApp.Services
             }
         }
 
-        public async Task SavePassTestRecordAsync(string email, string taskName, Dictionary<string, int> testResults)
+        public async Task SavePassTestRecordAsync(string email, string taskName, Dictionary<string, int> testResults, string assignedByNPC)
         {
             try
             {
-                _logger.LogInformation("SavePassTestRecordAsync called with email: '{email}', {testCount} tests", email, testResults.Count);
+                _logger.LogInformation("SavePassTestRecordAsync called with email: '{email}', {testCount} tests, NPC: '{npc}'", email, testResults.Count, assignedByNPC);
                 if (string.IsNullOrEmpty(email))
                 {
                     _logger.LogWarning("SavePassTestRecordAsync: email is null or empty - this should not happen");
@@ -86,9 +86,9 @@ namespace GraderFunctionApp.Services
                 
                 foreach (var test in testResults.Where(static t => t.Value >= 0))
                 {
-                    await SaveTestEntityAsync(tableClient, partitionKey, email, test.Key, timestamp, true, test.Value);
+                    await SaveTestEntityAsync(tableClient, partitionKey, email, test.Key, timestamp, true, test.Value, taskName, assignedByNPC);
                 }
-                _logger.LogInformation("Pass test records saved for email: {email}", email);
+                _logger.LogInformation("Pass test records saved for email: {email}, NPC: {npc}", email, assignedByNPC);
             }
             catch (Exception ex)
             {
@@ -97,11 +97,11 @@ namespace GraderFunctionApp.Services
             }
         }
 
-        public async Task SaveFailTestRecordAsync(string email, string taskName, Dictionary<string, int> testResults)
+        public async Task SaveFailTestRecordAsync(string email, string taskName, Dictionary<string, int> testResults, string assignedByNPC)
         {
             try
             {
-                _logger.LogInformation("SaveFailTestRecordAsync called with email: '{email}', {testCount} tests", email, testResults.Count);
+                _logger.LogInformation("SaveFailTestRecordAsync called with email: '{email}', {testCount} tests, NPC: '{npc}'", email, testResults.Count, assignedByNPC);
                 if (string.IsNullOrEmpty(email))
                 {
                     _logger.LogWarning("SaveFailTestRecordAsync: email is null or empty - this should not happen");
@@ -113,9 +113,9 @@ namespace GraderFunctionApp.Services
                 
                 foreach (var test in testResults.Where(static t => t.Value == 0))
                 {
-                    await SaveTestEntityAsync(tableClient, partitionKey, email, test.Key, timestamp, false);
+                    await SaveTestEntityAsync(tableClient, partitionKey, email, test.Key, timestamp, false, 0, taskName, assignedByNPC);
                 }
-                _logger.LogInformation("Fail test records saved for email: {email}", email);
+                _logger.LogInformation("Fail test records saved for email: {email}, NPC: {npc}", email, assignedByNPC);
             }
             catch (Exception ex)
             {
@@ -166,7 +166,7 @@ namespace GraderFunctionApp.Services
             }
         }
 
-        private async Task SaveTestEntityAsync(TableClient tableClient, string partitionKey, string email, string testName, DateTimeOffset timestamp, bool isPass, int mark = 0)
+        private async Task SaveTestEntityAsync(TableClient tableClient, string partitionKey, string email, string testName, DateTimeOffset timestamp, bool isPass, int mark = 0, string taskName = "", string assignedByNPC = "")
         {
             var cleanTestName = CleanTestName(testName);
             var rowKey = isPass 
@@ -197,10 +197,29 @@ namespace GraderFunctionApp.Services
             }
 
             ITableEntity entity = isPass
-            ? new PassTestEntity { PartitionKey = partitionKey, RowKey = rowKey, Email = email, TestName = testName, PassedAt = timestamp, Mark = mark, ETag = ETag.All }
-            : new FailTestEntity { PartitionKey = partitionKey, RowKey = rowKey, Email = email, TestName = testName, FailedAt = timestamp, ETag = ETag.All };
+            ? new PassTestEntity { 
+                PartitionKey = partitionKey, 
+                RowKey = rowKey, 
+                Email = email, 
+                TestName = testName, 
+                TaskName = taskName,
+                AssignedByNPC = assignedByNPC,
+                PassedAt = timestamp, 
+                Mark = mark, 
+                ETag = ETag.All 
+            }
+            : new FailTestEntity { 
+                PartitionKey = partitionKey, 
+                RowKey = rowKey, 
+                Email = email, 
+                TestName = testName, 
+                TaskName = taskName,
+                AssignedByNPC = assignedByNPC,
+                FailedAt = timestamp, 
+                ETag = ETag.All 
+            };
 
-            _logger.LogDebug($"{(isPass ? nameof(SavePassTestRecordAsync) : nameof(SaveFailTestRecordAsync))}: Saving test - PartitionKey: '{{partitionKey}}', RowKey: '{{rowKey}}', TestName: '{{testName}}'", partitionKey, rowKey, testName);
+            _logger.LogDebug($"{(isPass ? nameof(SavePassTestRecordAsync) : nameof(SaveFailTestRecordAsync))}: Saving test - PartitionKey: '{{partitionKey}}', RowKey: '{{rowKey}}', TestName: '{{testName}}', NPC: '{{npc}}'", partitionKey, rowKey, testName, assignedByNPC);
             await tableClient.UpsertEntityAsync(entity);
         }
 
@@ -339,6 +358,41 @@ namespace GraderFunctionApp.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating credential JSON for email: '{email}'", email);
+                return null;
+            }
+        }
+
+        public async Task<string?> GetLastTaskNPCAsync(string email)
+        {
+            try
+            {
+                _logger.LogInformation("GetLastTaskNPCAsync called with email: '{email}'", email);
+
+                var tableClient = _tableServiceClient.GetTableClient(_options.PassTestTableName);
+                await tableClient.CreateIfNotExistsAsync();
+
+                var partitionKey = SanitizeKey(email);
+                
+                // Get the most recent completed task for this user
+                var query = tableClient.QueryAsync<PassTestEntity>(
+                    filter: $"PartitionKey eq '{partitionKey}'");
+
+                PassTestEntity? mostRecentTask = null;
+                await foreach (var entity in query)
+                {
+                    if (mostRecentTask == null || entity.PassedAt > mostRecentTask.PassedAt)
+                    {
+                        mostRecentTask = entity;
+                    }
+                }
+
+                var lastNPC = mostRecentTask?.AssignedByNPC;
+                _logger.LogInformation("Last task NPC for {email}: {npc}", email, lastNPC ?? "none");
+                return lastNPC;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting last task NPC for email: '{email}'", email);
                 return null;
             }
         }
