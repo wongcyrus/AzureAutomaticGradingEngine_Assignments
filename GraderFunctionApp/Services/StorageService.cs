@@ -1,26 +1,28 @@
 using Azure.Data.Tables;
 using Azure.Storage.Blobs;
+using Azure;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Text;
-using GraderFunctionApp.Models; // Added for PassTestEntity and FailTestEntity
+using GraderFunctionApp.Models;
+using GraderFunctionApp.Interfaces;
+using GraderFunctionApp.Configuration;
 
-namespace GraderFunctionApp
+namespace GraderFunctionApp.Services
 {
-    public class StorageService
+    public class StorageService : IStorageService
     {
         private readonly BlobServiceClient _blobServiceClient;
         private readonly TableServiceClient _tableServiceClient;
-        private readonly ILogger _logger;
+        private readonly ILogger<StorageService> _logger;
+        private readonly StorageOptions _options;
 
-        private const string TestResultsContainerName = "test-results";
-        private const string PassTestTableName = "PassTests";
-        private const string FailTestTableName = "FailTests";
-
-        public StorageService(string connectionString, ILogger logger)
+        public StorageService(string connectionString, ILogger<StorageService> logger, IOptions<StorageOptions> options)
         {
             _blobServiceClient = new BlobServiceClient(connectionString);
             _tableServiceClient = new TableServiceClient(connectionString);
             _logger = logger;
+            _options = options.Value;
         }
 
         public async Task<string> SaveTestResultXmlAsync(string email, string xml)
@@ -40,7 +42,8 @@ namespace GraderFunctionApp
                     xml = "<empty/>";
                 }
 
-                var containerClient = _blobServiceClient.GetBlobContainerClient(TestResultsContainerName);
+                var containerClient = _blobServiceClient.GetBlobContainerClient(_options.TestResultsContainerName);
+                await containerClient.CreateIfNotExistsAsync();
 
                 // Create blob name: email_timestamp.xml
                 var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
@@ -76,10 +79,11 @@ namespace GraderFunctionApp
                 {
                     _logger.LogWarning("SavePassTestRecordAsync: email is null or empty - this should not happen");
                 }
-                var tableClient = await PrepareTableAsync(PassTestTableName);
+                var tableClient = await PrepareTableAsync(_options.PassTestTableName);
                 var timestamp = DateTimeOffset.UtcNow;
                 var partitionKey = SanitizeKey(email);
                 LogIfNoEmail(partitionKey, email, nameof(SavePassTestRecordAsync));
+                
                 foreach (var test in testResults.Where(static t => t.Value >= 0))
                 {
                     await SaveTestEntityAsync(tableClient, partitionKey, email, test.Key, timestamp, true, test.Value);
@@ -102,10 +106,11 @@ namespace GraderFunctionApp
                 {
                     _logger.LogWarning("SaveFailTestRecordAsync: email is null or empty - this should not happen");
                 }
-                var tableClient = await PrepareTableAsync(FailTestTableName);
+                var tableClient = await PrepareTableAsync(_options.FailTestTableName);
                 var timestamp = DateTimeOffset.UtcNow;
                 var partitionKey = SanitizeKey(email);
                 LogIfNoEmail(partitionKey, email, nameof(SaveFailTestRecordAsync));
+                
                 foreach (var test in testResults.Where(static t => t.Value == 0))
                 {
                     await SaveTestEntityAsync(tableClient, partitionKey, email, test.Key, timestamp, false);
@@ -125,7 +130,7 @@ namespace GraderFunctionApp
             {
                 _logger.LogInformation("GetPassedTasksAsync called with email: {email}", email);
 
-                var tableClient = _tableServiceClient.GetTableClient(PassTestTableName);
+                var tableClient = _tableServiceClient.GetTableClient(_options.PassTestTableName);
                 var partitionKey = SanitizeKey(email);
 
                 var queryResults = tableClient.QueryAsync<PassTestEntity>(e => e.PartitionKey == partitionKey);
@@ -167,6 +172,7 @@ namespace GraderFunctionApp
             var rowKey = isPass 
                 ? cleanTestName 
                 : $"{cleanTestName}_{timestamp:yyyyMMddHHmmss}";
+            
             if (cleanTestName == "invalidtest")
             {
                 _logger.LogError($"{(isPass ? nameof(SavePassTestRecordAsync) : nameof(SaveFailTestRecordAsync))}: Using 'invalidtest' for test name in row key. Original test name: '{{testName}}' - this indicates a problem with test name parsing", testName);
@@ -177,22 +183,22 @@ namespace GraderFunctionApp
                 // Check if record already exists
                 try
                 {
-                    var existing = await tableClient.GetEntityAsync<Models.PassTestEntity>(partitionKey, rowKey);
+                    var existing = await tableClient.GetEntityAsync<PassTestEntity>(partitionKey, rowKey);
                     if (existing != null)
                     {
                         _logger.LogInformation("Pass record already exists for PartitionKey: {partitionKey}, RowKey: {rowKey}. Skipping insert.", partitionKey, rowKey);
                         return;
                     }
                 }
-                catch (Azure.RequestFailedException ex) when (ex.Status == 404)
+                catch (RequestFailedException ex) when (ex.Status == 404)
                 {
                     // Not found, proceed to insert
                 }
             }
 
             ITableEntity entity = isPass
-            ? new Models.PassTestEntity { PartitionKey = partitionKey, RowKey = rowKey, Email = email, TestName = testName, PassedAt = timestamp, Mark = mark, ETag = Azure.ETag.All }
-            : new Models.FailTestEntity { PartitionKey = partitionKey, RowKey = rowKey, Email = email, TestName = testName, FailedAt = timestamp, ETag = Azure.ETag.All };
+            ? new PassTestEntity { PartitionKey = partitionKey, RowKey = rowKey, Email = email, TestName = testName, PassedAt = timestamp, Mark = mark, ETag = ETag.All }
+            : new FailTestEntity { PartitionKey = partitionKey, RowKey = rowKey, Email = email, TestName = testName, FailedAt = timestamp, ETag = ETag.All };
 
             _logger.LogDebug($"{(isPass ? nameof(SavePassTestRecordAsync) : nameof(SaveFailTestRecordAsync))}: Saving test - PartitionKey: '{{partitionKey}}', RowKey: '{{rowKey}}', TestName: '{{testName}}'", partitionKey, rowKey, testName);
             await tableClient.UpsertEntityAsync(entity);
@@ -230,14 +236,13 @@ namespace GraderFunctionApp
 
             // Azure Table keys cannot contain certain characters
             var invalidChars = new[] { '/', '\\', '#', '?', '\t', '\n', '\r' };
-            var sanitized = input.Trim(); // Remove leading/trailing whitespace
+            var sanitized = input.Trim();
 
             foreach (var c in invalidChars)
             {
                 sanitized = sanitized.Replace(c, '_');
             }
 
-            // If sanitization resulted in empty string, use a safe fallback
             if (string.IsNullOrEmpty(sanitized))
             {
                 _logger.LogWarning("SanitizeKey resulted in empty string after sanitization. Original input: '{input}'. This means the input contained only invalid characters. Using 'sanitized'", input);
@@ -255,8 +260,6 @@ namespace GraderFunctionApp
                 return "invalidtest";
             }
 
-            // Simply remove the first segment (namespace) from the test name
-            // Pattern: AzureProjectTestLib.ClassName.MethodName -> ClassName.MethodName
             var firstDotIndex = fullTestName.IndexOf('.');
             if (firstDotIndex >= 0 && firstDotIndex < fullTestName.Length - 1)
             {
@@ -272,7 +275,6 @@ namespace GraderFunctionApp
                 }
             }
 
-            // Fallback: sanitize the full name (this should always work)
             var sanitizedName = SanitizeKey(fullTestName);
             if (!string.IsNullOrEmpty(sanitizedName) && sanitizedName != "noemail")
             {
@@ -280,7 +282,6 @@ namespace GraderFunctionApp
                 return sanitizedName;
             }
 
-            // This should never happen, but if it does, we have a fallback
             _logger.LogError("CleanTestName: All strategies failed for '{fullTestName}' - using 'invalidtest'", fullTestName);
             return "invalidtest";
         }

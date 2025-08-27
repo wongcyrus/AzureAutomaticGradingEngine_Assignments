@@ -1,30 +1,65 @@
 using System.Xml;
+using Microsoft.Extensions.Logging;
+using GraderFunctionApp.Interfaces;
 
 namespace GraderFunctionApp.Services
 {
-    public static class TestResultParser
+    public class TestResultParser : ITestResultParser
     {
-        public static Dictionary<string, int> ParseNUnitTestResult(string rawXml)
+        private readonly ILogger<TestResultParser> _logger;
+
+        public TestResultParser(ILogger<TestResultParser> logger)
         {
-            XmlDocument xmlDoc = new XmlDocument();
-            xmlDoc.LoadXml(rawXml);
-            return ParseNUnitTestResult(xmlDoc);
+            _logger = logger;
         }
 
-        private static Dictionary<string, int> ParseNUnitTestResult(XmlDocument xmlDoc)
+        public Dictionary<string, int> ParseNUnitTestResult(string xml)
         {
-            // More robust: select all test-case nodes anywhere in the tree
-            var testCases = xmlDoc.SelectNodes("//test-case");
-            var result = new Dictionary<string, int>();
-            foreach (XmlNode node in testCases!)
+            var results = new Dictionary<string, int>();
+            
+            if (string.IsNullOrEmpty(xml))
             {
-                var fullName = node?.Attributes?["fullname"]?.Value;
-                if (string.IsNullOrEmpty(fullName)) continue;
-                var passed = string.Equals(node?.Attributes?["result"]?.Value, "Passed", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
-                result[fullName!] = passed;
+                _logger.LogWarning("ParseNUnitTestResult received null or empty XML");
+                return results;
             }
 
-            return result;
+            try
+            {
+                var doc = new XmlDocument();
+                doc.LoadXml(xml);
+
+                var testCases = doc.SelectNodes("//test-case");
+                if (testCases == null)
+                {
+                    _logger.LogWarning("No test-case nodes found in XML");
+                    return results;
+                }
+
+                foreach (XmlNode testCase in testCases)
+                {
+                    var nameAttr = testCase.Attributes?["name"];
+                    var resultAttr = testCase.Attributes?["result"];
+
+                    if (nameAttr?.Value != null && resultAttr?.Value != null)
+                    {
+                        var testName = nameAttr.Value;
+                        var isPassed = string.Equals(resultAttr.Value, "Passed", StringComparison.OrdinalIgnoreCase);
+                        results[testName] = isPassed ? 1 : 0;
+                    }
+                }
+
+                _logger.LogInformation("Parsed {count} test results from XML", results.Count);
+            }
+            catch (XmlException ex)
+            {
+                _logger.LogError(ex, "Failed to parse XML test results");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error while parsing test results");
+            }
+
+            return results;
         }
     }
 }

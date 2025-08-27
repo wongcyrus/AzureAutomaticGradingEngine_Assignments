@@ -2,17 +2,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using GraderFunctionApp.Interfaces;
+using GraderFunctionApp.Models;
 
 namespace GraderFunctionApp.Functions
 {
     public class PassTaskFunction
     {
-        private readonly ILogger _logger;
-        private readonly StorageService _storageService;
+        private readonly ILogger<PassTaskFunction> _logger;
+        private readonly IStorageService _storageService;
 
-        public PassTaskFunction(ILoggerFactory loggerFactory, StorageService storageService)
+        public PassTaskFunction(ILogger<PassTaskFunction> logger, IStorageService storageService)
         {
-            _logger = loggerFactory.CreateLogger<PassTaskFunction>();
+            _logger = logger;
             _storageService = storageService;
         }
 
@@ -24,7 +26,7 @@ namespace GraderFunctionApp.Functions
 
             if (!req.Query.ContainsKey("email"))
             {
-                return new BadRequestObjectResult("Email parameter is missing.");
+                return new BadRequestObjectResult(ApiResponse.ErrorResult("Email parameter is missing."));
             }
 
             string email = req.Query["email"]!;
@@ -41,12 +43,15 @@ namespace GraderFunctionApp.Functions
                     PassedTasks = passedTasks.Select(static task => new { task.Name, task.Mark })
                 };
 
-                return new JsonResult(result);
+                return new JsonResult(ApiResponse<object>.SuccessResult(result));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to fetch passed tasks for email: {email}", email);
-                return new StatusCodeResult(StatusCodes.Status500InternalServerError);
+                return new ObjectResult(ApiResponse.ErrorResult("Internal server error", ex.Message))
+                {
+                    StatusCode = 500
+                };
             }
         }
     }

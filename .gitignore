@@ -365,3 +365,5 @@ testing/*
 **/*.env
 TaskRunnerTest/report/*
 **/outputs.json
+GraderFunctionApp/deployment.zip
+q/**

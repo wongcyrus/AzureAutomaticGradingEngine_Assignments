@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using GraderFunctionApp.Services;
+using GraderFunctionApp.Interfaces;
 using GraderFunctionApp.Helpers;
 using GraderFunctionApp.Constants;
 using GraderFunctionApp.Models;
@@ -11,13 +11,24 @@ namespace GraderFunctionApp.Functions
 {
     public class GraderFunction
     {
-        private readonly ILogger _logger;
-        private readonly StorageService _storageService;
+        private readonly ILogger<GraderFunction> _logger;
+        private readonly IStorageService _storageService;
+        private readonly IGameTaskService _gameTaskService;
+        private readonly ITestRunner _testRunner;
+        private readonly ITestResultParser _testResultParser;
 
-        public GraderFunction(ILoggerFactory loggerFactory, StorageService storageService)
+        public GraderFunction(
+            ILogger<GraderFunction> logger,
+            IStorageService storageService,
+            IGameTaskService gameTaskService,
+            ITestRunner testRunner,
+            ITestResultParser testResultParser)
         {
-            _logger = loggerFactory.CreateLogger<GraderFunction>();
+            _logger = logger;
             _storageService = storageService;
+            _gameTaskService = gameTaskService;
+            _testRunner = testRunner;
+            _testResultParser = testResultParser;
         }
 
         [Function(nameof(GraderFunction))]
@@ -27,15 +38,26 @@ namespace GraderFunctionApp.Functions
         {
             _logger.LogInformation("Start AzureGraderFunction");
 
-            return req.Method switch
+            try
             {
-                "GET" => await HandleGetRequest(req, context),
-                "POST" => await HandlePostRequest(req, context),
-                _ => new OkObjectResult("ok")
-            };
+                return req.Method switch
+                {
+                    "GET" => await HandleGetRequestAsync(req, context),
+                    "POST" => await HandlePostRequestAsync(req, context),
+                    _ => new BadRequestObjectResult(ApiResponse.ErrorResult("Unsupported HTTP method"))
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unhandled exception in GraderFunction");
+                return new ObjectResult(ApiResponse.ErrorResult("Internal server error", ex.Message))
+                {
+                    StatusCode = 500
+                };
+            }
         }
 
-        private async Task<IActionResult> HandleGetRequest(HttpRequest req, ExecutionContext context)
+        private async Task<IActionResult> HandleGetRequestAsync(HttpRequest req, ExecutionContext context)
         {
             if (!req.Query.ContainsKey("credentials"))
             {
@@ -60,26 +82,32 @@ namespace GraderFunctionApp.Functions
                 string trace = req.Query["trace"]!;
                 email = UtilityHelpers.ExtractEmail(trace);
                 _logger.LogInformation("start:" + trace);
-                xml = await TestRunner.RunUnitTestProcess(context, _logger, credentials, email, filter);
+                xml = await _testRunner.RunUnitTestProcessAsync(context, _logger, credentials, email, filter);
                 _logger.LogInformation("end:" + trace);
             }
             else
             {
-                xml = await TestRunner.RunUnitTestProcess(context, _logger, credentials, email, filter);
+                xml = await _testRunner.RunUnitTestProcessAsync(context, _logger, credentials, email, filter);
             }
 
             if (string.IsNullOrEmpty(xml))
             {
-                return new ContentResult { Content = "<error>Failed to run tests or no results produced.</error>", ContentType = "application/xml", StatusCode = 500 };
+                return new ContentResult 
+                { 
+                    Content = "<error>Failed to run tests or no results produced.</error>", 
+                    ContentType = "application/xml", 
+                    StatusCode = 500 
+                };
             }
 
-            await SaveTestResultsToStorage(email, taskName, xml);
+            await SaveTestResultsToStorageAsync(email, taskName, xml);
             return new ContentResult { Content = xml, ContentType = "application/xml", StatusCode = 200 };
         }
 
-        private async Task<IActionResult> HandlePostRequest(HttpRequest req, ExecutionContext context)
+        private async Task<IActionResult> HandlePostRequestAsync(HttpRequest req, ExecutionContext context)
         {
             _logger.LogInformation("POST Request");
+            
             string needXml = req.Query["xml"]!;
             string credentials = req.Form["credentials"]!;
             string filter = req.Form["filter"]!;
@@ -97,34 +125,42 @@ namespace GraderFunctionApp.Functions
                 };
             }
 
-            var xml = await TestRunner.RunUnitTestProcess(context, _logger, credentials, "Anonymous", filter);
+            var xml = await _testRunner.RunUnitTestProcessAsync(context, _logger, credentials, "Anonymous", filter);
             if (string.IsNullOrEmpty(xml))
             {
-                return new ContentResult { Content = "<error>Failed to run tests or no results produced.</error>", ContentType = "application/xml", StatusCode = 500 };
+                return new ContentResult 
+                { 
+                    Content = "<error>Failed to run tests or no results produced.</error>", 
+                    ContentType = "application/xml", 
+                    StatusCode = 500 
+                };
             }
 
-            await SaveTestResultsToStorage("Anonymous", taskName, xml);
+            await SaveTestResultsToStorageAsync("Anonymous", taskName, xml);
 
             if (string.IsNullOrEmpty(needXml))
             {
-                var result = TestResultParser.ParseNUnitTestResult(xml!);
-                return new JsonResult(result);
+                var result = _testResultParser.ParseNUnitTestResult(xml!);
+                return new JsonResult(ApiResponse<Dictionary<string, int>>.SuccessResult(result));
             }
+            
             return new ContentResult { Content = xml, ContentType = "application/xml", StatusCode = 200 };
         }
 
-        private async Task SaveTestResultsToStorage(string email, string taskName, string xml)
+        private async Task SaveTestResultsToStorageAsync(string email, string taskName, string xml)
         {
             try
             {
                 _logger.LogInformation("SaveTestResultsToStorage called with email: {email}", email);
-                var testResults = TestResultParser.ParseNUnitTestResult(xml);
+                
+                var testResults = _testResultParser.ParseNUnitTestResult(xml);
                 await _storageService.SaveTestResultXmlAsync(email, xml);
 
                 // Load all tasks and their rewards
-                var tasksJson = GameTaskFunction.GetTasksJson(false);
+                var tasksJson = _gameTaskService.GetTasksJson(false);
                 var allTasks = Newtonsoft.Json.JsonConvert.DeserializeObject<List<GameTaskData>>(tasksJson);
-                var rewardMap = allTasks?.SelectMany(t => t.Tests.Select(test => new { test, t.Reward })).ToDictionary(x => x.test, x => x.Reward) ?? new Dictionary<string, int>();
+                var rewardMap = allTasks?.SelectMany(t => t.Tests.Select(test => new { test, t.Reward }))
+                    .ToDictionary(x => x.test, x => x.Reward) ?? new Dictionary<string, int>();
 
                 // Build pass dictionary with mark
                 var passDict = testResults.Where(kv => kv.Value == 1)
@@ -132,6 +168,7 @@ namespace GraderFunctionApp.Functions
 
                 await _storageService.SavePassTestRecordAsync(email, taskName, passDict);
                 await _storageService.SaveFailTestRecordAsync(email, taskName, testResults);
+                
                 _logger.LogInformation("Test results saved to storage for email: {email}", email);
             }
             catch (Exception ex)
@@ -140,6 +177,4 @@ namespace GraderFunctionApp.Functions
             }
         }
     }
-
-    // PassTaskFunction moved to PassTaskFunction.cs
 }
