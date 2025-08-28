@@ -397,6 +397,37 @@ namespace GraderFunctionApp.Services
             }
         }
 
+        public async Task<string?> GetRandomEasterEggAsync(string type)
+        {
+            try
+            {
+                var tableClient = _tableServiceClient.GetTableClient("EasterEgg");
+                await tableClient.CreateIfNotExistsAsync();
+
+                var query = tableClient.QueryAsync<EasterEgg>(filter: $"Type eq '{type}'");
+                var easterEggs = new List<EasterEgg>();
+                
+                await foreach (var egg in query)
+                {
+                    easterEggs.Add(egg);
+                }
+
+                if (easterEggs.Count == 0)
+                {
+                    return null;
+                }
+
+                var random = new Random();
+                var selectedEgg = easterEggs[random.Next(easterEggs.Count)];
+                return selectedEgg.Link;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting random easter egg for type: {type}", type);
+                return null;
+            }
+        }
+
         public async Task<NPCCharacter?> GetNPCCharacterAsync(string npcName)
         {
             try
