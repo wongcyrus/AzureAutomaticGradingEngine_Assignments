@@ -106,15 +106,25 @@ namespace GraderFunctionApp.Services
             var assembly = Assembly.GetAssembly(typeof(GameClassAttribute))!;
             var tasks = new List<GameTaskData>();
             
-            foreach (var testClass in GetTypesWithHelpAttribute(assembly))
+            _logger.LogDebug("Loading tasks from assembly: {assemblyName}", assembly.FullName);
+            
+            var typesWithAttribute = GetTypesWithHelpAttribute(assembly).ToList();
+            _logger.LogDebug("Found {count} types with GameClassAttribute", typesWithAttribute.Count);
+            
+            foreach (var testClass in typesWithAttribute)
             {
+                _logger.LogDebug("Processing test class: {className}", testClass.FullName);
+                
                 var gameClass = testClass.GetCustomAttribute<GameClassAttribute>();
                 var methods = testClass.GetMethods()
                     .Where(m => m.GetCustomAttribute<GameTaskAttribute>() != null)
                     .Select(c => new { c.Name, GameTask = c.GetCustomAttribute<GameTaskAttribute>()! });
 
+                var methodsList = methods.ToList();
+                _logger.LogDebug("Found {count} methods with GameTaskAttribute in {className}", methodsList.Count, testClass.Name);
+
                 // Process independent tasks (not grouped)
-                var independentTasks = methods.Where(c => c.GameTask.GroupNumber == -1)
+                var independentTasks = methodsList.Where(c => c.GameTask.GroupNumber == -1)
                     .Select(c => new GameTaskData()
                     {
                         Name = testClass.FullName + "." + c.Name,
@@ -127,7 +137,7 @@ namespace GraderFunctionApp.Services
                     });
 
                 // Process grouped tasks
-                var groupedTasks = methods.Where(c => c.GameTask.GroupNumber != -1)
+                var groupedTasks = methodsList.Where(c => c.GameTask.GroupNumber != -1)
                     .GroupBy(c => c.GameTask.GroupNumber)
                     .Select(c => new GameTaskData()
                     {
@@ -146,7 +156,7 @@ namespace GraderFunctionApp.Services
 
             var orderedTasks = tasks.OrderBy(c => c.GameClassOrder).ThenBy(c => c.Tests.First()).ToList();
             
-            _logger.LogDebug("Generated {count} game tasks (rephrasing: {rephrases})", orderedTasks.Count, rephrases);
+            _logger.LogInformation("Generated {count} game tasks total", orderedTasks.Count);
             return orderedTasks;
         }
 

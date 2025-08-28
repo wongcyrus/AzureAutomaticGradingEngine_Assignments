@@ -113,38 +113,43 @@ namespace GraderFunctionApp.Functions
                     return new JsonResult(response);
                 }
 
-                // Check if this NPC was the last one to assign a task
+                // Check if this NPC assigned a task recently (within 1 hour)
                 var lastTaskNPC = await _storageService.GetLastTaskNPCAsync(email);
                 if (!string.IsNullOrEmpty(lastTaskNPC) && lastTaskNPC == npc)
                 {
-                    var varietyResponses = new[]
+                    // Check if the last task from this NPC was assigned within the last hour
+                    var lastTaskTime = gameState.LastUpdated;
+                    var oneHourAgo = DateTime.UtcNow.AddHours(-1);
+                    
+                    if (lastTaskTime > oneHourAgo)
                     {
-                        "You just completed my task! Why don't you try talking to other trainers for some variety?",
-                        "I think you should explore what other NPCs have to offer before coming back to me!",
-                        "You've been working with me recently. Go see what challenges the other trainers have!",
-                        "Time to mix things up! Try getting a task from a different trainer this time.",
-                        "I just gave you a task recently. Let's give other trainers a chance to teach you something new!",
-                        "You should diversify your learning! Go talk to other NPCs for different perspectives.",
-                        "I've been keeping you busy lately. Why not see what the other trainers are up to?",
-                        "Let's spread the learning around! Try working with a different NPC for your next challenge.",
-                        "You've mastered my recent assignment. Time to learn from other experts around here!",
-                        "I think you'd benefit from working with different trainers. Go explore what others have to offer!"
-                    };
+                        var timeRemaining = lastTaskTime.AddHours(1) - DateTime.UtcNow;
+                        var minutesRemaining = (int)Math.Ceiling(timeRemaining.TotalMinutes);
+                        
+                        var cooldownResponses = new[]
+                        {
+                            $"I just gave you a task recently! Come back in {minutesRemaining} minutes for a new challenge.",
+                            $"You need to wait {minutesRemaining} more minutes before I can give you another task.",
+                            $"I'm still preparing your next challenge. Return in {minutesRemaining} minutes!",
+                            $"Give me {minutesRemaining} more minutes to prepare something new for you.",
+                            $"You're eager! But wait {minutesRemaining} more minutes before I assign another task."
+                        };
 
-                    var randomResponse = varietyResponses[new Random().Next(varietyResponses.Length)];
-                    
-                    // Personalize response with NPC background
-                    var personalizedResponse = npcCharacter != null 
-                        ? await PersonalizeMessageAsync(randomResponse, npcCharacter)
-                        : randomResponse;
-                    
-                    var response = GameResponse.Success(personalizedResponse, "ENCOURAGE_VARIETY");
-                    response.Score = gameState.TotalScore;
-                    response.CompletedTasks = gameState.CompletedTasks;
-                    response.AdditionalData["lastTaskNPC"] = lastTaskNPC;
-                    response.AdditionalData["suggestion"] = "Try talking to a different NPC for variety";
-                    
-                    return new JsonResult(response);
+                        var randomResponse = cooldownResponses[new Random().Next(cooldownResponses.Length)];
+                        
+                        // Personalize response with NPC background
+                        var personalizedResponse = npcCharacter != null 
+                            ? await PersonalizeMessageAsync(randomResponse, npcCharacter)
+                            : randomResponse;
+                        
+                        var response = GameResponse.Success(personalizedResponse, "NPC_COOLDOWN");
+                        response.Score = gameState.TotalScore;
+                        response.CompletedTasks = gameState.CompletedTasks;
+                        response.AdditionalData["cooldownMinutes"] = minutesRemaining;
+                        response.AdditionalData["nextAvailableTime"] = lastTaskTime.AddHours(1);
+                        
+                        return new JsonResult(response);
+                    }
                 }
 
                 // Get next available task
@@ -222,20 +227,7 @@ namespace GraderFunctionApp.Functions
         {
             try
             {
-                var prompt = $@"You are an NPC in an educational game with the following characteristics:
-- Age: {npcCharacter.Age}
-- Gender: {npcCharacter.Gender}
-- Background: {npcCharacter.Background}
-
-You are talking to the main character Tek, a brave Azure warrior.
-
-Please rephrase the following message to match your NPC personality. Keep the core information intact:
-
-Original message: ""{originalMessage}""
-
-Rephrased message:";
-
-                var result = await _aiService.RephraseInstructionAsync(prompt);
+                var result = await _aiService.PersonalizeNPCMessageAsync(originalMessage, npcCharacter.Age, npcCharacter.Gender, npcCharacter.Background);
                 return !string.IsNullOrEmpty(result) ? result : $"Tek, {originalMessage}";
             }
             catch (Exception ex)

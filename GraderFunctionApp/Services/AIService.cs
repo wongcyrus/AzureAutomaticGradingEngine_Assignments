@@ -17,6 +17,71 @@ namespace GraderFunctionApp.Services
             _logger = logger;
         }
 
+        public async Task<string?> PersonalizeNPCMessageAsync(string message, int age, string gender, string background)
+        {
+            if (string.IsNullOrEmpty(message))
+            {
+                return message;
+            }
+
+            var azureOpenAiEndpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
+            var azureOpenAiApiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY");
+            var deploymentOrModelName = Environment.GetEnvironmentVariable("DEPLOYMENT_OR_MODEL_NAME");
+
+            if (string.IsNullOrEmpty(azureOpenAiEndpoint) || 
+                string.IsNullOrEmpty(azureOpenAiApiKey) || 
+                string.IsNullOrEmpty(deploymentOrModelName))
+            {
+                return $"Tek, {message}";
+            }
+
+            try
+            {
+                _logger.LogDebug("Creating Azure OpenAI client with endpoint: {endpoint}, deployment: {deployment}", azureOpenAiEndpoint, deploymentOrModelName);
+                
+                var endpoint = new Uri(azureOpenAiEndpoint);
+                var azureClient = new AzureOpenAIClient(endpoint, new AzureKeyCredential(azureOpenAiApiKey));
+                var chatClient = azureClient.GetChatClient(deploymentOrModelName);
+
+                var messages = new List<ChatMessage>
+                {
+                    new SystemChatMessage($"You are an NPC in an educational game. Age: {age}, Gender: {gender}, Background: {background}. You are talking to Tek, a brave Azure warrior. Rephrase messages to match your personality while keeping core information intact. Only return the rephrased message, nothing else."),
+                    new UserChatMessage(message)
+                };
+
+                var requestOptions = new ChatCompletionOptions()
+                {
+                    MaxOutputTokenCount = 200,
+                    Temperature = 0.7f
+                };
+
+                _logger.LogDebug("Sending request to Azure OpenAI for NPC personalization");
+                var response = await chatClient.CompleteChatAsync(messages, requestOptions);
+
+                if (response?.Value?.Content == null || response.Value.Content.Count == 0)
+                {
+                    _logger.LogWarning("Azure OpenAI returned empty response for NPC personalization");
+                    return $"Tek, {message}";
+                }
+
+                var result = response.Value.Content[0].Text?.Trim();
+                _logger.LogDebug("Successfully personalized NPC message. Original: {original}, Result: {result}", message, result);
+                return !string.IsNullOrEmpty(result) ? result : $"Tek, {message}";
+            }
+            catch (RequestFailedException ex)
+            {
+                _logger.LogError(ex, "Azure OpenAI API request failed for NPC personalization. Status: {status}, ErrorCode: {errorCode}, Message: {message}. Endpoint: {endpoint}, Deployment: {deployment}", 
+                    ex.Status, ex.ErrorCode, ex.Message, azureOpenAiEndpoint, deploymentOrModelName);
+                return $"Tek, {message}";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error in NPC personalization. Type: {type}, Message: {message}. Endpoint: {endpoint}, Deployment: {deployment}", 
+                    ex.GetType().Name, ex.Message, azureOpenAiEndpoint, deploymentOrModelName);
+                return $"Tek, {message}";
+            }
+        }
+
         public async Task<string?> RephraseInstructionAsync(string instruction)
         {
             if (string.IsNullOrEmpty(instruction))
