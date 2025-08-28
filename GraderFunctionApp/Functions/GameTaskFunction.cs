@@ -102,10 +102,17 @@ namespace GraderFunctionApp.Functions
                 // Check if user has an active task with THIS NPC
                 if (gameState.HasActiveTask && !string.IsNullOrEmpty(gameState.CurrentTaskName))
                 {
-                    var response = GameResponse.Success(
-                        $"You have an active task: '{gameState.CurrentTaskName}'. Complete it and chat with me again for grading!",
-                        "TASK_ASSIGNED"
-                    );
+                    // Show the full task details including instruction
+                    var activeTaskMessage = !string.IsNullOrEmpty(gameState.LastMessage) 
+                        ? gameState.LastMessage 
+                        : $"Your current task: {gameState.CurrentTaskName}. Complete it and chat with me again for grading!";
+                    
+                    // Personalize the task reminder with NPC background
+                    var personalizedMessage = npcCharacter != null 
+                        ? await PersonalizeMessageAsync(activeTaskMessage, npcCharacter)
+                        : activeTaskMessage;
+                    
+                    var response = GameResponse.Success(personalizedMessage, "TASK_ASSIGNED");
                     response.TaskName = gameState.CurrentTaskName;
                     response.Score = gameState.TotalScore;
                     response.CompletedTasks = gameState.CompletedTasks;

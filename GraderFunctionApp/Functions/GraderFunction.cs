@@ -330,7 +330,6 @@ namespace GraderFunctionApp.Functions
                     response.Score = gameState.TotalScore;
                     response.CompletedTasks = gameState.CompletedTasks;
                     response.TaskName = gameState.CurrentTaskName;
-                    response.ReportUrl = $"/api/report?email={email}&task={gameState.CurrentTaskName}";
                     response.EasterEggUrl = await _storageService.GetRandomEasterEggAsync("Pass") ?? "";
                     
                     return response;
@@ -348,7 +347,6 @@ namespace GraderFunctionApp.Functions
                     response.Score = gameState.TotalScore;
                     response.CompletedTasks = gameState.CompletedTasks;
                     response.TaskName = gameState.CurrentTaskName;
-                    response.ReportUrl = $"/api/report?email={email}&task={gameState.CurrentTaskName}";
                     response.EasterEggUrl = await _storageService.GetRandomEasterEggAsync("Fail") ?? "";
                     response.AdditionalData["testResults"] = testResults;
                     response.AdditionalData["passedTests"] = passedTests;
