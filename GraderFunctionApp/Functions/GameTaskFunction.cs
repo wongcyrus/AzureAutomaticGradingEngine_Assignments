@@ -6,6 +6,7 @@ using Newtonsoft.Json.Serialization;
 using Microsoft.Azure.Functions.Worker;
 using GraderFunctionApp.Models;
 using GraderFunctionApp.Interfaces;
+using GraderFunctionApp.Services;
 
 namespace GraderFunctionApp.Functions
 {
@@ -15,17 +16,20 @@ namespace GraderFunctionApp.Functions
         private readonly IGameTaskService _gameTaskService;
         private readonly IGameStateService _gameStateService;
         private readonly IStorageService _storageService;
+        private readonly IAIService _aiService;
 
         public GameTaskFunction(
             ILogger<GameTaskFunction> logger, 
             IGameTaskService gameTaskService,
             IGameStateService gameStateService,
-            IStorageService storageService)
+            IStorageService storageService,
+            IAIService aiService)
         {
             _logger = logger;
             _gameTaskService = gameTaskService;
             _gameStateService = gameStateService;
             _storageService = storageService;
+            _aiService = aiService;
         }
 
         [Function(nameof(GameTaskFunction))]
@@ -47,6 +51,12 @@ namespace GraderFunctionApp.Functions
                     gameState = await _gameStateService.InitializeGameStateAsync(email, game, npc);
                 }
 
+                // Get NPC character background for personalization
+                var npcCharacter = await _storageService.GetNPCCharacterAsync(npc);
+                
+                // Get main character background 
+                var mainCharacter = await _storageService.GetNPCCharacterAsync("main_character");
+                
                 // Check if user has an active task with a DIFFERENT NPC
                 var allUserStates = await _gameStateService.GetAllGameStatesForUserAsync(email);
                 var activeTaskWithOtherNPC = allUserStates.FirstOrDefault(s => 
@@ -75,7 +85,12 @@ namespace GraderFunctionApp.Functions
 
                     var randomResponse = casualResponses[new Random().Next(casualResponses.Length)];
                     
-                    var response = GameResponse.Success(randomResponse, "BUSY_WITH_OTHER_NPC");
+                    // Personalize response with NPC background
+                    var personalizedResponse = npcCharacter != null 
+                        ? await PersonalizeMessageAsync(randomResponse, npcCharacter)
+                        : randomResponse;
+                    
+                    var response = GameResponse.Success(personalizedResponse, "BUSY_WITH_OTHER_NPC");
                     response.Score = gameState.TotalScore;
                     response.CompletedTasks = gameState.CompletedTasks;
                     response.AdditionalData["activeTaskNPC"] = otherNpcName;
@@ -118,7 +133,12 @@ namespace GraderFunctionApp.Functions
 
                     var randomResponse = varietyResponses[new Random().Next(varietyResponses.Length)];
                     
-                    var response = GameResponse.Success(randomResponse, "ENCOURAGE_VARIETY");
+                    // Personalize response with NPC background
+                    var personalizedResponse = npcCharacter != null 
+                        ? await PersonalizeMessageAsync(randomResponse, npcCharacter)
+                        : randomResponse;
+                    
+                    var response = GameResponse.Success(personalizedResponse, "ENCOURAGE_VARIETY");
                     response.Score = gameState.TotalScore;
                     response.CompletedTasks = gameState.CompletedTasks;
                     response.AdditionalData["lastTaskNPC"] = lastTaskNPC;
@@ -131,10 +151,12 @@ namespace GraderFunctionApp.Functions
                 var nextTask = await _gameTaskService.GetNextTaskAsync(email, npc, game);
                 if (nextTask == null)
                 {
-                    var response = GameResponse.Success(
-                        "Congratulations! You have completed all available tasks!",
-                        "ALL_COMPLETED"
-                    );
+                    var completionMessage = "Congratulations! You have completed all available tasks!";
+                    var personalizedCompletion = npcCharacter != null 
+                        ? await PersonalizeMessageAsync(completionMessage, npcCharacter)
+                        : completionMessage;
+                        
+                    var response = GameResponse.Success(personalizedCompletion, "ALL_COMPLETED");
                     response.Score = gameState.TotalScore;
                     response.CompletedTasks = gameState.CompletedTasks;
                     
@@ -151,10 +173,12 @@ namespace GraderFunctionApp.Functions
                     
                     if (uncompletedTask == null)
                     {
-                        var response = GameResponse.Success(
-                            "Congratulations! You have completed all available tasks!",
-                            "ALL_COMPLETED"
-                        );
+                        var completionMessage = "Congratulations! You have completed all available tasks!";
+                        var personalizedCompletion = npcCharacter != null 
+                            ? await PersonalizeMessageAsync(completionMessage, npcCharacter)
+                            : completionMessage;
+                            
+                        var response = GameResponse.Success(personalizedCompletion, "ALL_COMPLETED");
                         response.Score = gameState.TotalScore;
                         response.CompletedTasks = gameState.CompletedTasks;
                         
@@ -163,13 +187,15 @@ namespace GraderFunctionApp.Functions
                     nextTask = uncompletedTask;
                 }
 
-                // Assign new task
-                gameState = await _gameStateService.AssignTaskAsync(email, game, npc, nextTask.Name, nextTask.Filter, nextTask.Reward, nextTask.Instruction);
+                // Assign new task with personalized message
+                var taskMessage = $"New task: {nextTask.Name}. {nextTask.Instruction}";
+                var personalizedTaskMessage = npcCharacter != null 
+                    ? await PersonalizeMessageAsync(taskMessage, npcCharacter)
+                    : taskMessage;
+                    
+                gameState = await _gameStateService.AssignTaskAsync(email, game, npc, nextTask.Name, nextTask.Filter, nextTask.Reward, personalizedTaskMessage);
 
-                var taskResponse = GameResponse.Success(
-                    gameState.LastMessage,
-                    "TASK_ASSIGNED"
-                );
+                var taskResponse = GameResponse.Success(personalizedTaskMessage, "TASK_ASSIGNED");
                 taskResponse.TaskName = nextTask.Name;
                 taskResponse.Score = gameState.TotalScore;
                 taskResponse.CompletedTasks = gameState.CompletedTasks;
@@ -189,6 +215,33 @@ namespace GraderFunctionApp.Functions
                 {
                     StatusCode = 500
                 };
+            }
+        }
+
+        private async Task<string> PersonalizeMessageAsync(string originalMessage, NPCCharacter npcCharacter)
+        {
+            try
+            {
+                var prompt = $@"You are an NPC in an educational game with the following characteristics:
+- Age: {npcCharacter.Age}
+- Gender: {npcCharacter.Gender}
+- Background: {npcCharacter.Background}
+
+You are talking to the main character Tek, a brave Azure warrior.
+
+Please rephrase the following message to match your NPC personality. Keep the core information intact:
+
+Original message: ""{originalMessage}""
+
+Rephrased message:";
+
+                var result = await _aiService.RephraseInstructionAsync(prompt);
+                return !string.IsNullOrEmpty(result) ? result : $"Tek, {originalMessage}";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error personalizing message with AI, using fallback");
+                return $"Tek, {originalMessage}";
             }
         }
 

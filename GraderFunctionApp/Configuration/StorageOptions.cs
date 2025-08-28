@@ -11,5 +11,6 @@ namespace GraderFunctionApp.Configuration
         public string FailTestTableName { get; set; } = "FailTests";
         public string SubscriptionTableName { get; set; } = "Subscription";
         public string CredentialTableName { get; set; } = "Credential";
+        public string NPCCharacterTableName { get; set; } = "NPCCharacter";
     }
 }

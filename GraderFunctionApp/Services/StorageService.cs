@@ -396,5 +396,34 @@ namespace GraderFunctionApp.Services
                 return null;
             }
         }
+
+        public async Task<NPCCharacter?> GetNPCCharacterAsync(string npcName)
+        {
+            try
+            {
+                _logger.LogInformation("GetNPCCharacterAsync called with npcName: '{npcName}'", npcName);
+
+                var tableClient = _tableServiceClient.GetTableClient(_options.NPCCharacterTableName);
+                await tableClient.CreateIfNotExistsAsync();
+
+                var response = await tableClient.GetEntityIfExistsAsync<NPCCharacter>("NPC", npcName);
+                
+                if (response.HasValue)
+                {
+                    _logger.LogInformation("Found NPC character: '{npcName}'", npcName);
+                    return response.Value;
+                }
+                else
+                {
+                    _logger.LogWarning("No character data found for NPC: '{npcName}'", npcName);
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving NPC character for: '{npcName}'", npcName);
+                return null;
+            }
+        }
     }
 }
