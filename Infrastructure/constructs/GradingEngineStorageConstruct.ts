@@ -1,6 +1,7 @@
 import { Construct } from "constructs";
 import { StorageContainer } from "cdktf-azure-providers/.gen/providers/azurerm/storage-container";
 import { StorageTable } from "cdktf-azure-providers/.gen/providers/azurerm/storage-table";
+import { StorageAccount } from "cdktf-azure-providers/.gen/providers/azurerm/storage-account";
 
 const STORAGE_TABLES = [
   "Subscription",
@@ -16,13 +17,13 @@ export class GradingEngineStorageConstruct extends Construct {
   public readonly tables: Record<string, StorageTable>;
   public readonly container: StorageContainer;
 
-  constructor(scope: Construct, id: string, storageAccountName: string) {
+  constructor(scope: Construct, id: string, storageAccount: StorageAccount) {
     super(scope, id);
 
     // Create blob container for test results
     this.container = new StorageContainer(this, "TestResultsContainer", {
       name: "test-results",
-      storageAccountName,
+      storageAccountId: storageAccount.id,
       containerAccessType: "private",
     });
 
@@ -31,10 +32,12 @@ export class GradingEngineStorageConstruct extends Construct {
     STORAGE_TABLES.forEach(tableName => {
       this.tables[tableName] = new StorageTable(this, `${tableName}Table`, {
         name: tableName,
-        storageAccountName,
+        storageAccountName: storageAccount.name,
       });
     });
   }
+
+
 
   // Method to get all storage resources for dependency management
   public getAllResources(): (StorageTable | StorageContainer)[] {

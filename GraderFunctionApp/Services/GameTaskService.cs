@@ -13,12 +13,14 @@ namespace GraderFunctionApp.Services
         private readonly ILogger<GameTaskService> _logger;
         private readonly IStorageService _storageService;
         private readonly IAIService _aiService;
+        private readonly IGameStateService _gameStateService;
 
-        public GameTaskService(ILogger<GameTaskService> logger, IStorageService storageService, IAIService aiService)
+        public GameTaskService(ILogger<GameTaskService> logger, IStorageService storageService, IAIService aiService, IGameStateService gameStateService)
         {
             _logger = logger;
             _storageService = storageService;
             _aiService = aiService;
+            _gameStateService = gameStateService;
         }
 
         public List<GameTaskData> GetTasks(bool rephrases)
@@ -45,24 +47,23 @@ namespace GraderFunctionApp.Services
 
             try
             {
-                var passedTaskTuples = await _storageService.GetPassedTasksAsync(email);
-                var passedTasks = passedTaskTuples?.Select(t => t.Name);
-                _logger.LogInformation($"Retrieved {passedTasks?.Count() ?? 0} passed tasks for {email}.");
+                // Get completed tasks from game state
+                var gameState = await _gameStateService.GetGameStateAsync(email, game, npc);
+                var completedTasks = new HashSet<string>();
+                
+                if (gameState != null && !string.IsNullOrEmpty(gameState.CompletedTasksList))
+                {
+                    var completedTasksList = JsonConvert.DeserializeObject<List<string>>(gameState.CompletedTasksList) ?? new List<string>();
+                    completedTasks = new HashSet<string>(completedTasksList);
+                }
+                
+                _logger.LogInformation($"Retrieved {completedTasks.Count} completed tasks for {email}.");
 
                 // Get all tasks without rephrasing first (for performance)
                 var allTasks = GetTasksInternal(rephrases: false);
                 
-                // Filter to find available tasks
-                List<GameTaskData> availableTasks;
-                if (passedTasks != null && passedTasks.Any())
-                {
-                    var passedSet = new HashSet<string>(passedTasks);
-                    availableTasks = allTasks.Where(t => !t.Tests.All(test => passedSet.Contains(test))).ToList();
-                }
-                else
-                {
-                    availableTasks = allTasks;
-                }
+                // Filter to find available tasks (not completed)
+                var availableTasks = allTasks.Where(t => !completedTasks.Contains(t.Name)).ToList();
 
                 if (!availableTasks.Any())
                 {

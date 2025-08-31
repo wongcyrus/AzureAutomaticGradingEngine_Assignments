@@ -5,6 +5,7 @@ import { AzurermProvider } from "cdktf-azure-providers/.gen/providers/azurerm/pr
 import { AzureadProvider } from "./.gen/providers/azuread/provider";
 import { AzapiProvider } from "./.gen/providers/azapi/provider";
 import { ResourceGroup } from "cdktf-azure-providers/.gen/providers/azurerm/resource-group";
+import { StorageAccount } from "cdktf-azure-providers/.gen/providers/azurerm/storage-account";
 import { Construct } from "constructs";
 import path = require("path");
 
@@ -37,7 +38,7 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
 
     const resourceGroup = this.createResourceGroup();
     const azureFunctionConstruct = this.createAzureFunction(resourceGroup);
-    const storageConstruct = this.createStorageResources(azureFunctionConstruct.storageAccount.name);
+    const storageConstruct = this.createStorageResources(azureFunctionConstruct.storageAccount);
     
     // Add storage dependencies to function
     storageConstruct.getAllResources().forEach((resource) =>
@@ -120,11 +121,11 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     );
   }
 
-  private createStorageResources(storageAccountName: string) {
+  private createStorageResources(storageAccount: StorageAccount) {
     return new GradingEngineStorageConstruct(
       this,
       "StorageResources",
-      storageAccountName
+      storageAccount
     );
   }
 
