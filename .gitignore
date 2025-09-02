@@ -367,3 +367,4 @@ TaskRunnerTest/report/*
 **/outputs.json
 GraderFunctionApp/deployment.zip
 q/**
+**/tasks.json

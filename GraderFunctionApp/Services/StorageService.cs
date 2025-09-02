@@ -151,6 +151,37 @@ namespace GraderFunctionApp.Services
             }
         }
 
+        public async Task<List<string>> GetCompletedTaskNamesAsync(string email)
+        {
+            try
+            {
+                _logger.LogInformation("GetCompletedTaskNamesAsync called with email: {email}", email);
+
+                var tableClient = _tableServiceClient.GetTableClient(_options.PassTestTableName);
+                var partitionKey = SanitizeKey(email);
+
+                var queryResults = tableClient.QueryAsync<PassTestEntity>(e => e.PartitionKey == partitionKey);
+                var completedTaskNames = new HashSet<string>();
+
+                await foreach (var entity in queryResults)
+                {
+                    if (!string.IsNullOrEmpty(entity.TaskName))
+                    {
+                        completedTaskNames.Add(entity.TaskName);
+                    }
+                }
+
+                var result = completedTaskNames.ToList();
+                _logger.LogInformation("Fetched {count} completed task names for email: {email}", result.Count, email);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to fetch completed task names for email: {email}", email);
+                throw;
+            }
+        }
+
         private async Task<TableClient> PrepareTableAsync(string tableName)
         {
             var tableClient = _tableServiceClient.GetTableClient(tableName);

@@ -17,6 +17,7 @@ namespace GraderFunctionApp.Functions
         private readonly ITestRunner _testRunner;
         private readonly ITestResultParser _testResultParser;
         private readonly IGameStateService _gameStateService;
+        private readonly IAIService _aiService;
 
         public GraderFunction(
             ILogger<GraderFunction> logger,
@@ -24,7 +25,8 @@ namespace GraderFunctionApp.Functions
             IGameTaskService gameTaskService,
             ITestRunner testRunner,
             ITestResultParser testResultParser,
-            IGameStateService gameStateService)
+            IGameStateService gameStateService,
+            IAIService aiService)
         {
             _logger = logger;
             _storageService = storageService;
@@ -32,6 +34,7 @@ namespace GraderFunctionApp.Functions
             _testRunner = testRunner;
             _testResultParser = testResultParser;
             _gameStateService = gameStateService;
+            _aiService = aiService;
         }
 
         [Function(nameof(GraderFunction))]
@@ -322,14 +325,22 @@ namespace GraderFunctionApp.Functions
 
                 if (allTestsPassed)
                 {
+                    // Store task name and reward before completing (as they get cleared)
+                    var completedTaskName = gameState.CurrentTaskName;
+                    var earnedReward = gameState.CurrentTaskReward;
+                    
                     // Task completed successfully - mark as completed and ready for next task
                     gameState = await _gameStateService.CompleteTaskAsync(email, game, npc, gameState.CurrentTaskName, gameState.CurrentTaskReward);
                     
-                    var response = GameResponse.Success(gameState.LastMessage, "READY_FOR_NEXT");
+                    // Personalize the success message
+                    var basicSuccessMessage = $"Congratulations! You completed '{completedTaskName}' and earned {earnedReward} points!";
+                    var personalizedSuccessMessage = await PersonalizeMessageAsync(basicSuccessMessage, npc);
+                    
+                    var response = GameResponse.Success(personalizedSuccessMessage, "READY_FOR_NEXT");
                     response.TaskCompleted = true;
                     response.Score = gameState.TotalScore;
                     response.CompletedTasks = gameState.CompletedTasks;
-                    response.TaskName = gameState.CurrentTaskName;
+                    response.TaskName = completedTaskName;
                     response.EasterEggUrl = await _storageService.GetRandomEasterEggAsync("Pass") ?? "";
                     
                     return response;
@@ -338,12 +349,24 @@ namespace GraderFunctionApp.Functions
                 {
                     // Some tests failed - keep the same task active
                     var failedTests = totalTests - passedTests;
-                    var message = $"Task '{gameState.CurrentTaskName}' not completed yet. {passedTests}/{totalTests} tests passed. Please fix the issues and try again.";
                     
-                    gameState.LastMessage = message;
+                    // Get the task instruction from the game task service
+                    var allTasks = _gameTaskService.GetTasks(false);
+                    var currentTask = allTasks.FirstOrDefault(t => t.Name == gameState.CurrentTaskName);
+                    var originalInstruction = currentTask?.Instruction ?? "Complete the assigned task";
+                    
+                    // Create the failure message with task instruction
+                    var basicMessage = $"Task '{gameState.CurrentTaskName}' not completed yet. {passedTests}/{totalTests} tests passed.\n\n" +
+                                      $"Task: {originalInstruction}\n\n" +
+                                      "Please fix the issues and try again.";
+                    
+                    // Personalize the message using NPC character
+                    var personalizedMessage = await PersonalizeMessageAsync(basicMessage, npc);
+                    
+                    gameState.LastMessage = personalizedMessage;
                     await _gameStateService.CreateOrUpdateGameStateAsync(gameState);
                     
-                    var response = GameResponse.Success(message, "TASK_ASSIGNED");
+                    var response = GameResponse.Success(personalizedMessage, "TASK_ASSIGNED");
                     response.Score = gameState.TotalScore;
                     response.CompletedTasks = gameState.CompletedTasks;
                     response.TaskName = gameState.CurrentTaskName;
@@ -360,6 +383,29 @@ namespace GraderFunctionApp.Functions
                 _logger.LogError(ex, "Error running task grading");
                 var errorMessage = "Error occurred while checking your task. Please try again.";
                 return GameResponse.Error(errorMessage);
+            }
+        }
+
+        private async Task<string> PersonalizeMessageAsync(string originalMessage, string npcName)
+        {
+            try
+            {
+                var npcCharacter = await _storageService.GetNPCCharacterAsync(npcName);
+                if (npcCharacter != null)
+                {
+                    var result = await _aiService.PersonalizeNPCMessageAsync(originalMessage, npcCharacter.Age, npcCharacter.Gender, npcCharacter.Background);
+                    return !string.IsNullOrEmpty(result) ? result : $"Tek, {originalMessage}";
+                }
+                else
+                {
+                    _logger.LogWarning("No character data found for NPC: {npcName}, using fallback", npcName);
+                    return $"Tek, {originalMessage}";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error personalizing message with AI, using fallback");
+                return $"Tek, {originalMessage}";
             }
         }
     }

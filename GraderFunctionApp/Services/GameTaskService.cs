@@ -47,23 +47,34 @@ namespace GraderFunctionApp.Services
 
             try
             {
-                // Get completed tasks from game state
-                var gameState = await _gameStateService.GetGameStateAsync(email, game, npc);
-                var completedTasks = new HashSet<string>();
-                
-                if (gameState != null && !string.IsNullOrEmpty(gameState.CompletedTasksList))
+                // Rule 2: Check if this NPC provided a task within the last hour
+                var lastTaskNPC = await _storageService.GetLastTaskNPCAsync(email);
+                if (!string.IsNullOrEmpty(lastTaskNPC) && lastTaskNPC == npc)
                 {
-                    var completedTasksList = JsonConvert.DeserializeObject<List<string>>(gameState.CompletedTasksList) ?? new List<string>();
-                    completedTasks = new HashSet<string>(completedTasksList);
+                    // Get the game state to check the last updated time
+                    var gameState = await _gameStateService.GetGameStateAsync(email, game, npc);
+                    if (gameState != null)
+                    {
+                        var oneHourAgo = DateTime.UtcNow.AddHours(-1);
+                        if (gameState.LastUpdated > oneHourAgo)
+                        {
+                            _logger.LogInformation("NPC {npc} provided a task within the last hour for {email}. Cannot provide new task.", npc, email);
+                            return null;
+                        }
+                    }
                 }
+
+                // Rule 1: Get completed tasks from PassedTest (not from game state CompletedTasksList)
+                var completedTasks = await _storageService.GetCompletedTaskNamesAsync(email);
+                var completedTasksSet = new HashSet<string>(completedTasks);
                 
-                _logger.LogInformation($"Retrieved {completedTasks.Count} completed tasks for {email}.");
+                _logger.LogInformation($"Retrieved {completedTasksSet.Count} completed tasks for {email} from PassedTest.");
 
                 // Get all tasks without rephrasing first (for performance)
                 var allTasks = GetTasksInternal(rephrases: false);
                 
                 // Filter to find available tasks (not completed)
-                var availableTasks = allTasks.Where(t => !completedTasks.Contains(t.Name)).ToList();
+                var availableTasks = allTasks.Where(t => !completedTasksSet.Contains(t.Name)).ToList();
 
                 if (!availableTasks.Any())
                 {
