@@ -80,7 +80,6 @@ var host = new HostBuilder()
             return new PreGeneratedMessageService(logger, tableServiceClient, storageOptions, aiService, gameTaskService);
         });
         
-        services.AddSingleton<IGameMessageService, GameMessageService>();
         services.AddSingleton<IUnifiedMessageService, UnifiedMessageService>();
         services.AddSingleton<ITestResultParser, TestResultParser>();
         services.AddSingleton<ITestRunner, TestRunner>();
