@@ -24,7 +24,7 @@ namespace GraderFunctionApp.Services
             _options = options.Value;
         }
 
-        public async Task<string?> RunUnitTestProcessAsync(ExecutionContext context, ILogger log, string credentials, string trace, string filter)
+        public async Task<string?> RunUnitTestProcessAsync(ILogger log, string credentials, string trace, string filter)
         {
             var tempDir = UtilityHelpers.GetTemporaryDirectory(trace);
             var tempCredentialsFilePath = Path.Combine(tempDir, "azureauth.json");

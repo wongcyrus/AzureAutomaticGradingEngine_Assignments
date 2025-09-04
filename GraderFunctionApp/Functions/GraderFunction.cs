@@ -17,7 +17,7 @@ namespace GraderFunctionApp.Functions
         private readonly ITestRunner _testRunner;
         private readonly ITestResultParser _testResultParser;
         private readonly IGameStateService _gameStateService;
-        private readonly IAIService _aiService;
+        private readonly IUnifiedMessageService _unifiedMessageService;
 
         public GraderFunction(
             ILogger<GraderFunction> logger,
@@ -26,7 +26,7 @@ namespace GraderFunctionApp.Functions
             ITestRunner testRunner,
             ITestResultParser testResultParser,
             IGameStateService gameStateService,
-            IAIService aiService)
+            IUnifiedMessageService unifiedMessageService)
         {
             _logger = logger;
             _storageService = storageService;
@@ -34,13 +34,12 @@ namespace GraderFunctionApp.Functions
             _testRunner = testRunner;
             _testResultParser = testResultParser;
             _gameStateService = gameStateService;
-            _aiService = aiService;
+            _unifiedMessageService = unifiedMessageService;
         }
 
         [Function(nameof(GraderFunction))]
         public async Task<IActionResult> Run(
-             [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
-             ExecutionContext context)
+             [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req)
         {
             _logger.LogInformation("Start AzureGraderFunction");
 
@@ -48,8 +47,8 @@ namespace GraderFunctionApp.Functions
             {
                 return req.Method switch
                 {
-                    "GET" => await HandleGetRequestAsync(req, context),
-                    "POST" => await HandlePostRequestAsync(req, context),
+                    "GET" => await HandleGetRequestAsync(req),
+                    "POST" => await HandlePostRequestAsync(req),
                     _ => new BadRequestObjectResult(ApiResponse.ErrorResult("Unsupported HTTP method"))
                 };
             }
@@ -63,7 +62,7 @@ namespace GraderFunctionApp.Functions
             }
         }
 
-        private async Task<IActionResult> HandleGetRequestAsync(HttpRequest req, ExecutionContext context)
+        private async Task<IActionResult> HandleGetRequestAsync(HttpRequest req)
         {
             // Check if this is a game mode request
             if (req.Query.ContainsKey("gameMode") && req.Query["gameMode"] == "true")
@@ -94,12 +93,12 @@ namespace GraderFunctionApp.Functions
                 string trace = req.Query["trace"]!;
                 email = UtilityHelpers.ExtractEmail(trace);
                 _logger.LogInformation("start:" + trace);
-                xml = await _testRunner.RunUnitTestProcessAsync(context, _logger, credentials, email, filter);
+                xml = await _testRunner.RunUnitTestProcessAsync(_logger, credentials, email, filter);
                 _logger.LogInformation("end:" + trace);
             }
             else
             {
-                xml = await _testRunner.RunUnitTestProcessAsync(context, _logger, credentials, email, filter);
+                xml = await _testRunner.RunUnitTestProcessAsync(_logger, credentials, email, filter);
             }
 
             if (string.IsNullOrEmpty(xml))
@@ -116,7 +115,7 @@ namespace GraderFunctionApp.Functions
             return new ContentResult { Content = xml, ContentType = "application/xml", StatusCode = 200 };
         }
 
-        private async Task<IActionResult> HandlePostRequestAsync(HttpRequest req, ExecutionContext context)
+        private async Task<IActionResult> HandlePostRequestAsync(HttpRequest req)
         {
             _logger.LogInformation("POST Request");
             
@@ -137,7 +136,7 @@ namespace GraderFunctionApp.Functions
                 };
             }
 
-            var xml = await _testRunner.RunUnitTestProcessAsync(context, _logger, credentials, "Anonymous", filter);
+            var xml = await _testRunner.RunUnitTestProcessAsync(_logger, credentials, "Anonymous", filter);
             if (string.IsNullOrEmpty(xml))
             {
                 return new ContentResult 
@@ -307,7 +306,7 @@ namespace GraderFunctionApp.Functions
                 }
 
                 // Run the unit tests
-                var xml = await _testRunner.RunUnitTestProcessAsync(null!, _logger, credentialsToUse, email, gameState.CurrentTaskFilter);
+                var xml = await _testRunner.RunUnitTestProcessAsync(_logger, credentialsToUse, email, gameState.CurrentTaskFilter);
                 
                 if (string.IsNullOrEmpty(xml))
                 {
@@ -332,9 +331,8 @@ namespace GraderFunctionApp.Functions
                     // Task completed successfully - mark as completed and ready for next task
                     gameState = await _gameStateService.CompleteTaskAsync(email, game, npc, gameState.CurrentTaskName, gameState.CurrentTaskReward);
                     
-                    // Personalize the success message
-                    var basicSuccessMessage = $"Congratulations! You completed '{completedTaskName}' and earned {earnedReward} points!";
-                    var personalizedSuccessMessage = await PersonalizeMessageAsync(basicSuccessMessage, npc);
+                    // Use UnifiedMessageService for personalized success message
+                    var personalizedSuccessMessage = await _unifiedMessageService.GetTaskCompletedMessageAsync(npc, completedTaskName, earnedReward);
                     
                     var response = GameResponse.Success(personalizedSuccessMessage, "READY_FOR_NEXT");
                     response.TaskCompleted = true;
@@ -350,18 +348,8 @@ namespace GraderFunctionApp.Functions
                     // Some tests failed - keep the same task active
                     var failedTests = totalTests - passedTests;
                     
-                    // Get the task instruction from the game task service
-                    var allTasks = _gameTaskService.GetTasks(false);
-                    var currentTask = allTasks.FirstOrDefault(t => t.Name == gameState.CurrentTaskName);
-                    var originalInstruction = currentTask?.Instruction ?? "Complete the assigned task";
-                    
-                    // Create the failure message with task instruction
-                    var basicMessage = $"Task '{gameState.CurrentTaskName}' not completed yet. {passedTests}/{totalTests} tests passed.\n\n" +
-                                      $"Task: {originalInstruction}\n\n" +
-                                      "Please fix the issues and try again.";
-                    
-                    // Personalize the message using NPC character
-                    var personalizedMessage = await PersonalizeMessageAsync(basicMessage, npc);
+                    // Use UnifiedMessageService for personalized failure message
+                    var personalizedMessage = await _unifiedMessageService.GetTaskFailedMessageAsync(npc, gameState.CurrentTaskName, passedTests, totalTests);
                     
                     gameState.LastMessage = personalizedMessage;
                     await _gameStateService.CreateOrUpdateGameStateAsync(gameState);
@@ -383,29 +371,6 @@ namespace GraderFunctionApp.Functions
                 _logger.LogError(ex, "Error running task grading");
                 var errorMessage = "Error occurred while checking your task. Please try again.";
                 return GameResponse.Error(errorMessage);
-            }
-        }
-
-        private async Task<string> PersonalizeMessageAsync(string originalMessage, string npcName)
-        {
-            try
-            {
-                var npcCharacter = await _storageService.GetNPCCharacterAsync(npcName);
-                if (npcCharacter != null)
-                {
-                    var result = await _aiService.PersonalizeNPCMessageAsync(originalMessage, npcCharacter.Age, npcCharacter.Gender, npcCharacter.Background);
-                    return !string.IsNullOrEmpty(result) ? result : $"Tek, {originalMessage}";
-                }
-                else
-                {
-                    _logger.LogWarning("No character data found for NPC: {npcName}, using fallback", npcName);
-                    return $"Tek, {originalMessage}";
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error personalizing message with AI, using fallback");
-                return $"Tek, {originalMessage}";
             }
         }
     }

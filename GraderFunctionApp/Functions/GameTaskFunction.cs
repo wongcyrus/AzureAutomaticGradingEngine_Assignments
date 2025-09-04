@@ -17,19 +17,22 @@ namespace GraderFunctionApp.Functions
         private readonly IGameStateService _gameStateService;
         private readonly IStorageService _storageService;
         private readonly IAIService _aiService;
+        private readonly IGameMessageService _gameMessageService;
 
         public GameTaskFunction(
             ILogger<GameTaskFunction> logger, 
             IGameTaskService gameTaskService,
             IGameStateService gameStateService,
             IStorageService storageService,
-            IAIService aiService)
+            IAIService aiService,
+            IGameMessageService gameMessageService)
         {
             _logger = logger;
             _gameTaskService = gameTaskService;
             _gameStateService = gameStateService;
             _storageService = storageService;
             _aiService = aiService;
+            _gameMessageService = gameMessageService;
         }
 
         [Function(nameof(GameTaskFunction))]
@@ -69,26 +72,8 @@ namespace GraderFunctionApp.Functions
                     // Extract the other NPC name from RowKey (format: "game-npc")
                     var otherNpcName = activeTaskWithOtherNPC.RowKey.Split('-').LastOrDefault() ?? "another NPC";
                     
-                    var casualResponses = new[]
-                    {
-                        $"Hello there! I see you're working with {otherNpcName} on a task. You should complete that first before I can help you with anything new.",
-                        $"Hi! Looks like {otherNpcName} has given you something to work on. Focus on that task first, then come back to see me!",
-                        $"Greetings! I notice you have an active task with {otherNpcName}. One task at a time - finish that one first!",
-                        $"Hey! You're already busy with {otherNpcName}'s assignment. Complete that before taking on more work!",
-                        $"Hello! I can see {otherNpcName} is keeping you busy. Finish up with them first, then we can chat!",
-                        "Nice to meet you! But I can see you're already working on something. One step at a time!",
-                        "Hi there! You look busy with your current task. Come back when you're ready for something new!",
-                        "Hello! I'd love to help, but you should finish your current assignment first. Good luck!",
-                        "Greetings! Focus on your current task for now. I'll be here when you're ready for the next challenge!",
-                        "Hey! Looks like you have your hands full already. Complete your current work first!"
-                    };
-
-                    var randomResponse = casualResponses[new Random().Next(casualResponses.Length)];
-                    
-                    // Personalize response with NPC background
-                    var personalizedResponse = npcCharacter != null 
-                        ? await PersonalizeMessageAsync(randomResponse, npcCharacter)
-                        : randomResponse;
+                    // Use GameMessageService for consistent messaging
+                    var personalizedResponse = await _gameMessageService.GetBusyWithOtherNPCMessageAsync(otherNpcName, npcCharacter);
                     
                     var response = GameResponse.Success(personalizedResponse, "BUSY_WITH_OTHER_NPC");
                     response.Score = gameState.TotalScore;
@@ -105,12 +90,12 @@ namespace GraderFunctionApp.Functions
                     // Show the full task details including instruction
                     var activeTaskMessage = !string.IsNullOrEmpty(gameState.LastMessage) 
                         ? gameState.LastMessage 
-                        : $"Your current task: {gameState.CurrentTaskName}. Complete it and chat with me again for grading!";
+                        : null; // Let GameMessageService handle the default message
                     
-                    // Personalize the task reminder with NPC background
-                    var personalizedMessage = npcCharacter != null 
-                        ? await PersonalizeMessageAsync(activeTaskMessage, npcCharacter)
-                        : activeTaskMessage;
+                    // Use GameMessageService for consistent messaging
+                    var personalizedMessage = activeTaskMessage != null
+                        ? (npcCharacter != null ? await PersonalizeMessageAsync(activeTaskMessage, npcCharacter) : activeTaskMessage)
+                        : await _gameMessageService.GetActiveTaskReminderMessageAsync(gameState.CurrentTaskName, npcCharacter);
                     
                     var response = GameResponse.Success(personalizedMessage, "TASK_ASSIGNED");
                     response.TaskName = gameState.CurrentTaskName;
@@ -133,21 +118,8 @@ namespace GraderFunctionApp.Functions
                         var timeRemaining = lastTaskTime.AddHours(1) - DateTime.UtcNow;
                         var minutesRemaining = (int)Math.Ceiling(timeRemaining.TotalMinutes);
                         
-                        var cooldownResponses = new[]
-                        {
-                            $"I just gave you a task recently! Come back in {minutesRemaining} minutes for a new challenge.",
-                            $"You need to wait {minutesRemaining} more minutes before I can give you another task.",
-                            $"I'm still preparing your next challenge. Return in {minutesRemaining} minutes!",
-                            $"Give me {minutesRemaining} more minutes to prepare something new for you.",
-                            $"You're eager! But wait {minutesRemaining} more minutes before I assign another task."
-                        };
-
-                        var randomResponse = cooldownResponses[new Random().Next(cooldownResponses.Length)];
-                        
-                        // Personalize response with NPC background
-                        var personalizedResponse = npcCharacter != null 
-                            ? await PersonalizeMessageAsync(randomResponse, npcCharacter)
-                            : randomResponse;
+                        // Use GameMessageService for consistent messaging
+                        var personalizedResponse = await _gameMessageService.GetCooldownMessageAsync(minutesRemaining, npcCharacter);
                         
                         var response = GameResponse.Success(personalizedResponse, "NPC_COOLDOWN");
                         response.Score = gameState.TotalScore;
@@ -163,10 +135,7 @@ namespace GraderFunctionApp.Functions
                 var nextTask = await _gameTaskService.GetNextTaskAsync(email, npc, game);
                 if (nextTask == null)
                 {
-                    var completionMessage = "Congratulations! You have completed all available tasks!";
-                    var personalizedCompletion = npcCharacter != null 
-                        ? await PersonalizeMessageAsync(completionMessage, npcCharacter)
-                        : completionMessage;
+                    var personalizedCompletion = await _gameMessageService.GetAllTasksCompletedMessageAsync(npcCharacter);
                         
                     var response = GameResponse.Success(personalizedCompletion, "ALL_COMPLETED");
                     response.Score = gameState.TotalScore;
@@ -185,10 +154,7 @@ namespace GraderFunctionApp.Functions
                     
                     if (uncompletedTask == null)
                     {
-                        var completionMessage = "Congratulations! You have completed all available tasks!";
-                        var personalizedCompletion = npcCharacter != null 
-                            ? await PersonalizeMessageAsync(completionMessage, npcCharacter)
-                            : completionMessage;
+                        var personalizedCompletion = await _gameMessageService.GetAllTasksCompletedMessageAsync(npcCharacter);
                             
                         var response = GameResponse.Success(personalizedCompletion, "ALL_COMPLETED");
                         response.Score = gameState.TotalScore;
@@ -200,10 +166,7 @@ namespace GraderFunctionApp.Functions
                 }
 
                 // Assign new task with personalized message
-                var taskMessage = $"New task: {nextTask.Name}. {nextTask.Instruction}";
-                var personalizedTaskMessage = npcCharacter != null 
-                    ? await PersonalizeMessageAsync(taskMessage, npcCharacter)
-                    : taskMessage;
+                var personalizedTaskMessage = await _gameMessageService.GetTaskAssignmentMessageAsync(nextTask.Name, nextTask.Instruction, npcCharacter);
                     
                 gameState = await _gameStateService.AssignTaskAsync(email, game, npc, nextTask.Name, nextTask.Filter, nextTask.Reward, personalizedTaskMessage);
 

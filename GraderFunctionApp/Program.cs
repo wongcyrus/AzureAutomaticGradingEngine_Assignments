@@ -51,10 +51,38 @@ var host = new HostBuilder()
             return new GameStateService(tableServiceClient, logger);
         });
 
-        // Register other services
-        services.AddSingleton<IAIService, AIService>();
-        services.AddSingleton<ITestResultParser, TestResultParser>();
+        // Register TableServiceClient for shared use
+        services.AddSingleton<Azure.Data.Tables.TableServiceClient>(provider =>
+        {
+            var connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage")
+                ?? throw new InvalidOperationException("AzureWebJobsStorage connection string not found");
+            return new Azure.Data.Tables.TableServiceClient(connectionString);
+        });
+
+        // Register core services without circular dependencies
         services.AddSingleton<IGameTaskService, GameTaskService>();
+        
+        // Register AIService first without PreGeneratedMessageService dependency
+        services.AddSingleton<IAIService>(provider =>
+        {
+            var logger = provider.GetRequiredService<ILogger<AIService>>();
+            return new AIService(logger, null); // Start without pre-generated service
+        });
+        
+        // Register PreGeneratedMessageService with dependencies
+        services.AddSingleton<IPreGeneratedMessageService>(provider =>
+        {
+            var logger = provider.GetRequiredService<ILogger<PreGeneratedMessageService>>();
+            var tableServiceClient = provider.GetRequiredService<Azure.Data.Tables.TableServiceClient>();
+            var storageOptions = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<StorageOptions>>();
+            var aiService = provider.GetRequiredService<IAIService>();
+            var gameTaskService = provider.GetRequiredService<IGameTaskService>();
+            return new PreGeneratedMessageService(logger, tableServiceClient, storageOptions, aiService, gameTaskService);
+        });
+        
+        services.AddSingleton<IGameMessageService, GameMessageService>();
+        services.AddSingleton<IUnifiedMessageService, UnifiedMessageService>();
+        services.AddSingleton<ITestResultParser, TestResultParser>();
         services.AddSingleton<ITestRunner, TestRunner>();
 
         // Register Functions (for backward compatibility)

@@ -12,14 +12,12 @@ namespace GraderFunctionApp.Services
     {
         private readonly ILogger<GameTaskService> _logger;
         private readonly IStorageService _storageService;
-        private readonly IAIService _aiService;
         private readonly IGameStateService _gameStateService;
 
-        public GameTaskService(ILogger<GameTaskService> logger, IStorageService storageService, IAIService aiService, IGameStateService gameStateService)
+        public GameTaskService(ILogger<GameTaskService> logger, IStorageService storageService, IGameStateService gameStateService)
         {
             _logger = logger;
             _storageService = storageService;
-            _aiService = aiService;
             _gameStateService = gameStateService;
         }
 
@@ -85,26 +83,9 @@ namespace GraderFunctionApp.Services
                 // Get the next task (first available)
                 var nextTask = availableTasks.First();
                 
-                // Now rephrase ONLY the next task's instruction
-                _logger.LogDebug("Rephrasing instruction for next task: {taskName}", nextTask.Name);
-                var rephrasedInstruction = await _aiService.RephraseInstructionAsync(nextTask.Instruction);
-                
-                // Create a new task object with the rephrased instruction
-                var rephrasedTask = new GameTaskData
-                {
-                    Name = nextTask.Name,
-                    Tests = nextTask.Tests,
-                    GameClassOrder = nextTask.GameClassOrder,
-                    Instruction = rephrasedInstruction ?? nextTask.Instruction, // Fallback to original if rephrasing fails
-                    Filter = nextTask.Filter,
-                    Reward = nextTask.Reward,
-                    TimeLimit = nextTask.TimeLimit
-                };
-
-                _logger.LogInformation("Returning next task for {email}: {taskName} (rephrased: {wasRephrased})", 
-                    email, nextTask.Name, rephrasedInstruction != null && rephrasedInstruction != nextTask.Instruction);
-
-                return rephrasedTask;
+                // Return the task without rephrasing - rephrasing will be handled by UnifiedMessageService
+                _logger.LogInformation("Returning next task for {email}: {taskName}", email, nextTask.Name);
+                return nextTask;
             }
             catch (Exception ex)
             {

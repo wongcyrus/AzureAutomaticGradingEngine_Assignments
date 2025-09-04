@@ -11,10 +11,12 @@ namespace GraderFunctionApp.Services
     {
         private readonly ILogger<AIService> _logger;
         private static readonly ObjectCache TokenCache = MemoryCache.Default;
+        private readonly IPreGeneratedMessageService? _preGeneratedMessageService;
 
-        public AIService(ILogger<AIService> logger)
+        public AIService(ILogger<AIService> logger, IPreGeneratedMessageService? preGeneratedMessageService = null)
         {
             _logger = logger;
+            _preGeneratedMessageService = preGeneratedMessageService;
         }
 
         public async Task<string?> PersonalizeNPCMessageAsync(string message, int age, string gender, string background)
@@ -22,6 +24,53 @@ namespace GraderFunctionApp.Services
             if (string.IsNullOrEmpty(message))
             {
                 return message;
+            }
+
+            // If message is very short or contains only special characters, return with prefix
+            if (message.Trim().Length < 5 || message.Trim().All(c => !char.IsLetter(c)))
+            {
+                _logger.LogDebug("Message too short or no letters found, using simple prefix: {message}", message);
+                return $"Tek, {message}";
+            }
+
+            // Validate NPC characteristics
+            if (string.IsNullOrEmpty(gender) || string.IsNullOrEmpty(background))
+            {
+                _logger.LogDebug("Missing NPC characteristics (gender: {gender}, background: {background}), using simple prefix", gender, background);
+                return $"Tek, {message}";
+            }
+
+            if (age < 1 || age > 200)
+            {
+                _logger.LogDebug("Invalid age {age}, using simple prefix", age);
+                return $"Tek, {message}";
+            }
+
+            // Try to get pre-generated message first
+            if (_preGeneratedMessageService != null)
+            {
+                try
+                {
+                    var preGeneratedMessage = await _preGeneratedMessageService.GetPreGeneratedNPCMessageAsync(message, age, gender, background);
+                    if (!string.IsNullOrEmpty(preGeneratedMessage))
+                    {
+                        _logger.LogDebug("Using pre-generated NPC message for: {message}", message);
+                        return preGeneratedMessage;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error retrieving pre-generated NPC message, falling back to live generation");
+                }
+            }
+
+            // Check in-memory cache as secondary fallback
+            var cacheKey = $"npc_{message}_{age}_{gender}_{background}";
+            var tokenContents = TokenCache?.GetCacheItem(cacheKey);
+            if (tokenContents != null && tokenContents.Value != null)
+            {
+                _logger.LogDebug("Returning cached NPC message");
+                return tokenContents.Value.ToString();
             }
 
             var azureOpenAiEndpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
@@ -45,8 +94,8 @@ namespace GraderFunctionApp.Services
 
                 var messages = new List<ChatMessage>
                 {
-                    new SystemChatMessage($"You are an NPC in an educational game. Age: {age}, Gender: {gender}, Background: {background}. You are talking to Tek, a brave Azure warrior. Rephrase messages to match your personality while keeping core information intact. Only return the rephrased message, nothing else."),
-                    new UserChatMessage(message)
+                    new SystemChatMessage($"You are helping in an Azure learning game. You play an NPC character with these traits - Age: {age}, Gender: {gender}, Background: {background}. Rephrase the following message to sound natural for your character while keeping all important information. Keep it friendly and educational. Return only the rephrased message."),
+                    new UserChatMessage($"Rephrase this message: {message}")
                 };
 
                 var requestOptions = new ChatCompletionOptions()
@@ -55,24 +104,84 @@ namespace GraderFunctionApp.Services
                     Temperature = 0.7f
                 };
 
-                _logger.LogDebug("Sending request to Azure OpenAI for NPC personalization");
+                _logger.LogDebug("Sending request to Azure OpenAI for NPC personalization. Message: {message}, Age: {age}, Gender: {gender}, Background: {background}", 
+                    message, age, gender, background);
+                
                 var response = await chatClient.CompleteChatAsync(messages, requestOptions);
+
+                _logger.LogDebug("Received response from Azure OpenAI. HasValue: {hasValue}, ContentCount: {contentCount}", 
+                    response?.Value != null, response?.Value?.Content?.Count ?? 0);
 
                 if (response?.Value?.Content == null || response.Value.Content.Count == 0)
                 {
-                    _logger.LogWarning("Azure OpenAI returned empty response for NPC personalization");
+                    _logger.LogWarning("Azure OpenAI returned empty response for NPC personalization. Trying fallback approach. Message: {message}", message);
+                    
+                    // Try a simpler prompt as fallback
+                    var fallbackMessages = new List<ChatMessage>
+                    {
+                        new SystemChatMessage("You are a helpful assistant. Rephrase the following message to be more natural and friendly while keeping the same meaning."),
+                        new UserChatMessage(message)
+                    };
+                    
+                    var fallbackResponse = await chatClient.CompleteChatAsync(fallbackMessages, requestOptions);
+                    
+                    if (fallbackResponse?.Value?.Content != null && fallbackResponse.Value.Content.Count > 0)
+                    {
+                        var fallbackResult = fallbackResponse.Value.Content[0].Text?.Trim();
+                        if (!string.IsNullOrEmpty(fallbackResult))
+                        {
+                            _logger.LogDebug("Fallback approach succeeded. Result: {result}", fallbackResult);
+                            return fallbackResult;
+                        }
+                    }
+                    
+                    _logger.LogWarning("Both original and fallback approaches failed for NPC personalization. Using default prefix.");
                     return $"Tek, {message}";
                 }
 
                 var result = response.Value.Content[0].Text?.Trim();
+                
+                _logger.LogDebug("Azure OpenAI response content: {content}", result);
+                
+                if (string.IsNullOrEmpty(result))
+                {
+                    _logger.LogWarning("Azure OpenAI returned empty text content for NPC personalization. Message: {message}, Age: {age}, Gender: {gender}, Background: {background}", 
+                        message, age, gender, background);
+                    return $"Tek, {message}";
+                }
+                
+                // Cache the result for future use
+                var policy = new CacheItemPolicy
+                {
+                    Priority = CacheItemPriority.Default,
+                    AbsoluteExpiration = DateTimeOffset.Now.AddHours(1)
+                };
+                
+                var cacheItem = new CacheItem(cacheKey, result);
+                TokenCache?.Set(cacheItem, policy);
+
                 _logger.LogDebug("Successfully personalized NPC message. Original: {original}, Result: {result}", message, result);
-                return !string.IsNullOrEmpty(result) ? result : $"Tek, {message}";
+                return result;
             }
             catch (RequestFailedException ex)
             {
-                _logger.LogError(ex, "Azure OpenAI API request failed for NPC personalization. Status: {status}, ErrorCode: {errorCode}, Message: {message}. Endpoint: {endpoint}, Deployment: {deployment}", 
-                    ex.Status, ex.ErrorCode, ex.Message, azureOpenAiEndpoint, deploymentOrModelName);
-                return $"Tek, {message}";
+                // Handle specific Azure OpenAI errors
+                if (ex.Status == 400 && ex.ErrorCode == "content_filter")
+                {
+                    _logger.LogWarning("Azure OpenAI content filter triggered for NPC message: {message}. Using fallback.", message);
+                    return $"Tek, {message}";
+                }
+                else if (ex.Status == 429)
+                {
+                    _logger.LogWarning("Azure OpenAI rate limit exceeded for NPC personalization. Using fallback.");
+                    return $"Tek, {message}";
+                }
+                else
+                {
+                    _logger.LogError(ex, "Azure OpenAI API request failed for NPC personalization. Status: {status}, ErrorCode: {errorCode}, Message: {errorMessage}. Endpoint: {endpoint}, Deployment: {deployment}", 
+                        ex.Status, ex.ErrorCode, ex.Message, azureOpenAiEndpoint, deploymentOrModelName);
+                    return $"Tek, {message}";
+                }
             }
             catch (Exception ex)
             {
@@ -88,6 +197,24 @@ namespace GraderFunctionApp.Services
             {
                 _logger.LogDebug("Instruction is null or empty, returning as-is");
                 return instruction;
+            }
+
+            // Try to get pre-generated message first
+            if (_preGeneratedMessageService != null)
+            {
+                try
+                {
+                    var preGeneratedMessage = await _preGeneratedMessageService.GetPreGeneratedInstructionAsync(instruction);
+                    if (!string.IsNullOrEmpty(preGeneratedMessage))
+                    {
+                        _logger.LogDebug("Using pre-generated instruction message for: {instruction}", instruction);
+                        return preGeneratedMessage;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error retrieving pre-generated instruction message, falling back to live generation");
+                }
             }
 
             var rnd = new Random();

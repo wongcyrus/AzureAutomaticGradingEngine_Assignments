@@ -12,5 +12,6 @@ namespace GraderFunctionApp.Configuration
         public string SubscriptionTableName { get; set; } = "Subscription";
         public string CredentialTableName { get; set; } = "Credential";
         public string NPCCharacterTableName { get; set; } = "NPCCharacter";
+        public string PreGeneratedMessageTableName { get; set; } = "PreGeneratedMessages";
     }
 }

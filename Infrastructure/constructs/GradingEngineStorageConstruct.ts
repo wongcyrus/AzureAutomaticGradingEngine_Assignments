@@ -10,7 +10,8 @@ const STORAGE_TABLES = [
   "FailTests",
   "GameStates",
   "NPCCharacter",
-  "EasterEgg"
+  "EasterEgg",
+  "PreGeneratedMessages"
 ];
 
 export class GradingEngineStorageConstruct extends Construct {
