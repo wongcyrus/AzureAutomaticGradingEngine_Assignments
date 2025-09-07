@@ -1,8 +1,11 @@
 using Azure;
 using Azure.AI.OpenAI;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using OpenAI.Chat;
 using System.Runtime.Caching;
+using System.Security.Cryptography;
+using System.Text;
 using GraderFunctionApp.Interfaces;
 
 namespace GraderFunctionApp.Services
@@ -11,12 +14,14 @@ namespace GraderFunctionApp.Services
     {
         private readonly ILogger<AIService> _logger;
         private static readonly ObjectCache TokenCache = MemoryCache.Default;
-        private readonly IPreGeneratedMessageService? _preGeneratedMessageService;
+        private readonly IServiceProvider _serviceProvider;
+        private readonly IStorageService? _storageService;
 
-        public AIService(ILogger<AIService> logger, IPreGeneratedMessageService? preGeneratedMessageService = null)
+        public AIService(ILogger<AIService> logger, IServiceProvider serviceProvider, IStorageService? storageService = null)
         {
             _logger = logger;
-            _preGeneratedMessageService = preGeneratedMessageService;
+            _serviceProvider = serviceProvider;
+            _storageService = storageService;
         }
 
         public async Task<string?> PersonalizeNPCMessageAsync(string message, int age, string gender, string background)
@@ -47,15 +52,23 @@ namespace GraderFunctionApp.Services
             }
 
             // Try to get pre-generated message first
-            if (_preGeneratedMessageService != null)
+            var preGeneratedMessageService = _serviceProvider.GetService<IPreGeneratedMessageService>();
+            if (preGeneratedMessageService != null)
             {
                 try
                 {
-                    var preGeneratedMessage = await _preGeneratedMessageService.GetPreGeneratedNPCMessageAsync(message, age, gender, background);
+                    _logger.LogInformation("Attempting to get pre-generated NPC message. Message: {message}, Age: {age}, Gender: {gender}, Background: {background}", 
+                        message, age, gender, background);
+                    
+                    var preGeneratedMessage = await preGeneratedMessageService.GetPreGeneratedNPCMessageAsync(message, age, gender, background);
                     if (!string.IsNullOrEmpty(preGeneratedMessage))
                     {
-                        _logger.LogDebug("Using pre-generated NPC message for: {message}", message);
+                        _logger.LogInformation("SUCCESS: Found and using pre-generated NPC message for: {message}", message);
                         return preGeneratedMessage;
+                    }
+                    else
+                    {
+                        _logger.LogInformation("No pre-generated message found, will generate new one for: {message}", message);
                     }
                 }
                 catch (Exception ex)
@@ -63,15 +76,21 @@ namespace GraderFunctionApp.Services
                     _logger.LogWarning(ex, "Error retrieving pre-generated NPC message, falling back to live generation");
                 }
             }
-
-            // Check in-memory cache as secondary fallback
-            var cacheKey = $"npc_{message}_{age}_{gender}_{background}";
-            var tokenContents = TokenCache?.GetCacheItem(cacheKey);
-            if (tokenContents != null && tokenContents.Value != null)
+            else
             {
-                _logger.LogDebug("Returning cached NPC message");
-                return tokenContents.Value.ToString();
+                _logger.LogWarning("PreGeneratedMessageService is null - cannot check for pre-generated messages");
             }
+
+            // Cache key: current NPC + message content
+            // The message already contains the full context including task instruction
+            var messageHash = ComputeHash(message);
+            var npcKey = $"{age}_{gender.GetHashCode()}_{background.GetHashCode()}";
+            var cacheKey = $"npc_{npcKey}_{messageHash}";
+            var finalCacheKey = ComputeHash(cacheKey);
+            
+            // Skip in-memory cache to ensure we always check pre-generated messages for hit counting
+            // This way, even if we've seen this message before, we'll still increment hit counts
+            // for pre-generated messages in the database
 
             var azureOpenAiEndpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
             var azureOpenAiApiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY");
@@ -150,16 +169,9 @@ namespace GraderFunctionApp.Services
                     return $"Tek, {message}";
                 }
                 
-                // Cache the result for future use
-                var policy = new CacheItemPolicy
-                {
-                    Priority = CacheItemPriority.Default,
-                    AbsoluteExpiration = DateTimeOffset.Now.AddHours(1)
-                };
+                // Don't cache the result in memory - let PreGeneratedMessageService handle caching
+                // This ensures that hit counts are properly tracked in the database
                 
-                var cacheItem = new CacheItem(cacheKey, result);
-                TokenCache?.Set(cacheItem, policy);
-
                 _logger.LogDebug("Successfully personalized NPC message. Original: {original}, Result: {result}", message, result);
                 return result;
             }
@@ -200,11 +212,12 @@ namespace GraderFunctionApp.Services
             }
 
             // Try to get pre-generated message first
-            if (_preGeneratedMessageService != null)
+            var preGeneratedMessageService = _serviceProvider.GetService<IPreGeneratedMessageService>();
+            if (preGeneratedMessageService != null)
             {
                 try
                 {
-                    var preGeneratedMessage = await _preGeneratedMessageService.GetPreGeneratedInstructionAsync(instruction);
+                    var preGeneratedMessage = await preGeneratedMessageService.GetPreGeneratedInstructionAsync(instruction);
                     if (!string.IsNullOrEmpty(preGeneratedMessage))
                     {
                         _logger.LogDebug("Using pre-generated instruction message for: {instruction}", instruction);
@@ -219,7 +232,9 @@ namespace GraderFunctionApp.Services
 
             var rnd = new Random();
             var version = rnd.Next(1, 3);
-            var cacheKey = instruction + version;
+            // Simple cache key for instruction rephrasing (not NPC-specific)
+            var instructionHash = ComputeHash(instruction);
+            var cacheKey = $"instruction_{instructionHash}_{version}";
 
             var tokenContents = TokenCache?.GetCacheItem(cacheKey);
             if (tokenContents != null && tokenContents.Value != null)
@@ -356,6 +371,13 @@ namespace GraderFunctionApp.Services
                     ex.GetType().Name, ex.Message);
                 return instruction;
             }
+        }
+
+        private static string ComputeHash(string input)
+        {
+            using var sha256 = SHA256.Create();
+            var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
+            return Convert.ToBase64String(hashedBytes).Replace("/", "_").Replace("+", "-").Replace("=", "");
         }
     }
 }

@@ -87,14 +87,9 @@ namespace GraderFunctionApp.Functions
                 // Check if user has an active task with THIS NPC
                 if (gameState.HasActiveTask && !string.IsNullOrEmpty(gameState.CurrentTaskName))
                 {
-                    // Show the full task details including instruction
-                    var activeTaskMessage = !string.IsNullOrEmpty(gameState.LastMessage) 
-                        ? gameState.LastMessage 
-                        : null; // Let GameMessageService handle the default message
-                    
-                    // Use GameMessageService for consistent messaging
-                    var personalizedMessage = activeTaskMessage != null
-                        ? (npcCharacter != null ? await PersonalizeMessageAsync(activeTaskMessage, npcCharacter) : activeTaskMessage)
+                    // Use the stored personalized message (already personalized when task was assigned)
+                    var personalizedMessage = !string.IsNullOrEmpty(gameState.LastMessage) 
+                        ? gameState.LastMessage  // Already personalized, don't personalize again
                         : await _unifiedMessageService.GetActiveTaskReminderMessageAsync(npc, gameState.CurrentTaskName);
                     
                     var response = GameResponse.Success(personalizedMessage, "TASK_ASSIGNED");

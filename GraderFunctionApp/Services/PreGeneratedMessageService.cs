@@ -73,24 +73,31 @@ namespace GraderFunctionApp.Services
 
             try
             {
-                var npcCharacteristics = JsonConvert.SerializeObject(new { age, gender, background });
-                var combinedKey = $"{originalMessage}|{npcCharacteristics}";
-                var messageHash = ComputeHash(combinedKey);
+                // Use the same key format as AIService: npc_{npcKey}_{messageHash}
+                var messageHash = ComputeHash(originalMessage);
+                var npcKey = $"{age}_{gender.GetHashCode()}_{background.GetHashCode()}";
+                var cacheKey = $"npc_{npcKey}_{messageHash}";
+                var combinedHash = ComputeHash(cacheKey);
 
-                var response = await _tableClient.GetEntityIfExistsAsync<PreGeneratedMessage>("npc", messageHash);
+                _logger.LogInformation("GetPreGeneratedNPCMessageAsync - Looking for message. OriginalMessage: {originalMessage}, MessageHash: {messageHash}, NPCKey: {npcKey}, CacheKey: {cacheKey}, CombinedHash: {combinedHash}", 
+                    originalMessage, messageHash, npcKey, cacheKey, combinedHash);
+
+                var response = await _tableClient.GetEntityIfExistsAsync<PreGeneratedMessage>("npc", combinedHash);
 
                 if (response.HasValue && response.Value != null)
                 {
                     var preGeneratedMessage = response.Value;
-                    _logger.LogDebug("Found pre-generated NPC message for hash: {hash}", messageHash);
+                    _logger.LogInformation("FOUND pre-generated NPC message! Hash: {hash}, Current HitCount: {hitCount}, MessageType: {messageType}", 
+                        combinedHash, preGeneratedMessage.HitCount, preGeneratedMessage.MessageType);
                     
                     // Increment hit count and update last used timestamp
+                    _logger.LogInformation("About to increment hit count for message hash: {hash}", combinedHash);
                     await IncrementHitCountAsync(preGeneratedMessage);
                     
                     return preGeneratedMessage?.GeneratedMessage;
                 }
 
-                _logger.LogDebug("No pre-generated NPC message found for hash: {hash}", messageHash);
+                _logger.LogInformation("NO pre-generated NPC message found for hash: {hash}", combinedHash);
                 return null;
             }
             catch (Exception ex)
@@ -198,27 +205,39 @@ namespace GraderFunctionApp.Services
             {
                 try
                 {
-                    var npcCharacteristics = JsonConvert.SerializeObject(new { age, gender, background });
-                    var combinedKey = $"{originalMessage}|{npcCharacteristics}";
-                    var messageHash = ComputeHash(combinedKey);
+                    // Use the same key format as AIService: npc_{npcKey}_{messageHash}
+                    var messageHash = ComputeHash(originalMessage);
+                    var npcKey = $"{age}_{gender.GetHashCode()}_{background.GetHashCode()}";
+                    var cacheKey = $"npc_{npcKey}_{messageHash}";
+                    var combinedHash = ComputeHash(cacheKey);
+
+                    _logger.LogInformation("GenerateAndStoreNPCMessageAsync - Attempt {attempt}. OriginalMessage: {originalMessage}, MessageHash: {messageHash}, NPCKey: {npcKey}, CacheKey: {cacheKey}, CombinedHash: {combinedHash}", 
+                        attempt, originalMessage, messageHash, npcKey, cacheKey, combinedHash);
 
                     // Check if already exists
-                    var existingResponse = await _tableClient.GetEntityIfExistsAsync<PreGeneratedMessage>("npc", messageHash);
+                    var existingResponse = await _tableClient.GetEntityIfExistsAsync<PreGeneratedMessage>("npc", combinedHash);
                     if (existingResponse.HasValue && existingResponse.Value != null)
                     {
-                        _logger.LogDebug("NPC message already exists for hash: {hash}", messageHash);
+                        _logger.LogInformation("GenerateAndStoreNPCMessageAsync - NPC message already exists for hash: {hash}, skipping generation", combinedHash);
                         return;
                     }
 
+                    _logger.LogInformation("GenerateAndStoreNPCMessageAsync - Calling AI service to generate message for: {originalMessage}", originalMessage);
+                    
                     // Generate new message using AI service
                     var generatedMessage = await _aiService.PersonalizeNPCMessageAsync(originalMessage, age, gender, background);
 
                     if (!string.IsNullOrEmpty(generatedMessage) && generatedMessage != $"Tek, {originalMessage}")
                     {
+                        _logger.LogInformation("GenerateAndStoreNPCMessageAsync - AI service returned message: {generatedMessage}", generatedMessage);
+                        
+                        // Store NPC characteristics for reference
+                        var npcCharacteristics = JsonConvert.SerializeObject(new { age, gender, background });
+                        
                         var preGeneratedMessage = new PreGeneratedMessage
                         {
                             PartitionKey = "npc",
-                            RowKey = messageHash,
+                            RowKey = combinedHash,
                             OriginalMessage = originalMessage,
                             GeneratedMessage = generatedMessage,
                             MessageType = "npc",
@@ -226,12 +245,16 @@ namespace GraderFunctionApp.Services
                             GeneratedAt = DateTime.UtcNow
                         };
 
+                        _logger.LogInformation("GenerateAndStoreNPCMessageAsync - About to store message in table. Hash: {hash}, GeneratedMessage: {generatedMessage}", 
+                            combinedHash, generatedMessage);
+
                         await _tableClient.UpsertEntityAsync(preGeneratedMessage);
-                        _logger.LogDebug("Stored pre-generated NPC message for hash: {hash}", messageHash);
+                        
+                        _logger.LogInformation("GenerateAndStoreNPCMessageAsync SUCCESS - Stored message with hash: {hash}", combinedHash);
                     }
                     else
                     {
-                        _logger.LogDebug("Skipping NPC message - AI returned empty or default response for: {message}", originalMessage);
+                        _logger.LogWarning("GenerateAndStoreNPCMessageAsync - AI service returned empty or fallback message: {generatedMessage}", generatedMessage);
                     }
                     
                     return; // Success - exit retry loop
@@ -478,27 +501,34 @@ namespace GraderFunctionApp.Services
         {
             try
             {
+                _logger.LogInformation("IncrementHitCountAsync START - Hash: {hash}, Current HitCount: {currentCount}, ETag: {etag}", 
+                    message.RowKey, message.HitCount, message.ETag);
+                
                 // Increment hit count and update last used timestamp
+                var oldHitCount = message.HitCount;
                 message.HitCount++;
                 message.LastUsedAt = DateTime.UtcNow;
+                
+                _logger.LogInformation("IncrementHitCountAsync - About to update entity. Hash: {hash}, Old HitCount: {oldCount}, New HitCount: {newCount}, LastUsedAt: {lastUsedAt}", 
+                    message.RowKey, oldHitCount, message.HitCount, message.LastUsedAt);
                 
                 // Update the entity in the table using optimistic concurrency
                 await _tableClient.UpdateEntityAsync(message, message.ETag, TableUpdateMode.Replace);
                 
-                _logger.LogDebug("Incremented hit count for message hash: {hash}. New count: {count}", 
-                    message.RowKey, message.HitCount);
+                _logger.LogInformation("IncrementHitCountAsync SUCCESS - Hash: {hash}, Final HitCount: {count}, LastUsedAt: {lastUsedAt}", 
+                    message.RowKey, message.HitCount, message.LastUsedAt);
             }
             catch (RequestFailedException ex) when (ex.Status == 412)
             {
                 // Concurrency conflict - someone else updated the entity
                 // This is acceptable for hit counting, we'll just log and continue
-                _logger.LogDebug("Concurrency conflict when updating hit count for message hash: {hash}. This is expected under high load.", 
+                _logger.LogWarning("IncrementHitCountAsync - Concurrency conflict (412) when updating hit count for message hash: {hash}. This is expected under high load.", 
                     message.RowKey);
             }
             catch (Exception ex)
             {
                 // Don't throw - hit count tracking shouldn't break the main functionality
-                _logger.LogWarning(ex, "Failed to update hit count for message hash: {hash}", message.RowKey);
+                _logger.LogError(ex, "IncrementHitCountAsync FAILED - Hash: {hash}, Error: {error}", message.RowKey, ex.Message);
             }
         }
 
@@ -537,60 +567,70 @@ namespace GraderFunctionApp.Services
                     return;
                 }
 
+                // Get all tasks from the system to generate realistic messages
+                var allTasks = _gameTaskService.GetTasks(rephrases: false);
+                _logger.LogInformation("Found {count} tasks to generate messages with", allTasks.Count);
+
                 // Reduced set of high-value message templates to minimize AI calls
-                var priorityGameMessages = new[]
+                var priorityGameMessageTemplates = new[]
                 {
-                    // Task assignment messages (most important)
+                    // Task assignment messages (most important) - these will use real task data
+                    "Ready for this? Task: {0}. {1}",
+                    "New task: {0}. {1}",
+                    
+                    // Static messages that don't need task data
                     "Ready for your next Azure assignment?",
                     "Here's a task that will test your cloud skills.",
-                    "New task: {0}. {1}",
-                    "Ready for this? Task: {0}. {1}",
-                    
-                    // Task completion messages
                     "Excellent work on that deployment!",
                     "Great job completing that task! Ready for the next challenge?",
-                    "Congratulations! You completed '{0}' and earned {1} points!",
-                    
-                    // Guidance messages
                     "Let me guide you through this Azure service.",
                     "Don't worry, cloud computing can be tricky at first.",
-                    
-                    // Progress messages
                     "You're making excellent progress in your Azure adventure!",
                     "Your Azure skills are growing stronger!",
-                    
-                    // Essential game state messages
-                    "Your current task: {0}. Complete it and chat with me again for grading!",
-                    "Hello there! I see you're working with {0} on a task. Complete that first!",
-                    "I just gave you a task recently! Come back in {0} minutes for a new challenge.",
                     "Congratulations! You have completed all available tasks!",
                     "Hello! How can I help you today?"
                 };
 
-                var totalCombinations = priorityGameMessages.Length * npcs.Count;
-                _logger.LogInformation("Processing {totalCombinations} message-NPC combinations in optimized batches", totalCombinations);
+                var messagesToGenerate = new List<(string message, NPCCharacter npc)>();
+
+                // Generate static messages (no task data needed)
+                var staticMessages = priorityGameMessageTemplates.Where(t => !t.Contains("{0}")).ToArray();
+                foreach (var message in staticMessages)
+                {
+                    foreach (var npc in npcs)
+                    {
+                        messagesToGenerate.Add((message, npc));
+                    }
+                }
+
+                // Generate task-specific messages with real task data
+                var taskMessageTemplates = priorityGameMessageTemplates.Where(t => t.Contains("{0}")).ToArray();
+                foreach (var template in taskMessageTemplates)
+                {
+                    foreach (var task in allTasks.Take(5)) // Use first 5 tasks to limit combinations
+                    {
+                        foreach (var npc in npcs)
+                        {
+                            var messageText = string.Format(template, task.Name, task.Instruction);
+                            messagesToGenerate.Add((messageText, npc));
+                        }
+                    }
+                }
+
+                var totalCombinations = messagesToGenerate.Count;
+                _logger.LogInformation("Processing {totalCombinations} message-NPC combinations in optimized batches (including {staticCount} static and {taskCount} task-specific messages)", 
+                    totalCombinations, staticMessages.Length * npcs.Count, taskMessageTemplates.Length * Math.Min(5, allTasks.Count) * npcs.Count);
 
                 // Process in batches with parallel execution
                 const int batchSize = 10; // Process 10 AI requests in parallel
                 const int delayBetweenBatches = 2000; // 2 second delay between batches
 
-                var allTasks = new List<(string message, NPCCharacter npc)>();
-                
-                // Create all message-NPC combinations
-                foreach (var message in priorityGameMessages)
-                {
-                    foreach (var npc in npcs)
-                    {
-                        allTasks.Add((message, npc));
-                    }
-                }
-
                 var processedCount = 0;
-                var totalBatches = (int)Math.Ceiling((double)allTasks.Count / batchSize);
+                var totalBatches = (int)Math.Ceiling((double)totalCombinations / batchSize);
 
                 for (int batchIndex = 0; batchIndex < totalBatches; batchIndex++)
                 {
-                    var batch = allTasks.Skip(batchIndex * batchSize).Take(batchSize).ToList();
+                    var batch = messagesToGenerate.Skip(batchIndex * batchSize).Take(batchSize).ToList();
                     _logger.LogInformation("Processing batch {batchIndex}/{totalBatches} ({count} items)...", 
                         batchIndex + 1, totalBatches, batch.Count);
 
@@ -599,17 +639,12 @@ namespace GraderFunctionApp.Services
                     {
                         try
                         {
-                            // Replace placeholders with generic values for pre-generation
-                            var messageText = item.message.Contains("{0}") 
-                                ? string.Format(item.message, "sample task", "sample instruction") 
-                                : item.message;
-
-                            await GenerateAndStoreNPCMessageAsync(messageText, item.npc.Age, item.npc.Gender, item.npc.Background);
+                            await GenerateAndStoreNPCMessageAsync(item.message, item.npc.Age, item.npc.Gender, item.npc.Background);
                             return true;
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogWarning(ex, "Failed to generate message for NPC: {npcName}", item.npc.Name);
+                            _logger.LogWarning(ex, "Failed to generate message for NPC: {npcName}, Message: {message}", item.npc.Name, item.message);
                             return false;
                         }
                     });
@@ -628,7 +663,7 @@ namespace GraderFunctionApp.Services
                     }
                 }
 
-                _logger.LogInformation("Generated {count} NPC messages for {npcCount} NPCs using optimized batch processing", 
+                _logger.LogInformation("Generated {count} NPC messages for {npcCount} NPCs using optimized batch processing with real task data", 
                     processedCount, npcs.Count);
             }
             catch (Exception ex)

@@ -62,11 +62,12 @@ var host = new HostBuilder()
         // Register core services without circular dependencies
         services.AddSingleton<IGameTaskService, GameTaskService>();
         
-        // Register AIService first without PreGeneratedMessageService dependency
+        // Register AIService without PreGeneratedMessageService to break circular dependency
         services.AddSingleton<IAIService>(provider =>
         {
             var logger = provider.GetRequiredService<ILogger<AIService>>();
-            return new AIService(logger, null); // Start without pre-generated service
+            var storageService = provider.GetRequiredService<IStorageService>();
+            return new AIService(logger, provider, storageService);
         });
         
         // Register PreGeneratedMessageService with dependencies

@@ -92,7 +92,7 @@ namespace GraderFunctionApp.Services
             return await CreateOrUpdateGameStateAsync(gameState);
         }
 
-        public async Task<GameState> AssignTaskAsync(string email, string game, string npc, string taskName, string taskFilter, int reward, string instruction)
+        public async Task<GameState> AssignTaskAsync(string email, string game, string npc, string taskName, string taskFilter, int reward, string personalizedMessage)
         {
             var gameState = await GetGameStateAsync(email, game, npc);
             if (gameState == null)
@@ -104,7 +104,7 @@ namespace GraderFunctionApp.Services
             gameState.CurrentTaskFilter = taskFilter;
             gameState.CurrentTaskReward = reward;
             gameState.CurrentPhase = "TASK_ASSIGNED";
-            gameState.LastMessage = $"New task: {taskName}. {instruction}";
+            gameState.LastMessage = personalizedMessage; // Store the already personalized message
             gameState.HasActiveTask = true;
 
             return await CreateOrUpdateGameStateAsync(gameState);

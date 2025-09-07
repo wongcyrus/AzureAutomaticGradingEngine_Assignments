@@ -159,11 +159,16 @@ namespace GraderFunctionApp.Services
             }
 
             // Use the AI service for personalization with consistent parameters
+            _logger.LogInformation("PersonalizeMessage - About to call AIService.PersonalizeNPCMessageAsync. Message: {message}, Age: {age}, Gender: {gender}, Background: {background}", 
+                message, npcCharacter.Age, npcCharacter.Gender, npcCharacter.Background);
+            
             var result = await _aiService.PersonalizeNPCMessageAsync(
                 message, 
                 npcCharacter.Age, 
                 npcCharacter.Gender, 
                 npcCharacter.Background);
+
+            _logger.LogInformation("PersonalizeMessage - AIService returned: {result}", result);
 
             return !string.IsNullOrEmpty(result) ? result : $"Tek, {message}";
         }
