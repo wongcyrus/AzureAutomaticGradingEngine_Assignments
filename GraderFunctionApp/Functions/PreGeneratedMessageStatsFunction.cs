@@ -105,5 +105,29 @@ namespace GraderFunctionApp.Functions
                 return new StatusCodeResult(StatusCodes.Status500InternalServerError);
             }
         }
+
+        [Function("ClearAllPreGeneratedMessages")]
+        public async Task<IActionResult> ClearAllMessages(
+            [HttpTrigger(AuthorizationLevel.Function, "delete", Route = "pregeneratedmessagestats/clear")] HttpRequest req)
+        {
+            _logger.LogInformation("Clearing all pre-generated messages for testing");
+
+            try
+            {
+                await _preGeneratedMessageService.ClearAllPreGeneratedMessagesAsync();
+                
+                return new OkObjectResult(new
+                {
+                    message = "All pre-generated messages cleared successfully",
+                    timestamp = DateTime.UtcNow,
+                    warning = "This operation is intended for testing purposes only"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error clearing all pre-generated messages");
+                return new StatusCodeResult(StatusCodes.Status500InternalServerError);
+            }
+        }
     }
 }

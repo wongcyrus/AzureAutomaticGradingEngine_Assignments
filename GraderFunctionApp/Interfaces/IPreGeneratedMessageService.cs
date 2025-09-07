@@ -9,5 +9,6 @@ namespace GraderFunctionApp.Interfaces
         Task RefreshAllPreGeneratedMessagesAsync();
         Task<PreGeneratedMessageStats> GetHitCountStatsAsync();
         Task ResetHitCountsAsync();
+        Task ClearAllPreGeneratedMessagesAsync();
     }
 }

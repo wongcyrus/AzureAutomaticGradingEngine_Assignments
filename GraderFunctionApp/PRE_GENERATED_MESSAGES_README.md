@@ -163,6 +163,27 @@ Messages are automatically refreshed daily, but can be manually triggered:
 - Use the HTTP endpoint for immediate refresh
 - Timer function ensures regular updates without manual intervention
 
+### Testing and Cleanup Operations
+For testing purposes, several cleanup operations are available:
+
+#### Reset Hit Counts
+Resets the usage statistics for all pre-generated messages while keeping the messages:
+```bash
+curl -X POST "https://YOUR_FUNCTION_APP.azurewebsites.net/api/pregeneratedmessagestats/reset?code=YOUR_KEY"
+```
+
+#### Clear All Messages (Testing Only)
+⚠️ **WARNING**: This deletes ALL pre-generated messages. Use only for testing:
+```bash
+curl -X DELETE "https://YOUR_FUNCTION_APP.azurewebsites.net/api/pregeneratedmessagestats/clear?code=YOUR_KEY"
+```
+
+#### Refresh Messages
+Regenerates all pre-generated messages from current data:
+```bash
+curl -X POST "https://YOUR_FUNCTION_APP.azurewebsites.net/api/messages/refresh?code=YOUR_KEY"
+```
+
 ## Troubleshooting
 
 ### Common Issues
@@ -179,6 +200,13 @@ az storage table list --account-name YOUR_STORAGE_ACCOUNT
 # View function logs  
 az functionapp logs tail --name YOUR_FUNCTION_APP --resource-group YOUR_RG
 
+# Get current statistics
+curl -X GET "https://YOUR_FUNCTION_APP.azurewebsites.net/api/pregeneratedmessagestats?code=YOUR_KEY"
+
 # Test message generation
-curl -X POST "https://YOUR_FUNCTION_APP.azurewebsites.net/api/generate-messages?code=YOUR_KEY"
+curl -X POST "https://YOUR_FUNCTION_APP.azurewebsites.net/api/messages/refresh?code=YOUR_KEY"
+
+# Testing cleanup operations
+curl -X POST "https://YOUR_FUNCTION_APP.azurewebsites.net/api/pregeneratedmessagestats/reset?code=YOUR_KEY"  # Reset hit counts
+curl -X DELETE "https://YOUR_FUNCTION_APP.azurewebsites.net/api/pregeneratedmessagestats/clear?code=YOUR_KEY"  # Clear all messages
 ```

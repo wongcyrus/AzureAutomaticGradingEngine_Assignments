@@ -406,6 +406,74 @@ namespace GraderFunctionApp.Services
             }
         }
 
+        public async Task ClearAllPreGeneratedMessagesAsync()
+        {
+            _logger.LogInformation("Starting cleanup of all pre-generated messages for testing");
+            
+            try
+            {
+                var messagesToDelete = new List<PreGeneratedMessage>();
+                
+                // Query all messages
+                await foreach (var message in _tableClient.QueryAsync<PreGeneratedMessage>())
+                {
+                    messagesToDelete.Add(message);
+                }
+                
+                _logger.LogInformation("Found {count} pre-generated messages to delete", messagesToDelete.Count);
+                
+                if (!messagesToDelete.Any())
+                {
+                    _logger.LogInformation("No pre-generated messages found to delete");
+                    return;
+                }
+                
+                // Delete messages in batches to avoid timeout
+                const int batchSize = 100;
+                var totalBatches = (int)Math.Ceiling((double)messagesToDelete.Count / batchSize);
+                var deletedCount = 0;
+                
+                for (int batchIndex = 0; batchIndex < totalBatches; batchIndex++)
+                {
+                    var batch = messagesToDelete.Skip(batchIndex * batchSize).Take(batchSize).ToList();
+                    
+                    foreach (var message in batch)
+                    {
+                        try
+                        {
+                            await _tableClient.DeleteEntityAsync(message.PartitionKey, message.RowKey, message.ETag);
+                            deletedCount++;
+                        }
+                        catch (RequestFailedException ex) when (ex.Status == 404)
+                        {
+                            // Entity already deleted - this is fine
+                            _logger.LogDebug("Message already deleted: {partitionKey}/{rowKey}", message.PartitionKey, message.RowKey);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to delete message: {partitionKey}/{rowKey}", message.PartitionKey, message.RowKey);
+                        }
+                    }
+                    
+                    _logger.LogInformation("Batch {batchIndex}/{totalBatches} completed. Deleted {deletedCount}/{totalMessages}",
+                        batchIndex + 1, totalBatches, deletedCount, messagesToDelete.Count);
+                    
+                    // Add small delay between batches to avoid overwhelming table storage
+                    if (batchIndex < totalBatches - 1)
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(500));
+                    }
+                }
+                
+                _logger.LogInformation("Completed cleanup: deleted {deletedCount} pre-generated messages", deletedCount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during pre-generated messages cleanup");
+                throw;
+            }
+        }
+
         private async Task IncrementHitCountAsync(PreGeneratedMessage message)
         {
             try
