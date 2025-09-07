@@ -143,6 +143,21 @@ namespace GraderFunctionApp.Services
                 return $"Tek, {message}";
             }
 
+            // Skip AI rephrasing for messages that are hard to cache due to dynamic content
+            var skipRephraseStatuses = new HashSet<string>
+            {
+                "TASK_FAILED",
+                "BUSY_WITH_OTHER_NPC", 
+                "NPC_COOLDOWN",
+                "ACTIVE_TASK_REMINDER"
+            };
+
+            if (skipRephraseStatuses.Contains(status))
+            {
+                _logger.LogDebug("Skipping AI rephrasing for status: {status} - using direct message", status);
+                return $"Tek, {message}";
+            }
+
             // Use the AI service for personalization with consistent parameters
             var result = await _aiService.PersonalizeNPCMessageAsync(
                 message, 
