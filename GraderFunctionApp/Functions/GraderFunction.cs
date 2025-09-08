@@ -385,13 +385,27 @@ namespace GraderFunctionApp.Functions
                     // Some tests failed - keep the same task active
                     var failedTests = totalTests - passedTests;
                     
+                    // Get task instruction to include with failure message
+                    var allTasks = _gameTaskService.GetTasks(false);
+                    var currentTask = allTasks.FirstOrDefault(t => t.Name == gameState.CurrentTaskName);
+                    
                     // Use UnifiedMessageService for personalized failure message
                     var personalizedMessage = await _unifiedMessageService.GetTaskFailedMessageAsync(npc, gameState.CurrentTaskName, passedTests, totalTests);
                     
-                    gameState.LastMessage = personalizedMessage;
+                    // Get personalized task instruction using UnifiedMessageService
+                    var personalizedTaskInstruction = currentTask != null 
+                        ? await _unifiedMessageService.GetTaskAssignedMessageAsync(npc, currentTask.Name, currentTask.Instruction)
+                        : "";
+                    
+                    // Combine failure message with personalized task instruction
+                    var combinedMessage = string.IsNullOrEmpty(personalizedTaskInstruction) 
+                        ? personalizedMessage 
+                        : $"{personalizedMessage}\n\n{personalizedTaskInstruction}";
+                    
+                    gameState.LastMessage = combinedMessage;
                     await _gameStateService.CreateOrUpdateGameStateAsync(gameState);
                     
-                    var response = GameResponse.Success(personalizedMessage, "TASK_ASSIGNED");
+                    var response = GameResponse.Success(gameState.LastMessage, "TASK_ASSIGNED");
                     response.Score = gameState.TotalScore;
                     response.CompletedTasks = gameState.CompletedTasks;
                     response.TaskName = gameState.CurrentTaskName;
