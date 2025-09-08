@@ -14,5 +14,6 @@ namespace GraderFunctionApp.Interfaces
         Task<string?> GetCredentialJsonAsync(string email);
         Task<NPCCharacter?> GetNPCCharacterAsync(string npcName);
         Task<string?> GetRandomEasterEggAsync(string type);
+        Task<string?> GenerateTestResultSasUrlAsync(string blobName);
     }
 }

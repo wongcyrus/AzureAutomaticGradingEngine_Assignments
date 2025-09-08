@@ -182,14 +182,14 @@ namespace GraderFunctionApp.Functions
             }
         }
 
-        private async Task SaveTestResultsToStorageAsync(string email, string taskName, string xml, string npc = "")
+        private async Task<string> SaveTestResultsToStorageAsync(string email, string taskName, string xml, string npc = "")
         {
             try
             {
                 _logger.LogInformation("SaveTestResultsToStorage called with email: {email}, NPC: {npc}", email, npc);
                 
                 var testResults = _testResultParser.ParseNUnitTestResult(xml);
-                await _storageService.SaveTestResultXmlAsync(email, xml);
+                var blobName = await _storageService.SaveTestResultXmlAsync(email, xml);
 
                 // Load all tasks and their rewards
                 var tasksJson = _gameTaskService.GetTasksJson(false);
@@ -220,10 +220,12 @@ namespace GraderFunctionApp.Functions
                 }
                 
                 _logger.LogInformation("Test results saved to storage for email: {email}, NPC: {npc}", email, npc);
+                return blobName;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to save test results to storage for email: {email}", email);
+                return "";
             }
         }
 
@@ -315,7 +317,7 @@ namespace GraderFunctionApp.Functions
 
                 // Parse test results
                 var testResults = _testResultParser.ParseNUnitTestResult(xml);
-                await SaveTestResultsToStorageAsync(email, gameState.CurrentTaskName, xml, npc);
+                var blobName = await SaveTestResultsToStorageAsync(email, gameState.CurrentTaskName, xml, npc);
 
                 // Check if all tests passed
                 var totalTests = testResults.Count;
@@ -362,6 +364,16 @@ namespace GraderFunctionApp.Functions
                     response.AdditionalData["testResults"] = testResults;
                     response.AdditionalData["passedTests"] = passedTests;
                     response.AdditionalData["totalTests"] = totalTests;
+                    
+                    // Generate SAS URL for test result XML when tests fail
+                    if (!string.IsNullOrEmpty(blobName))
+                    {
+                        var sasUrl = await _storageService.GenerateTestResultSasUrlAsync(blobName);
+                        if (!string.IsNullOrEmpty(sasUrl))
+                        {
+                            response.AdditionalData["testResultXmlUrl"] = sasUrl;
+                        }
+                    }
                     
                     return response;
                 }

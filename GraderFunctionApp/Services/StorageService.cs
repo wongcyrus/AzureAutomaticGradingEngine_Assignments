@@ -1,5 +1,7 @@
 using Azure.Data.Tables;
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using Azure.Storage.Sas;
 using Azure;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -58,7 +60,14 @@ namespace GraderFunctionApp.Services
                 var blobClient = containerClient.GetBlobClient(blobName);
 
                 using var stream = new MemoryStream(Encoding.UTF8.GetBytes(xml));
-                await blobClient.UploadAsync(stream, overwrite: true);
+                var blobHttpHeaders = new BlobHttpHeaders
+                {
+                    ContentType = "text/xml"
+                };
+                await blobClient.UploadAsync(stream, new BlobUploadOptions
+                {
+                    HttpHeaders = blobHttpHeaders
+                });
 
                 _logger.LogInformation("Test result XML saved to blob: {blobName}", blobName);
                 return blobName;
@@ -252,6 +261,48 @@ namespace GraderFunctionApp.Services
 
             _logger.LogDebug($"{(isPass ? nameof(SavePassTestRecordAsync) : nameof(SaveFailTestRecordAsync))}: Saving test - PartitionKey: '{{partitionKey}}', RowKey: '{{rowKey}}', TestName: '{{testName}}', NPC: '{{npc}}'", partitionKey, rowKey, testName, assignedByNPC);
             await tableClient.UpsertEntityAsync(entity);
+        }
+
+        public async Task<string?> GenerateTestResultSasUrlAsync(string blobName)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(blobName))
+                {
+                    _logger.LogWarning("GenerateTestResultSasUrlAsync: blobName is null or empty");
+                    return null;
+                }
+
+                var containerClient = _blobServiceClient.GetBlobContainerClient(_options.TestResultsContainerName);
+                var blobClient = containerClient.GetBlobClient(blobName);
+
+                // Check if blob exists
+                var exists = await blobClient.ExistsAsync();
+                if (!exists.Value)
+                {
+                    _logger.LogWarning("GenerateTestResultSasUrlAsync: Blob {blobName} does not exist", blobName);
+                    return null;
+                }
+
+                // Generate SAS URL with 1 hour expiry
+                var sasBuilder = new BlobSasBuilder
+                {
+                    BlobContainerName = _options.TestResultsContainerName,
+                    BlobName = blobName,
+                    Resource = "b",
+                    ExpiresOn = DateTimeOffset.UtcNow.AddHours(1)
+                };
+                sasBuilder.SetPermissions(BlobSasPermissions.Read);
+
+                var sasUrl = blobClient.GenerateSasUri(sasBuilder).ToString();
+                _logger.LogInformation("Generated SAS URL for blob: {blobName}", blobName);
+                return sasUrl;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to generate SAS URL for blob: {blobName}", blobName);
+                return null;
+            }
         }
 
         private string SanitizeFileName(string input)
