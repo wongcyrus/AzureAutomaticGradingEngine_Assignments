@@ -1,128 +1,143 @@
-# Azure Automatic Grading Engine - Classroom Assignments samples
+# Azure Automatic Grading Engine - Classroom Assignments
 
-This repository contains sample classroom assignments for classroom activity for grading students submissions of Azure Services by the [Azure Automatic Grading Solution](http://github.com/microsoft/azureautomaticgradingengine)
+An automated grading system for Azure infrastructure assignments with gamified learning experience.
 
-## Example Student Classroom Assessment Tasks:
+## Overview
 
-Students are asked to create the following Azure Infrastructure 
+This project provides automated assessment of student Azure infrastructure deployments through unit testing and gamified interactions. Students create Azure resources and receive immediate feedback through an RPG-style interface with NPC characters.
 
-1. Create 2 Virtual Networks in 2 regions.
-2. Create 2 Subnets in each Virtual Network.
-3. Create Route Tables & Network Security Groups.
-4. Create Virtual Network Peering for 2 Virtual Networks.
-5. Create 2 Storage Accounts - one for an Azure Function and another for a Azure Static Website.
-    1. Azure Function Storage Account contains 1 Storage Container, 1 Storage Queue, and 1 StorageTable.
-    2. Static website Storage Account contains index page *index.html* and error page *error.html*.
-6. Create 1 Application Insights with Log Analytics Workspace.
-7. Create 1 Azure Function App with 1 Azure Function.
+## Architecture
 
-# Azure Project Grader for Automatic Grading Engine 
+- **GraderFunctionApp**: Azure Functions backend for grading and game logic
+- **azure-isekai**: RPG Maker game frontend for student interaction
+- **Infrastructure**: CDK-TF deployment scripts
+- **AzureProjectTest**: Unit test library for Azure resource validation
 
-For course testing Microsoft Azure, it is hard to assess or grade Azure project manually. This project makes use of the technique of unit test to grade student's Azure project settings automatically to validate have the students created the above resources and services.
+## Quick Start
 
-A rubic assessment is then completed on the task and students recieve grades based on the nunit outcomes and validation. 
+### Prerequisites
 
-This project has been developed by [Cyrus Wong]( https://www.linkedin.com/in/cyruswong) [Microsoft MVP Azure](https://mvp.microsoft.com/en-US/mvp/profile/86da86ff-8786-ed11-aad1-000d3a197333WT.mc_id=AZ-MVP-5005120) and [Microsoft Learn Educator Ambassador](https://docs.microsoft.com/learn/roles/educator/learn-for-educators-overview) in Association with the [Microsoft Next Generation Developer Relations Team](https://techcommunity.microsoft.com/t5/educator-developer-blog/bg-p/EducatorDeveloperBlog?WT.mc_id=academic-39457-leestott).
+- Azure subscription with appropriate permissions
+- Node.js 18+ and npm
+- .NET 8.0 SDK
+- Azure CLI
 
-Project collaborators include, [Kwok,Hau Ling](https://www.linkedin.com/in/hau-ling-kwok-657b9624a/), [Lau Hing Pui](https://www.linkedin.com/in/leolaulhp/), and [Xu Yuan](https://www.linkedin.com/in/xu-yuan-flora/) from the IT114115 Higher Diploma in Cloud and Data Centre Administration.
+### Deployment
 
-The project is being validated through usage on the course [Higher Diploma in Cloud and Data Centre Administration](https://www.vtc.edu.hk/admission/en/programme/it114115-higher-diploma-in-cloud-and-data-centre-administration/)
+1. **Configure Environment**
+   ```bash
+   cp .env.template .env
+   # Edit .env with your Azure OpenAI credentials
+   ```
 
-## Testing the Sample Classroom Setup 
+2. **Deploy Infrastructure**
+   ```bash
+   cd Infrastructure/
+   npm install
+   npm install --global cdktf-cli@latest
+   az login --use-device-code
+   cdktf deploy --auto-approve
+   ```
 
-## CDK-TF Deployment 
-You have to refer [Object Oriented Your Azure Infrastructure with Cloud Development Kit for Terraform (CDKTF)](https://techcommunity.microsoft.com/t5/educator-developer-blog/object-oriented-your-azure-infrastructure-with-cloud-development/ba-p/3474715) and setup your CDK-TF.
+3. **Build and Deploy Tests**
+   ```bash
+   cd AzureProjectTest
+   dotnet publish -r win-x64 -c Release
+   # Upload to Azure Function storage using provided azcopy command
+   ```
 
-Update .env.template and rename it to .env
-```
-FUNCTION_APP_NAME=
-AZURE_OPENAI_ENDPOINT=https://eastus.api.cognitive.microsoft.com/
-AZURE_OPENAI_API_KEY=
+## Student Assignment Tasks
+
+Students must create the following Azure infrastructure:
+
+1. **Networking**: 2 Virtual Networks in different regions with subnets, route tables, NSGs, and VNet peering
+2. **Storage**: 2 Storage Accounts (Function App + Static Website) with containers, queues, tables
+3. **Monitoring**: Application Insights with Log Analytics Workspace
+4. **Compute**: Azure Function App with functions
+
+## Game Features
+
+- **NPC Characters**: AI-powered characters guide students through assignments
+- **Task Management**: Sequential task assignment with progress tracking
+- **Automated Grading**: Real-time validation of Azure resources
+- **Score System**: Points awarded for completed tasks
+- **Detailed Feedback**: XML test results for debugging failed deployments
+
+## API Endpoints
+
+### Core Functions
+- `GET /api/game-task` - Get next task assignment
+- `GET /api/grader` - Submit work for grading
+- `GET /api/pass-task` - View completed tasks and scores
+
+### Admin Functions
+- `GET /api/pregeneratedmessagestats` - View message cache statistics
+- `POST /api/pregeneratedmessagestats/reset` - Reset cache hit counts
+- `GET /api/RefreshPreGeneratedMessages` - Refresh AI message cache
+
+## Configuration
+
+### Required Environment Variables
+
+```bash
+FUNCTION_APP_NAME=your-function-app-name
+AZURE_OPENAI_ENDPOINT=https://your-region.api.cognitive.microsoft.com/
+AZURE_OPENAI_API_KEY=your-api-key
 DEPLOYMENT_OR_MODEL_NAME=gpt-35-turbo
 ```
 
-Login Azure and set subscription
-```
-az login --use-device-code
-```
+### Service Principal Setup
 
-```
-cd Infrastructure/
-npm install --global cdktf-cli@latest
-npm i
-mkdir -p /workspaces/AzureAutomaticGradingEngine_Assignments/AzureProjectTest/bin/Release/net8.0/publish/win-x64
-cdktf deploy --auto-approve
-cdktf deploy --auto-approve
-```
-The second time of deployment will upload the Azure tests libray.
-
-## Package UnitTest into exe
-```
-cd AzureProjectTest
-dotnet publish -r win-x64 -c Release
-```
-Use Microsoft Azure Storage Explorer 
-Upload all files in ```\AzureProjectTest\bin\Release\net6.0\win-x64``` to the storage account file share ```data/Functions/Tests```.
-```
-azcopy copy '/workspaces/AzureAutomaticGradingEngine_Assignments/AzureProjectTest/bin/Release/net8.0/win-x64/publish/*' 'https://<ID>.file.core.windows.net/graderfunctionapp2025-1568/data/Functions/Tests?<SAS Token>' --recursive=true
-```
-
-## Create or reuse Service Principal (Azure Cloud Shell)
-
-Use the helper script to create or reuse a single Service Principal with the exact roles required by the tests, and output credentials to a JSON file the tests consume.
-
-What it does:
-- Reuses an existing SP by name (or creates it if missing) and refreshes its secret.
-- Assigns roles:
-    - Reader at the subscription scope
-    - Website Contributor at the resource group scope (via roleDefinitionId GUID)
-- Writes credentials JSON with: appId, displayName, password, tenant
-
-Run in Azure Cloud Shell (Bash):
+Create a service principal with required permissions:
 
 ```bash
 chmod +x scripts/create-sp-cloudshell.sh
-
-# Reuse a single SP and write credentials to sp.json (defaults: -g projProd, -n grading-engine-sp, -o sp.json)
 scripts/create-sp-cloudshell.sh -s <subscriptionId>
 ```
 
-Notes:
-- Idempotent: reruns reuse the same SP and re-assign roles only if missing.
-- Website Contributor roleDefinitionId used: de139f84-1756-47ae-9be6-808fbbe84772
+## Testing Locally
 
-Optional cleanup (delete previous SP by appId from the generated file):
-
-```bash
-az ad sp delete --id "$(jq -r '.appId' testing/sp.json)"
-```
-
-Run tests locally using the generated credentials:
+Run tests with generated service principal credentials:
 
 ```bash
 dotnet run --project AzureProjectTest/AzureProjectTest.csproj --configuration Debug -- \
     $(pwd)/testing/sp.json $(pwd)/testing trace ""
 ```
 
+## Performance Features
 
-## Contributing to Samples
+- **Message Caching**: Pre-generated AI responses for common scenarios
+- **Hit Count Tracking**: Monitor cache effectiveness
+- **Batch Processing**: Optimized message generation
+- **Cross-NPC State Management**: Prevent task conflicts between NPCs
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
+## Security
 
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+- Function-level authorization for all endpoints
+- Service principal with minimal required permissions
+- SAS URLs for secure test result access
+- Input validation and sanitization
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+## Contributing
 
-## Trademarks
+1. Fork the repository
+2. Create a feature branch
+3. Make changes with appropriate tests
+4. Submit a pull request
 
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
-trademarks or logos is subject to and must follow 
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
+## License
+
+This project is licensed under the MIT License. See LICENSE file for details.
+
+## Support
+
+For issues and questions:
+- Create an issue in the GitHub repository
+- Contact the development team
+- Review the troubleshooting documentation
+
+## Acknowledgments
+
+Developed by [Cyrus Wong](https://www.linkedin.com/in/cyruswong) (Microsoft MVP Azure) in association with Microsoft Next Generation Developer Relations Team.
+
+Project collaborators: Kwok Hau Ling, Lau Hing Pui, and Xu Yuan from IT114115 Higher Diploma in Cloud and Data Centre Administration.
