@@ -86,7 +86,6 @@ namespace GraderFunctionApp.Services
             var messageHash = ComputeHash(message);
             var npcKey = $"{age}_{gender.GetHashCode()}_{background.GetHashCode()}";
             var cacheKey = $"npc_{npcKey}_{messageHash}";
-            var finalCacheKey = ComputeHash(cacheKey);
             
             // Skip in-memory cache to ensure we always check pre-generated messages for hit counting
             // This way, even if we've seen this message before, we'll still increment hit counts

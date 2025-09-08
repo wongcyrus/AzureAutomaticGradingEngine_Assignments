@@ -73,31 +73,31 @@ namespace GraderFunctionApp.Services
 
             try
             {
-                // Use the same key format as AIService: npc_{npcKey}_{messageHash}
+                // Use EXACT same key format as AIService
                 var messageHash = ComputeHash(originalMessage);
                 var npcKey = $"{age}_{gender.GetHashCode()}_{background.GetHashCode()}";
                 var cacheKey = $"npc_{npcKey}_{messageHash}";
-                var combinedHash = ComputeHash(cacheKey);
+                
+                _logger.LogInformation("GetPreGeneratedNPCMessageAsync - Looking for message. OriginalMessage: {originalMessage}, MessageHash: {messageHash}, NPCKey: {npcKey}, CacheKey: {cacheKey}", 
+                    originalMessage, messageHash, npcKey, cacheKey);
 
-                _logger.LogInformation("GetPreGeneratedNPCMessageAsync - Looking for message. OriginalMessage: {originalMessage}, MessageHash: {messageHash}, NPCKey: {npcKey}, CacheKey: {cacheKey}, CombinedHash: {combinedHash}", 
-                    originalMessage, messageHash, npcKey, cacheKey, combinedHash);
-
-                var response = await _tableClient.GetEntityIfExistsAsync<PreGeneratedMessage>("npc", combinedHash);
+                // Use cacheKey directly as RowKey (not hashed again)
+                var response = await _tableClient.GetEntityIfExistsAsync<PreGeneratedMessage>("npc", cacheKey);
 
                 if (response.HasValue && response.Value != null)
                 {
                     var preGeneratedMessage = response.Value;
-                    _logger.LogInformation("FOUND pre-generated NPC message! Hash: {hash}, Current HitCount: {hitCount}, MessageType: {messageType}", 
-                        combinedHash, preGeneratedMessage.HitCount, preGeneratedMessage.MessageType);
+                    _logger.LogInformation("FOUND pre-generated NPC message! CacheKey: {cacheKey}, Current HitCount: {hitCount}, MessageType: {messageType}", 
+                        cacheKey, preGeneratedMessage.HitCount, preGeneratedMessage.MessageType);
                     
                     // Increment hit count and update last used timestamp
-                    _logger.LogInformation("About to increment hit count for message hash: {hash}", combinedHash);
+                    _logger.LogInformation("About to increment hit count for message cacheKey: {cacheKey}", cacheKey);
                     await IncrementHitCountAsync(preGeneratedMessage);
                     
                     return preGeneratedMessage?.GeneratedMessage;
                 }
 
-                _logger.LogInformation("NO pre-generated NPC message found for hash: {hash}", combinedHash);
+                _logger.LogInformation("NO pre-generated NPC message found for cacheKey: {cacheKey}", cacheKey);
                 return null;
             }
             catch (Exception ex)
@@ -205,20 +205,19 @@ namespace GraderFunctionApp.Services
             {
                 try
                 {
-                    // Use the same key format as AIService: npc_{npcKey}_{messageHash}
+                    // Use EXACT same key format as AIService
                     var messageHash = ComputeHash(originalMessage);
                     var npcKey = $"{age}_{gender.GetHashCode()}_{background.GetHashCode()}";
                     var cacheKey = $"npc_{npcKey}_{messageHash}";
-                    var combinedHash = ComputeHash(cacheKey);
 
-                    _logger.LogInformation("GenerateAndStoreNPCMessageAsync - Attempt {attempt}. OriginalMessage: {originalMessage}, MessageHash: {messageHash}, NPCKey: {npcKey}, CacheKey: {cacheKey}, CombinedHash: {combinedHash}", 
-                        attempt, originalMessage, messageHash, npcKey, cacheKey, combinedHash);
+                    _logger.LogInformation("GenerateAndStoreNPCMessageAsync - Attempt {attempt}. OriginalMessage: {originalMessage}, MessageHash: {messageHash}, NPCKey: {npcKey}, CacheKey: {cacheKey}", 
+                        attempt, originalMessage, messageHash, npcKey, cacheKey);
 
-                    // Check if already exists
-                    var existingResponse = await _tableClient.GetEntityIfExistsAsync<PreGeneratedMessage>("npc", combinedHash);
+                    // Check if already exists using cacheKey directly
+                    var existingResponse = await _tableClient.GetEntityIfExistsAsync<PreGeneratedMessage>("npc", cacheKey);
                     if (existingResponse.HasValue && existingResponse.Value != null)
                     {
-                        _logger.LogInformation("GenerateAndStoreNPCMessageAsync - NPC message already exists for hash: {hash}, skipping generation", combinedHash);
+                        _logger.LogInformation("GenerateAndStoreNPCMessageAsync - NPC message already exists for cacheKey: {cacheKey}, skipping generation", cacheKey);
                         return;
                     }
 
@@ -237,7 +236,7 @@ namespace GraderFunctionApp.Services
                         var preGeneratedMessage = new PreGeneratedMessage
                         {
                             PartitionKey = "npc",
-                            RowKey = combinedHash,
+                            RowKey = cacheKey, // Use cacheKey directly, not hashed
                             OriginalMessage = originalMessage,
                             GeneratedMessage = generatedMessage,
                             MessageType = "npc",
@@ -245,12 +244,12 @@ namespace GraderFunctionApp.Services
                             GeneratedAt = DateTime.UtcNow
                         };
 
-                        _logger.LogInformation("GenerateAndStoreNPCMessageAsync - About to store message in table. Hash: {hash}, GeneratedMessage: {generatedMessage}", 
-                            combinedHash, generatedMessage);
+                        _logger.LogInformation("GenerateAndStoreNPCMessageAsync - About to store message in table. CacheKey: {cacheKey}, GeneratedMessage: {generatedMessage}", 
+                            cacheKey, generatedMessage);
 
                         await _tableClient.UpsertEntityAsync(preGeneratedMessage);
                         
-                        _logger.LogInformation("GenerateAndStoreNPCMessageAsync SUCCESS - Stored message with hash: {hash}", combinedHash);
+                        _logger.LogInformation("GenerateAndStoreNPCMessageAsync SUCCESS - Stored message with cacheKey: {cacheKey}", cacheKey);
                     }
                     else
                     {
@@ -501,7 +500,7 @@ namespace GraderFunctionApp.Services
         {
             try
             {
-                _logger.LogInformation("IncrementHitCountAsync START - Hash: {hash}, Current HitCount: {currentCount}, ETag: {etag}", 
+                _logger.LogInformation("IncrementHitCountAsync START - CacheKey: {cacheKey}, Current HitCount: {currentCount}, ETag: {etag}", 
                     message.RowKey, message.HitCount, message.ETag);
                 
                 // Increment hit count and update last used timestamp
@@ -509,26 +508,26 @@ namespace GraderFunctionApp.Services
                 message.HitCount++;
                 message.LastUsedAt = DateTime.UtcNow;
                 
-                _logger.LogInformation("IncrementHitCountAsync - About to update entity. Hash: {hash}, Old HitCount: {oldCount}, New HitCount: {newCount}, LastUsedAt: {lastUsedAt}", 
+                _logger.LogInformation("IncrementHitCountAsync - About to update entity. CacheKey: {cacheKey}, Old HitCount: {oldCount}, New HitCount: {newCount}, LastUsedAt: {lastUsedAt}", 
                     message.RowKey, oldHitCount, message.HitCount, message.LastUsedAt);
                 
                 // Update the entity in the table using optimistic concurrency
                 await _tableClient.UpdateEntityAsync(message, message.ETag, TableUpdateMode.Replace);
                 
-                _logger.LogInformation("IncrementHitCountAsync SUCCESS - Hash: {hash}, Final HitCount: {count}, LastUsedAt: {lastUsedAt}", 
+                _logger.LogInformation("IncrementHitCountAsync SUCCESS - CacheKey: {cacheKey}, Final HitCount: {count}, LastUsedAt: {lastUsedAt}", 
                     message.RowKey, message.HitCount, message.LastUsedAt);
             }
             catch (RequestFailedException ex) when (ex.Status == 412)
             {
                 // Concurrency conflict - someone else updated the entity
                 // This is acceptable for hit counting, we'll just log and continue
-                _logger.LogWarning("IncrementHitCountAsync - Concurrency conflict (412) when updating hit count for message hash: {hash}. This is expected under high load.", 
+                _logger.LogWarning("IncrementHitCountAsync - Concurrency conflict (412) when updating hit count for message cacheKey: {cacheKey}. This is expected under high load.", 
                     message.RowKey);
             }
             catch (Exception ex)
             {
                 // Don't throw - hit count tracking shouldn't break the main functionality
-                _logger.LogError(ex, "IncrementHitCountAsync FAILED - Hash: {hash}, Error: {error}", message.RowKey, ex.Message);
+                _logger.LogError(ex, "IncrementHitCountAsync FAILED - CacheKey: {cacheKey}, Error: {error}", message.RowKey, ex.Message);
             }
         }
 
