@@ -259,7 +259,7 @@ namespace GraderFunctionApp.Services
                 ETag = ETag.All 
             };
 
-            _logger.LogDebug($"{(isPass ? nameof(SavePassTestRecordAsync) : nameof(SaveFailTestRecordAsync))}: Saving test - PartitionKey: '{{partitionKey}}', RowKey: '{{rowKey}}', TestName: '{{testName}}', NPC: '{{npc}}'", partitionKey, rowKey, testName, assignedByNPC);
+            _logger.LogInformation($"{(isPass ? nameof(SavePassTestRecordAsync) : nameof(SaveFailTestRecordAsync))}: Saving test - PartitionKey: '{{partitionKey}}', RowKey: '{{rowKey}}', TestName: '{{testName}}', Mark: {{mark}}, NPC: '{{npc}}'", partitionKey, rowKey, testName, mark, assignedByNPC);
             await tableClient.UpsertEntityAsync(entity);
         }
 

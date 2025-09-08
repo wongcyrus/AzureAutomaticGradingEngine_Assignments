@@ -194,12 +194,47 @@ namespace GraderFunctionApp.Functions
                 // Load all tasks and their rewards
                 var tasksJson = _gameTaskService.GetTasksJson(false);
                 var allTasks = Newtonsoft.Json.JsonConvert.DeserializeObject<List<GameTaskData>>(tasksJson);
-                var rewardMap = allTasks?.SelectMany(t => t.Tests.Select(test => new { test, t.Reward }))
-                    .ToDictionary(x => x.test, x => x.Reward) ?? new Dictionary<string, int>();
+                
+                _logger.LogInformation("Building reward map from {taskCount} tasks", allTasks?.Count ?? 0);
+                
+                // Build reward map: distribute task reward among its tests
+                var rewardMap = new Dictionary<string, int>();
+                foreach (var task in allTasks ?? new List<GameTaskData>())
+                {
+                    if (task.Tests?.Length > 0)
+                    {
+                        var rewardPerTest = task.Reward / task.Tests.Length;
+                        _logger.LogInformation("Task '{taskName}' has {testCount} tests, {totalReward} total reward, {rewardPerTest} per test", 
+                            task.Name, task.Tests.Length, task.Reward, rewardPerTest);
+                        
+                        foreach (var test in task.Tests)
+                        {
+                            // Extract short test name (last part after the last dot)
+                            var shortTestName = test.Split('.').LastOrDefault() ?? test;
+                            rewardMap[shortTestName] = rewardPerTest;
+                            _logger.LogDebug("Mapped test '{testName}' (short: '{shortName}') to {reward} points", test, shortTestName, rewardPerTest);
+                        }
+                    }
+                }
+                
+                _logger.LogInformation("Test results keys: {testKeys}", string.Join(", ", testResults.Keys));
+                _logger.LogInformation("Reward map keys: {rewardKeys}", string.Join(", ", rewardMap.Keys));
 
                 // Build pass dictionary with mark
                 var passDict = testResults.Where(kv => kv.Value == 1)
-                    .ToDictionary(kv => kv.Key, kv => rewardMap.ContainsKey(kv.Key) ? rewardMap[kv.Key] : 0);
+                    .ToDictionary(kv => kv.Key, kv => {
+                        var reward = rewardMap.ContainsKey(kv.Key) ? rewardMap[kv.Key] : 0;
+                        _logger.LogInformation("Test '{testName}' passed, assigning {reward} points", kv.Key, reward);
+                        return reward;
+                    });
+
+                _logger.LogInformation("About to save {passCount} passed tests with total marks: {totalMarks}", 
+                    passDict.Count, passDict.Values.Sum());
+                
+                foreach (var kvp in passDict)
+                {
+                    _logger.LogInformation("Passed test: '{testName}' = {mark} points", kvp.Key, kvp.Value);
+                }
 
                 if (!string.IsNullOrEmpty(npc))
                 {
