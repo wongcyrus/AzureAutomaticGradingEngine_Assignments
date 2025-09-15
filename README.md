@@ -92,8 +92,21 @@ Create a service principal with required permissions:
 
 ```bash
 chmod +x scripts/create-sp-cloudshell.sh
-scripts/create-sp-cloudshell.sh -s <subscriptionId>
+scripts/create-sp-cloudshell.sh -s <subscriptionID>
 ```
+
+#### In Azure Cloud Shell
+Get your subscription ID
+```bash
+az account list -o table
+```
+
+```bash
+wget -O create-sp-cloudshell.sh https://gist.githubusercontent.com/wongcyrus/3d83d5f26e39da685bb10b7187087ba6/raw/ea1c1e6a1ad195a2d82cf5dcfab64e01762c4aed/create-sp-cloudshell.sh
+chmod +x create-sp-cloudshell.sh
+create-sp-cloudshell.sh -s <subscriptionID>
+```
+
 
 ## Testing Locally
 
