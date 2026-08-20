@@ -9,6 +9,7 @@
     "get": "cdktn get",
     "build": "tsc",
     "synth": "cdktn synth",
+    "secrets:sync": "./sync-github-secrets.sh",
     "compile": "tsc --pretty",
     "watch": "tsc -w",
     "test": "jest",

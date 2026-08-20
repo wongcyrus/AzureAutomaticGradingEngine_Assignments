@@ -6,7 +6,6 @@
   "terraformProviders": [
     "azure/azapi@~> 2.12.0",
     "hashicorp/azuread@~> 3.9.0",
-    "integrations/github@~> 6.13.0",
     "hashicorp/null@~> 3.3.1"
   ],
   "terraformModules": [],

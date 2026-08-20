@@ -12,7 +12,6 @@ import path = require("path");
 // Import custom constructs
 import { GradingEngineStorageConstruct } from "./constructs/GradingEngineStorageConstruct";
 import { AzureADApplicationConstruct } from "./constructs/AzureADApplicationConstruct";
-import { GitHubSecretsConstruct } from "./constructs/GitHubSecretsConstruct";
 import { StaticWebAppConstruct } from "./constructs/StaticWebAppConstruct";
 import { BuildDeploymentConstruct } from "./constructs/BuildDeploymentConstruct";
 
@@ -63,26 +62,6 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       staticWebAppConstruct.staticWebApp.defaultHostName,
       PREFIX
     );
-
-    const githubSecretConfig = [
-      process.env.GITHUB_OWNER,
-      process.env.GITHUB_TOKEN,
-      process.env.STATIC_WEBAPP_REPO,
-    ];
-    if (githubSecretConfig.some(Boolean) && !githubSecretConfig.every(Boolean)) {
-      throw new Error(
-        "GITHUB_OWNER, GITHUB_TOKEN, and STATIC_WEBAPP_REPO must all be set to manage GitHub secrets."
-      );
-    }
-    if (githubSecretConfig.every(Boolean)) {
-      new GitHubSecretsConstruct(
-        this,
-        "GitHubSecrets",
-        azureADConstruct.application,
-        azureADConstruct.applicationPassword,
-        staticWebAppConstruct.staticWebApp.apiKey
-      );
-    }
 
     new BuildDeploymentConstruct(this, "BuildDeploy", azureFunctionConstruct);
 

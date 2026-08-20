@@ -6,6 +6,7 @@
 - Node.js 22.19+ and npm
 - .NET 8.0 SDK
 - Azure CLI
+- GitHub CLI authenticated with `gh auth login`
 - CDK Terrain (cdktn)
 
 ## Step-by-Step Deployment
@@ -18,7 +19,7 @@ git clone --recurse-submodules <repository-url>
 cd AzureAutomaticGradingEngine_Assignments
 
 # Copy environment template
-cp .env.template .env
+cp Infrastructure/.env.template Infrastructure/.env
 ```
 
 Edit `.env` with your Azure OpenAI credentials:
@@ -42,7 +43,11 @@ npm run bootstrap
 cd Infrastructure/
 
 # Deploy infrastructure
-npx cdktn deploy --auto-approve
+npx cdktn deploy
+
+# Read the deployment outputs and synchronize the frontend's GitHub secrets.
+# This uses your existing `gh auth login` session; no GitHub token belongs in .env.
+npm run secrets:sync -- wongcyrus/azure-isekai
 ```
 
 This creates:

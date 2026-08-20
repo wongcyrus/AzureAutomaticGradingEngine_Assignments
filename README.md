@@ -27,7 +27,7 @@ This project provides automated assessment of student Azure infrastructure deplo
 
 1. **Configure Environment**
    ```bash
-   cp .env.template .env
+   cp Infrastructure/.env.template Infrastructure/.env
    # Edit .env with your Azure OpenAI credentials
    ```
 
@@ -37,8 +37,12 @@ This project provides automated assessment of student Azure infrastructure deplo
    npm run bootstrap
    az login --use-device-code
    cd Infrastructure
-   npx cdktn deploy --auto-approve
+   npx cdktn deploy
+   npm run secrets:sync -- wongcyrus/azure-isekai
    ```
+
+   The secret sync reads deployment outputs from CDKTN and uses your authenticated
+   GitHub CLI session (`gh auth login`); no GitHub token is stored in `.env`.
 
 3. **Build and Deploy Tests**
    ```bash
