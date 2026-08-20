@@ -1,6 +1,7 @@
 [submodule "azure-isekai"]
 	path = azure-isekai
 	url = https://github.com/wongcyrus/azure-isekai
+	shallow = true
 [submodule "packages/cdktf-azure-providers"]
 	path = packages/cdktf-azure-providers
 	url = https://github.com/wongcyrus/cdktf-azure-providers
