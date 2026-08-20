@@ -33,15 +33,27 @@ export class StaticWebAppConstruct extends Construct {
       APPINSIGHTS_INSTRUMENTATIONKEY: this.appInsights.instrumentationKey,
     };
 
+    const repositoryUrl = process.env.STATIC_WEBAPP_REPO_URL;
+    const repositoryToken = process.env.GITHUB_TOKEN;
+    if (Boolean(repositoryUrl) !== Boolean(repositoryToken)) {
+      throw new Error(
+        "STATIC_WEBAPP_REPO_URL and GITHUB_TOKEN must either both be set or both be omitted."
+      );
+    }
+
     this.staticWebApp = new StaticWebApp(this, "StaticWebApp", {
       name: `${prefix}StaticWebApp`,
       resourceGroupName: resourceGroup.name,
       location: resourceGroup.location,
       skuTier: "Free",
       skuSize: "Free",
-      repositoryUrl: process.env.STATIC_WEBAPP_REPO_URL,
-      repositoryBranch: "main",
-      repositoryToken: process.env.GITHUB_TOKEN,
+      ...(repositoryUrl && repositoryToken
+        ? {
+            repositoryUrl,
+            repositoryBranch: "main",
+            repositoryToken,
+          }
+        : {}),
       appSettings,
     });
   }
