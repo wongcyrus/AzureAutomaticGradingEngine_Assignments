@@ -26,9 +26,7 @@ const FUNCTION_NAMES = [
   "GraderFunction",
   "GameTaskFunction",
   "PassTaskFunction",
-  "StudentRegistrationFunction",
-  "MessageRefreshTimerFunction",
-  "MessageGeneratorFunction"
+  "StudentRegistrationFunction"
 ];
 
 // Main stack using constructs
