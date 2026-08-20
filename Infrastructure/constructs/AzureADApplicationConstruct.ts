@@ -14,7 +14,7 @@ export class AzureADApplicationConstruct extends Construct {
       signInAudience: "AzureADMyOrg",
       web: {
         redirectUris: [
-          `https://${staticWebAppHostName}/.auth/login/aadb2c/callback`,
+          `https://${staticWebAppHostName}/.auth/login/aad/callback`,
         ],
         implicitGrant: {
           accessTokenIssuanceEnabled: true,
