@@ -1,3 +1,9 @@
 [submodule "azure-isekai"]
 	path = azure-isekai
 	url = https://github.com/wongcyrus/azure-isekai
+[submodule "packages/cdktf-azure-providers"]
+	path = packages/cdktf-azure-providers
+	url = https://github.com/wongcyrus/cdktf-azure-providers
+[submodule "packages/azure-common-construct"]
+	path = packages/azure-common-construct
+	url = https://github.com/wongcyrus/azure-common-construct

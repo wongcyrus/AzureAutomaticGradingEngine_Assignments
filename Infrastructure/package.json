@@ -1,34 +1,34 @@
 {
-  "name": "azure-automatic-grading-engine-assignment",
+  "name": "@grading-engine/infrastructure",
   "version": "1.0.0",
   "main": "main.js",
   "types": "main.ts",
   "license": "MPL-2.0",
   "private": true,
   "scripts": {
-    "get": "cdktf get",
+    "get": "cdktn get",
     "build": "tsc",
-    "synth": "cdktf synth",
+    "synth": "cdktn synth",
     "compile": "tsc --pretty",
     "watch": "tsc -w",
     "test": "jest",
     "test:watch": "jest --watch",
-    "upgrade": "npm i cdktf@latest cdktf-cli@latest",
-    "upgrade:next": "npm i cdktf@next cdktf-cli@next"
+    "upgrade": "npm install cdktn@latest cdktn-cli@latest"
   },
   "engines": {
-    "node": ">=14.0"
+    "node": ">=22.19.0"
   },
-  "dependencies": {    
-    "azure-common-construct": "^0.0.77",
-    "cdktf": "^0.21.0",
-    "cdktf-azure-providers": "^0.0.16",
-    "constructs": "^10.4.2",
+  "dependencies": {
+    "azure-common-construct": "^0.1.0",
+    "cdktn": "^0.24.0",
+    "cdktf-azure-providers": "^0.1.0",
+    "constructs": "^10.6.0",
     "dotenv": "^17.2.1"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^24.2.1",
+    "cdktn-cli": "^0.24.0",
     "jest": "^30.0.5",
     "ts-jest": "^29.4.1",
     "ts-node": "^10.9.2",

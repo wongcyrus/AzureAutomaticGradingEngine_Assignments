@@ -1,6 +1,6 @@
 import { AzureFunctionWindowsConstruct } from "azure-common-construct/patterns/AzureFunctionWindowsConstruct";
 import { PublishMode } from "azure-common-construct/patterns/PublisherConstruct";
-import { App, TerraformOutput, TerraformStack } from "cdktf";
+import { App, TerraformOutput, TerraformStack } from "cdktn";
 import { AzurermProvider } from "cdktf-azure-providers/.gen/providers/azurerm/provider";
 import { AzureadProvider } from "./.gen/providers/azuread/provider";
 import { AzapiProvider } from "./.gen/providers/azapi/provider";

@@ -10,7 +10,8 @@ This project provides automated assessment of student Azure infrastructure deplo
 
 - **GraderFunctionApp**: Azure Functions backend for grading and game logic
 - **azure-isekai**: RPG Maker game frontend for student interaction
-- **Infrastructure**: CDK-TF deployment scripts
+- **Infrastructure**: CDK Terrain deployment code
+- **packages/**: Git submodules containing shared provider bindings and Azure constructs
 - **AzureProjectTest**: Unit test library for Azure resource validation
 
 ## Quick Start
@@ -18,7 +19,7 @@ This project provides automated assessment of student Azure infrastructure deplo
 ### Prerequisites
 
 - Azure subscription with appropriate permissions
-- Node.js 18+ and npm
+- Node.js 22.19+ and npm
 - .NET 8.0 SDK
 - Azure CLI
 
@@ -32,11 +33,11 @@ This project provides automated assessment of student Azure infrastructure deplo
 
 2. **Deploy Infrastructure**
    ```bash
-   cd Infrastructure/
-   npm install
-   npm install --global cdktf-cli@latest
+   git submodule update --init --recursive
+   npm run bootstrap
    az login --use-device-code
-   cdktf deploy --auto-approve
+   cd Infrastructure
+   npx cdktn deploy --auto-approve
    ```
 
 3. **Build and Deploy Tests**

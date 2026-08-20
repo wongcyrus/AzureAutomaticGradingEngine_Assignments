@@ -3,10 +3,10 @@
 ## Prerequisites
 
 - Azure subscription with Owner or Contributor permissions
-- Node.js 18+ and npm
+- Node.js 22.19+ and npm
 - .NET 8.0 SDK
 - Azure CLI
-- CDK for Terraform (cdktf)
+- CDK Terrain (cdktn)
 
 ## Step-by-Step Deployment
 
@@ -14,7 +14,7 @@
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone --recurse-submodules <repository-url>
 cd AzureAutomaticGradingEngine_Assignments
 
 # Copy environment template
@@ -38,12 +38,11 @@ az account set --subscription <your-subscription-id>
 ### 3. Infrastructure Deployment
 
 ```bash
+npm run bootstrap
 cd Infrastructure/
-npm install
-npm install --global cdktf-cli@latest
 
 # Deploy infrastructure
-cdktf deploy --auto-approve
+npx cdktn deploy --auto-approve
 ```
 
 This creates:

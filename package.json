@@ -1,0 +1,18 @@
+{
+  "name": "azure-automatic-grading-engine-workspace",
+  "private": true,
+  "workspaces": [
+    "Infrastructure",
+    "packages/*"
+  ],
+  "scripts": {
+    "providers:get": "npm run get --workspace cdktf-azure-providers && npm run get --workspace @grading-engine/infrastructure",
+    "build": "npm run build --workspace cdktf-azure-providers && npm run build --workspace azure-common-construct && npm run build --workspace @grading-engine/infrastructure",
+    "test": "npm run test --workspace cdktf-azure-providers && npm run test --workspace azure-common-construct && npm run test --workspace @grading-engine/infrastructure",
+    "bootstrap": "npm install && npm run providers:get && npm run build",
+    "synth": "npm run synth --workspace @grading-engine/infrastructure"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

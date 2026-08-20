@@ -74,7 +74,7 @@ log_success "Deployment package created at: $DEPLOYMENT_ZIP"
 log_info "Checking if Function App exists..."
 if ! az functionapp show --name "$FUNCTION_APP_NAME" --resource-group "$RESOURCE_GROUP" > /dev/null 2>&1; then
     log_error "Function App '$FUNCTION_APP_NAME' not found in resource group '$RESOURCE_GROUP'"
-    log_info "Please deploy the infrastructure first using: cd Infrastructure && npx cdktf deploy"
+    log_info "Please deploy the infrastructure first using: cd Infrastructure && npx cdktn deploy"
     exit 1
 fi
 log_success "Function App found"

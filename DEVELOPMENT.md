@@ -15,9 +15,10 @@
 ├── AzureProjectTest/           # Unit test library
 │   ├── Tests/                  # Test implementations
 │   └── Models/                 # Test models
-└── Infrastructure/             # CDK-TF deployment
+├── Infrastructure/             # CDK Terrain application
     ├── stacks/                 # Infrastructure stacks
     └── constructs/             # Reusable constructs
+└── packages/                   # Shared libraries (Git submodules/npm workspaces)
 ```
 
 ## Development Setup
@@ -26,7 +27,7 @@
 
 - Visual Studio Code or Visual Studio 2022
 - .NET 8.0 SDK
-- Node.js 18+
+- Node.js 22.19+
 - Azure Functions Core Tools
 - Azure CLI
 
@@ -34,8 +35,9 @@
 
 1. **Clone and Setup**
    ```bash
-   git clone <repository-url>
+   git clone --recurse-submodules <repository-url>
    cd AzureAutomaticGradingEngine_Assignments
+   npm run bootstrap
    cp .env.template .env
    # Edit .env with development credentials
    ```

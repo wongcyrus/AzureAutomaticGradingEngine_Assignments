@@ -59,7 +59,7 @@ echo ℹ️  Checking if Function App exists...
 az functionapp show --name "%FUNCTION_APP_NAME%" --resource-group "%RESOURCE_GROUP%" >nul 2>&1
 if errorlevel 1 (
     echo ❌ Function App '%FUNCTION_APP_NAME%' not found in resource group '%RESOURCE_GROUP%'
-    echo ℹ️  Please deploy the infrastructure first using: cd Infrastructure ^&^& npx cdktf deploy
+    echo ℹ️  Please deploy the infrastructure first using: cd Infrastructure ^&^& npx cdktn deploy
     exit /b 1
 )
 echo ✅ Function App found

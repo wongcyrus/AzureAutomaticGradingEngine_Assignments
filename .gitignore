@@ -368,3 +368,7 @@ TaskRunnerTest/report/*
 GraderFunctionApp/deployment.zip
 q/**
 **/tasks.json
+
+# JavaScript workspace packages are Git submodules, not NuGet restore output.
+!/packages/
+!/packages/*
