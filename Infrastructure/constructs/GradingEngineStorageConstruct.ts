@@ -33,7 +33,7 @@ export class GradingEngineStorageConstruct extends Construct {
     STORAGE_TABLES.forEach(tableName => {
       this.tables[tableName] = new StorageTable(this, `${tableName}Table`, {
         name: tableName,
-        storageAccountName: storageAccount.name,
+        storageAccountId: storageAccount.id,
       });
     });
   }
