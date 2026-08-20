@@ -37,8 +37,8 @@ export class StaticWebAppConstruct extends Construct {
       name: `${prefix}StaticWebApp`,
       resourceGroupName: resourceGroup.name,
       location: resourceGroup.location,
-      skuTier: "Free",
-      skuSize: "Free",
+      skuTier: "Standard",
+      skuSize: "Standard",
       appSettings,
     });
   }

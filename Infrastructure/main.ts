@@ -153,6 +153,14 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       value: `https://${staticWebApp.defaultHostName}`,
     });
 
+    new TerraformOutput(this, "static_web_app_name", {
+      value: staticWebApp.name,
+    });
+
+    new TerraformOutput(this, "static_web_app_resource_group_name", {
+      value: staticWebApp.resourceGroupName,
+    });
+
     new TerraformOutput(this, "static_web_app_api_key", {
       value: staticWebApp.apiKey,
       sensitive: true,
