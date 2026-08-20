@@ -134,7 +134,7 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     });
 
     new TerraformOutput(this, "Output_AADB2C_PROVIDER_CLIENT_ID", {
-      value: application.id,
+      value: application.clientId,
       sensitive: true,
     }).overrideLogicalId("AADB2C_PROVIDER_CLIENT_ID");
 
