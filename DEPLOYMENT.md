@@ -6,7 +6,6 @@
 - Node.js 22.19+ and npm
 - .NET 8.0 SDK
 - Azure CLI
-- GitHub CLI authenticated with `gh auth login`
 - CDK Terrain (cdktn)
 
 ## Step-by-Step Deployment
@@ -45,9 +44,8 @@ cd Infrastructure/
 # Deploy infrastructure
 npx cdktn deploy
 
-# Read the deployment outputs and synchronize the frontend's GitHub secrets.
-# This uses your existing `gh auth login` session; no GitHub token belongs in .env.
-npm run secrets:sync -- wongcyrus/azure-isekai
+# Read the deployment token from CDKTN and upload azure-isekai directly.
+npm run frontend:deploy
 ```
 
 This creates:

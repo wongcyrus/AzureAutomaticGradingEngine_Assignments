@@ -38,11 +38,11 @@ This project provides automated assessment of student Azure infrastructure deplo
    az login --use-device-code
    cd Infrastructure
    npx cdktn deploy
-   npm run secrets:sync -- wongcyrus/azure-isekai
+   npm run frontend:deploy
    ```
 
-   The secret sync reads deployment outputs from CDKTN and uses your authenticated
-   GitHub CLI session (`gh auth login`); no GitHub token is stored in `.env`.
+   The frontend deployment reads the Azure Static Web Apps token directly from
+   CDKTN output. It does not use GitHub Actions or a GitHub token.
 
 3. **Build and Deploy Tests**
    ```bash
