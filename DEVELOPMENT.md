@@ -69,10 +69,13 @@
 
 Services are registered in `Program.cs`:
 ```csharp
-builder.Services.AddScoped<IGameTaskService, GameTaskService>();
-builder.Services.AddScoped<IStorageService, StorageService>();
-builder.Services.AddScoped<IAIService, AIService>();
+services.AddSingleton<IGameTaskService, GameTaskService>();
+services.AddSingleton<IUnifiedMessageService, UnifiedMessageService>();
+services.AddSingleton<ITestRunner, TestRunner>();
 ```
+
+Storage and AI services use explicit singleton factories because they require
+configuration-backed Azure clients and must avoid circular dependencies.
 
 ### Service Layer Pattern
 
@@ -94,11 +97,36 @@ builder.Services.AddScoped<IAIService, AIService>();
 ```csharp
 public class GameStateService : IGameStateService
 {
-    public async Task<GameState> GetGameStateAsync(string email, string game, string npc);
-    public async Task<GameState> AssignTaskAsync(string email, string game, string npc, string taskName);
-    public async Task<GameState> CompleteTaskAsync(string email, string game, string npc, string taskName, int reward);
+    public Task<GameState?> GetGameStateAsync(string email, string game, string npc);
+    public Task<GameState?> TryAssignTaskAsync(
+        string email, string game, string npc, string taskName,
+        string taskFilter, int reward, string personalizedMessage);
+    public Task<GameState> CompleteTaskAsync(
+        string email, string game, string npc, string taskName, int reward);
 }
 ```
+
+`GameStates` uses the normalized student email as the partition key. NPC states
+use `<game>-<npc>` row keys and the single active-task lock uses
+`__active_task_lock__`. Keep assignment and lock mutation in one Azure Table
+transaction; all transaction actions must remain in the same partition.
+Normalize authenticated emails with `Trim().ToLowerInvariant()` at every
+Function boundary; Azure Table partition keys are case-sensitive.
+
+Concurrency invariants:
+
+1. Initialize state with `Add`, never an unconditional upsert.
+2. Acquire the lock with `Add` in the same transaction as assignment.
+3. Update completion and delete the lock in one ETag-conditional transaction.
+4. Treat duplicate completion as idempotent only when the completed-task list
+   proves that exact task already completed.
+5. Never write a game-state snapshot captured before asynchronous test
+   execution. Reread and use an ETag-conditional update.
+
+Concurrent grading may legitimately produce one completion response and a
+later request reporting that no task is active. The invariant is data
+integrity: only one reward is added, the completed state is not reverted, and
+no stale lock remains.
 
 ### NPC Character System
 
@@ -118,9 +146,14 @@ public class NPCCharacter : ITableEntity
 ```csharp
 public class TestRunner : ITestRunner
 {
-    public async Task<string> RunUnitTestProcessAsync(ILogger logger, string credentials, string email, string filter);
+    public Task<string?> RunUnitTestProcessAsync(
+        ILogger logger, string subscriptionId, string email, string filter);
 }
 ```
+
+The child process receives an explicit subscription ID. Authentication is
+provided by `DefaultAzureCredential`: the user-assigned identity in Azure and
+the current Azure CLI identity during local development.
 
 ## Adding New Features
 
@@ -275,8 +308,9 @@ scenarios:
 
 ### Authentication
 
-- Function-level keys for API access
-- Service principal for Azure resource access
+- Microsoft Entra authentication and group-restricted Static Web Apps access
+- Function-level keys between the Static Web Apps API and Function App
+- User-assigned managed identity for Azure resource access
 - Input validation on all endpoints
 
 ### Data Protection
@@ -287,7 +321,9 @@ scenarios:
 
 ### Access Control
 
-- Minimal permissions for service principals
+- Subscription `Reader` plus assignment-resource-group `Website Contributor`
+  for the grading identity
+- No stored student service-principal credentials
 - Role-based access for admin functions
 - Audit logging for all operations
 

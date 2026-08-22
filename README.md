@@ -18,13 +18,32 @@ The grader uses one user-assigned managed identity to inspect explicitly
 registered student subscriptions. Student service principals and passwords are
 not created or stored.
 
+### Request and identity flow
+
+1. The student signs in to Azure Static Web Apps with Microsoft Entra ID.
+2. The Static Web Apps API reads the trusted authenticated principal and adds
+   the student's email when proxying to the Function App.
+3. The Function App resolves that email to one explicitly registered
+   subscription in the `Subscription` table.
+4. `DefaultAzureCredential` selects the Function App's user-assigned managed
+   identity through `AZURE_CLIENT_ID`.
+5. The grader runs only the tests for the student's active task against that
+   subscription.
+
+Frontend sign-in, subscription registration, and Azure RBAC are separate:
+membership in the student sign-in group does not grant subscription access.
+Direct managed-identity RBAC supports any same-tenant Azure subscription,
+including personal subscriptions; Azure Education Hub is not required.
+Cross-tenant subscriptions require Azure Lighthouse or another explicit
+cross-tenant delegation design.
+
 ## Quick Start
 
 ### Prerequisites
 
 - Azure subscription with appropriate permissions
 - Node.js 22.19+ and npm
-- .NET 8.0 SDK
+- .NET SDK versions selected by `global.json` and the dev container
 - Azure CLI
 
 ### Deployment
@@ -50,6 +69,9 @@ not created or stored.
 
    The frontend deployment reads the Azure Static Web Apps token directly from
    CDKTN output. It does not use GitHub Actions or a GitHub token.
+   Run `npm run frontend:deploy` after every infrastructure deployment that
+   changes Function URLs or keys. The command installs API dependencies and
+   refreshes all Function proxy and Entra app settings before deployment.
    CDKTN restricts sign-in to the `GradingEngineAssignmentStudents` Entra
    security group; the invitation script idempotently invites guests and adds
    existing or new users to that group.
@@ -157,7 +179,24 @@ dotnet run --project AzureProjectTest/AzureProjectTest.csproj --configuration De
 - **Message Caching**: Pre-generated AI responses for common scenarios
 - **Hit Count Tracking**: Monitor cache effectiveness
 - **Batch Processing**: Optimized message generation
-- **Cross-NPC State Management**: Prevent task conflicts between NPCs
+- **Atomic task ownership**: One fixed lock row per student is acquired in the
+  same Azure Table transaction as task assignment
+- **Concurrency-safe completion**: ETag-conditional transactions prevent
+  duplicate or delayed grading requests from overwriting newer task state
+
+## Game-state concurrency
+
+All of a student's game-state and active-lock rows share the student's email
+as their Azure Table partition key. Assignment atomically adds
+`__active_task_lock__` and updates the winning NPC state:
+
+- simultaneous requests to different NPCs produce one `TASK_ASSIGNED` and one
+  `BUSY_WITH_OTHER_NPC`;
+- duplicate requests to the same NPC return the same active task;
+- completion updates the state and deletes the matching lock atomically;
+- first-time initialization is create-only, so it cannot overwrite an
+  assignment created by another request;
+- delayed grading writes use ETags and cannot clear or rewrite a newer task.
 
 ## Security
 

@@ -1,11 +1,21 @@
 # API Documentation
 
-## Authentication
+## Authentication and API Layers
 
-All endpoints require function-level authorization. Include the function key in requests:
+Students call the Azure Static Web Apps routes shown below. Static Web Apps
+requires Microsoft Entra authentication and injects the trusted student
+principal. The API proxy derives the email from that principal; callers cannot
+select another student's email.
+
+The underlying Function App endpoints use function-level authorization and are
+for service-to-service or instructor diagnostics only:
+
 ```
 ?code=<function-key>
 ```
+
+Do not expose Function keys in the browser. Static Web Apps stores the complete
+backend URL (including its key) in application settings.
 
 ## Core Endpoints
 
@@ -14,9 +24,10 @@ All endpoints require function-level authorization. Include the function key in 
 Get next task assignment for a student.
 
 **Parameters:**
-- `email` (required): Student email
 - `npc` (required): NPC character name
 - `game` (required): Game identifier (default: "azure-learning")
+
+The authenticated student's email is supplied by the Static Web Apps proxy.
 
 **Response:**
 ```json
@@ -24,7 +35,7 @@ Get next task assignment for a student.
   "status": "OK",
   "message": "Here's your next challenge...",
   "next_game_phrase": "TASK_ASSIGNED",
-  "task_name": "AzureProjectTestLib.ResourceGroupTest.Test01_ResourceGroupExist",
+  "task_name": "AzureProjectTestLib.ResourceGroupTest.Test01_ResourceGroupExist AzureProjectTestLib.ResourceGroupTest.Test02_ResourceGroupLocation",
   "score": 0,
   "completed_tasks": 0,
   "additional_data": {
@@ -41,14 +52,21 @@ Get next task assignment for a student.
 - `NPC_COOLDOWN`: NPC recently assigned task (1-hour cooldown)
 - `ALL_COMPLETED`: All tasks completed
 
+Task assignment is serialized per student. If two different NPC requests
+arrive together, only one can atomically create the active-task lock; the other
+returns `BUSY_WITH_OTHER_NPC`. Duplicate requests to the winning NPC return the
+same task.
+
 ### GET /api/grader
 
 Submit work for grading.
 
 **Parameters:**
-- `email` (required): Student email
 - `npc` (required): NPC character name
 - `game` (required): Game identifier
+
+The authenticated student's email is supplied by the proxy and must not be
+sent by the browser.
 
 **Response (Success):**
 ```json
@@ -62,6 +80,10 @@ Submit work for grading.
   "easter_egg_url": "https://..."
 }
 ```
+
+Completion atomically updates the NPC state and releases the student's active
+task lock. Duplicate or delayed grading responses use ETags and cannot
+overwrite a newer task.
 
 **Response (Failure):**
 ```json
@@ -85,7 +107,7 @@ Submit work for grading.
 View completed tasks and scores.
 
 **Parameters:**
-- `email` (required): Student email
+- None. The authenticated student's email is supplied by the proxy.
 
 **Response:**
 ```json
@@ -195,6 +217,28 @@ All endpoints return errors in this format:
 - Grading: No limit (students can retry failed tasks)
 - Admin endpoints: No limit
 
+## Student Registration
+
+### POST /api/registration
+
+Registers the authenticated student's subscription after managed-identity
+onboarding.
+
+**Form field:**
+
+- `subscriptionId`: Azure subscription GUID
+
+The backend validates that:
+
+- the grading identity can read the subscription;
+- the assignment resource group exists;
+- `projProd` has `GradingStudentEmail` equal to the authenticated email; and
+- the email has no conflicting fixed-row registration.
+
+Registration stores no Azure credential. It writes one entity with the student
+email as `PartitionKey`, `registration` as `RowKey`, and the explicit
+subscription ID.
+
 ## Data Models
 
 ### GameResponse
@@ -211,6 +255,9 @@ interface GameResponse {
   additional_data?: Record<string, any>;
 }
 ```
+
+The Static Web Apps proxies return the snake_case shape above. Direct Function
+App responses use the equivalent camelCase .NET property names.
 
 ### NPCCharacter
 ```typescript

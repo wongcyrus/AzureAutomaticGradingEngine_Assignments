@@ -4,7 +4,8 @@
 
 - Azure subscription with Owner or Contributor permissions
 - Node.js 22.19+ and npm
-- .NET 8.0 SDK
+- .NET SDK versions selected by `global.json` (the dev container installs both
+  the pinned .NET 9 SDK and the .NET 8 target runtime/SDK)
 - Azure CLI
 - CDK Terrain (cdktn)
 
@@ -44,7 +45,8 @@ cd Infrastructure/
 # Deploy infrastructure
 npx cdktn deploy
 
-# Read the deployment token from CDKTN and upload azure-isekai directly.
+# Install Static Web Apps API dependencies, refresh Entra/proxy settings, and
+# deploy the frontend and API.
 npm run frontend:deploy
 
 # Create a roster with one email address per line. Include instructors who
@@ -63,33 +65,39 @@ This creates:
 - `GradingEngineAssignmentStudents` Entra security group
 - Group-only Enterprise Application assignment
 
+CDKTN owns the infrastructure and initial Static Web Apps configuration. The
+frontend deployment script owns the complete runtime settings map after
+creation, including:
+
+- `AADB2C_PROVIDER_CLIENT_ID`
+- `AADB2C_PROVIDER_CLIENT_SECRET`
+- `GameTaskFunctionUrl`
+- `GraderFunctionUrl`
+- `PassTaskFunctionUrl`
+- `StudentRegistrationFunctionUrl`
+
+Terraform intentionally ignores subsequent drift in the complete Static Web
+Apps settings map so a later infrastructure deployment does not erase these
+values. Always rerun `npm run frontend:deploy` after Function URLs, keys, or
+Entra credentials change.
+
 The account running `students:invite` needs permission to invite external
 users and update group membership (for example, an appropriate Entra directory
 role). Group assignment to an Enterprise Application may require Microsoft
 Entra ID P1. Invited users receive no Azure subscription RBAC permissions. Student
 subscription access is delegated separately to the grading identity.
 
-### 4. Build and Deploy Function App
+### 4. Function and Test Deployment
+
+`npx cdktn deploy` builds and zip-deploys `GraderFunctionApp` and publishes the
+Windows NUnit runner to the Function App's storage file share. Ensure `dotnet`
+is on `PATH`; in environments using the local installer:
 
 ```bash
-cd ../GraderFunctionApp
-dotnet publish -c Release -o publish/
-
-# Deploy to Azure Function App
-func azure functionapp publish <your-function-app-name>
+PATH="$HOME/.dotnet:$PATH" npx cdktn deploy
 ```
 
-### 5. Deploy Test Library
-
-```bash
-cd ../AzureProjectTest
-dotnet publish -r win-x64 -c Release
-
-# Upload to storage using azcopy (command provided in deployment output)
-azcopy copy "bin/Release/net8.0/win-x64/publish/*" "https://<storage>.blob.core.windows.net/testlib/<SAS-token>" --recursive
-```
-
-### 6. Update Student Access
+### 5. Update Student Access
 
 Edit `Infrastructure/students.txt`, then rerun:
 
@@ -100,16 +108,21 @@ npm run students:invite -- students.txt
 
 The command is idempotent: existing guests and memberships are reused.
 
-### 7. Verification
+### 6. Verification
 
 Test the deployment:
 ```bash
-# Test function app
-curl "https://<function-app>.azurewebsites.net/api/game-task?email=test@example.com&npc=Stella&game=azure-learning"
+# Anonymous access should redirect to Microsoft Entra sign-in.
+curl -I "https://<static-web-app>/"
 
 # Test game frontend (the hostname is a CDKTN output)
 npx cdktn output AzureAutomaticGradingEngineGrader
 ```
+
+Then sign in through a browser and verify
+`/api/game-task?npc=Stella&game=azure-learning`. A plain anonymous `curl` cannot
+exercise the student API because it has no Static Web Apps authentication
+cookie.
 
 ## Post-Deployment Configuration
 
@@ -137,8 +150,10 @@ scripts/onboard-managed-identity.sh \
   -i <instructor-user-object-id>
 ```
 
-The subscription must belong to the grading identity's Entra tenant, and
-`projProd` must already exist. The script idempotently assigns:
+The subscription must belong to the grading identity's Entra tenant, but it
+does not need to come from Azure Education Hub. Personal and other same-tenant
+subscriptions are supported. `projProd` must already exist. The script
+idempotently assigns:
 
 - `Reader` on the subscription.
 - `Website Contributor` on `projProd`.
@@ -165,7 +180,25 @@ The command is idempotent and refuses conflicting registrations, ownership
 tags, or missing grader RBAC.
 
 To revoke grading access, delete both role assignments for the grading identity
-from the student subscription.
+from the student subscription and remove the student's `Subscription` table
+registration. Removing the Static Web Apps group membership only revokes game
+sign-in; it does not revoke Azure RBAC.
+
+Cross-tenant subscriptions cannot directly assign this managed identity
+because it belongs to another tenant. Use Azure Lighthouse for explicit
+cross-tenant delegation before registering such a subscription.
+
+### Resetting One Student
+
+The student's email is the partition key for game and result records. A full
+game reset must remove all rows in that student's `GameStates` partition,
+including `__active_task_lock__`, plus the intended `PassTests`, `FailTests`,
+and test-result blobs. Do not delete the `Subscription` registration unless the
+student must register a different subscription.
+
+Deleting only an NPC state while leaving the lock row blocks future task
+assignment. Application code deletes a matching state and lock atomically, but
+manual Storage Explorer or CLI cleanup must include the lock explicitly.
 
 ### Pre-generate AI Messages
 
@@ -179,7 +212,8 @@ curl -X GET "https://<function-app>.azurewebsites.net/api/RefreshPreGeneratedMes
 ### Common Issues
 
 1. **Function App deployment fails**
-   - Check .NET 8.0 is installed
+   - Check the SDK selected by `global.json` and the .NET 8 target SDK/runtime
+     are installed
    - Verify Azure CLI is logged in
    - Ensure sufficient permissions
 
@@ -189,9 +223,20 @@ curl -X GET "https://<function-app>.azurewebsites.net/api/RefreshPreGeneratedMes
    - Ensure quota is available
 
 3. **Game not loading**
-   - Check static website is enabled
-   - Verify CORS settings
-   - Check browser console for errors
+   - Confirm the user belongs to `GradingEngineAssignmentStudents`
+   - Check `/.auth/me` shows the expected authenticated email
+   - Rerun `npm run frontend:deploy` to restore API dependencies and all proxy
+     settings
+   - A `404` from `/api/game-task` usually means the Static Web Apps API was
+     deployed without its npm dependencies, not that the backend Function is
+     missing
+
+4. **Student can sign in but grading cannot access the subscription**
+   - Confirm registration maps the same sign-in email to the subscription
+   - Confirm `projProd` has the matching `GradingStudentEmail` tag
+   - Confirm the grading identity has subscription `Reader` and scoped
+     `Website Contributor`
+   - Allow several minutes for new RBAC assignments to propagate
 
 ### Logs and Monitoring
 
