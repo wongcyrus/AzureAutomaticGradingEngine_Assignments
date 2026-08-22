@@ -185,8 +185,7 @@ public class VnetTests
         Assert.AreEqual("*", allowHttpInbound.SourceAddressPrefix);
         Assert.AreEqual("TCP", allowHttpInbound.Protocol.ToUpper());
         Assert.AreEqual(201, allowHttpInbound.Priority);
-        Assert.IsTrue(publicSubnet.AddressPrefix == allowHttpInbound.DestinationAddressPrefix ||
-                      publicSubnet.AddressPrefix == allowHttpInbound.DestinationAddressPrefixes[0]);
+        Assert.IsTrue(SecurityRuleTargetsSubnet(allowHttpInbound, publicSubnet));
 
 
         var allowAllTcpOutbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "*");
@@ -217,8 +216,7 @@ public class VnetTests
         Assert.AreEqual("*", allowHttpInbound.SourceAddressPrefix);
         Assert.AreEqual("TCP", allowHttpInbound.Protocol.ToUpper());
         Assert.AreEqual(201, allowHttpInbound.Priority);
-        Assert.IsTrue(publicSubnet.AddressPrefix == allowHttpInbound.DestinationAddressPrefix ||
-                      publicSubnet.AddressPrefix == allowHttpInbound.DestinationAddressPrefixes[0]);
+        Assert.IsTrue(SecurityRuleTargetsSubnet(allowHttpInbound, publicSubnet));
 
         var allowAllTcpOutbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "*");
         Assert.AreEqual("Allow", allowAllTcpOutbound!.Access);
@@ -251,15 +249,14 @@ public class VnetTests
         Assert.AreEqual("*", allowAllTcpOutbound.DestinationAddressPrefix);
 
         var crossVnetInbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c =>
-            c.SourceAddressPrefix == scope.GetVnet2PrivateSubnet()!.AddressPrefix);
+            SecurityRuleSourcesSubnet(c, scope.GetVnet2PrivateSubnet()!));
         Assert.AreEqual("Allow", crossVnetInbound!.Access);
         Assert.AreEqual("Inbound", crossVnetInbound.Direction);
         Assert.AreEqual("*", crossVnetInbound.SourcePortRange);
         Assert.AreEqual("TCP", crossVnetInbound.Protocol.ToUpper());
         Assert.AreEqual("80", crossVnetInbound.DestinationPortRange);
         Assert.AreEqual(201, crossVnetInbound.Priority);
-        Assert.IsTrue(privateSubnet1.AddressPrefix == crossVnetInbound.DestinationAddressPrefix ||
-                      privateSubnet1.AddressPrefix == crossVnetInbound.DestinationAddressPrefixes[0]);
+        Assert.IsTrue(SecurityRuleTargetsSubnet(crossVnetInbound, privateSubnet1));
     }
 
     [GameTask("Add 2 NSG rules to subnet 10.1.0.0/24: (1) Allow HTTP inbound from 10.0.0.0/24 with priority 201; (2) Allow all TCP outbound to anywhere with priority 100.", 5, 10)]
@@ -283,15 +280,47 @@ public class VnetTests
         Assert.AreEqual("*", allowAllTcpOutbound.DestinationAddressPrefix);
 
         var crossVnetInbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c =>
-            c.SourceAddressPrefix == scope.GetVnet1PrivateSubnet()!.AddressPrefix);
+            SecurityRuleSourcesSubnet(c, scope.GetVnet1PrivateSubnet()!));
         Assert.AreEqual("Allow", crossVnetInbound!.Access);
         Assert.AreEqual("Inbound", crossVnetInbound.Direction);
         Assert.AreEqual("*", crossVnetInbound.SourcePortRange);
         Assert.AreEqual("TCP", crossVnetInbound.Protocol.ToUpper());
         Assert.AreEqual("80", crossVnetInbound.DestinationPortRange);
         Assert.AreEqual(201, crossVnetInbound.Priority);
-        Assert.IsTrue(privateSubnet2.AddressPrefix == crossVnetInbound.DestinationAddressPrefix ||
-                      privateSubnet2.AddressPrefix == crossVnetInbound.DestinationAddressPrefixes[0]);
+        Assert.IsTrue(SecurityRuleTargetsSubnet(crossVnetInbound, privateSubnet2));
+    }
+
+    private static string? GetSubnetAddressPrefix(Subnet? subnet)
+    {
+        return !string.IsNullOrEmpty(subnet?.AddressPrefix)
+            ? subnet.AddressPrefix
+            : subnet?.AddressPrefixes?.FirstOrDefault();
+    }
+
+    private static bool SecurityRuleSourcesSubnet(
+        SecurityRule securityRule,
+        Subnet subnet)
+    {
+        var subnetAddressPrefix = GetSubnetAddressPrefix(subnet);
+        return subnetAddressPrefix != null &&
+               (securityRule.SourceAddressPrefix == subnetAddressPrefix ||
+                (securityRule.SourceAddressPrefixes?.Contains(
+                    subnetAddressPrefix) ?? false));
+    }
+
+    private static bool SecurityRuleTargetsSubnet(
+        SecurityRule securityRule,
+        Subnet subnet)
+    {
+        var subnetAddressPrefix = GetSubnetAddressPrefix(subnet);
+        if (subnetAddressPrefix == null)
+        {
+            return false;
+        }
+
+        return securityRule.DestinationAddressPrefix == subnetAddressPrefix ||
+               (securityRule.DestinationAddressPrefixes?.Contains(
+                   subnetAddressPrefix) ?? false);
     }
 
     private sealed class TestScope : IDisposable
@@ -314,25 +343,29 @@ public class VnetTests
             Client.Dispose();
         }
 
-    public Subnet? GetVnet1PublicSubnet()
+        public Subnet? GetVnet1PublicSubnet()
         {
-            return Vnet1.Subnets.FirstOrDefault(c => c.AddressPrefix == "10.0.1.0/24");
+            return Vnet1.Subnets.FirstOrDefault(
+                c => GetSubnetAddressPrefix(c) == "10.0.1.0/24");
         }
 
 
-    public Subnet? GetVnet2PublicSubnet()
+        public Subnet? GetVnet2PublicSubnet()
         {
-            return Vnet2.Subnets.FirstOrDefault(c => c.AddressPrefix == "10.1.1.0/24");
+            return Vnet2.Subnets.FirstOrDefault(
+                c => GetSubnetAddressPrefix(c) == "10.1.1.0/24");
         }
 
-    public Subnet? GetVnet1PrivateSubnet()
+        public Subnet? GetVnet1PrivateSubnet()
         {
-            return Vnet1.Subnets.FirstOrDefault(c => c.AddressPrefix == "10.0.0.0/24");
+            return Vnet1.Subnets.FirstOrDefault(
+                c => GetSubnetAddressPrefix(c) == "10.0.0.0/24");
         }
 
-    public Subnet? GetVnet2PrivateSubnet()
+        public Subnet? GetVnet2PrivateSubnet()
         {
-            return Vnet2.Subnets.FirstOrDefault(c => c.AddressPrefix == "10.1.0.0/24");
+            return Vnet2.Subnets.FirstOrDefault(
+                c => GetSubnetAddressPrefix(c) == "10.1.0.0/24");
         }
     }
 }
