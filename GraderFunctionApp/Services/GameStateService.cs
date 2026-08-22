@@ -1,3 +1,4 @@
+using Azure;
 using Azure.Data.Tables;
 using GraderFunctionApp.Interfaces;
 using GraderFunctionApp.Models;
@@ -92,7 +93,22 @@ namespace GraderFunctionApp.Services
             return await CreateOrUpdateGameStateAsync(gameState);
         }
 
-        public async Task<GameState> AssignTaskAsync(string email, string game, string npc, string taskName, string taskFilter, int reward, string personalizedMessage)
+        public async Task<GameTaskLock?> GetActiveTaskLockAsync(string email)
+        {
+            var response = await _tableClient.GetEntityIfExistsAsync<GameTaskLock>(
+                email,
+                GameTaskLock.LockRowKey);
+            return response.HasValue ? response.Value : null;
+        }
+
+        public async Task<GameState?> TryAssignTaskAsync(
+            string email,
+            string game,
+            string npc,
+            string taskName,
+            string taskFilter,
+            int reward,
+            string personalizedMessage)
         {
             var gameState = await GetGameStateAsync(email, game, npc);
             if (gameState == null)
@@ -106,8 +122,32 @@ namespace GraderFunctionApp.Services
             gameState.CurrentPhase = "TASK_ASSIGNED";
             gameState.LastMessage = personalizedMessage; // Store the already personalized message
             gameState.HasActiveTask = true;
+            gameState.LastUpdated = DateTime.UtcNow;
 
-            return await CreateOrUpdateGameStateAsync(gameState);
+            var taskLock = new GameTaskLock
+            {
+                PartitionKey = email,
+                Game = game,
+                Npc = npc,
+                TaskName = taskName
+            };
+
+            try
+            {
+                await _tableClient.SubmitTransactionAsync(
+                [
+                    new TableTransactionAction(TableTransactionActionType.Add, taskLock),
+                    new TableTransactionAction(TableTransactionActionType.UpsertReplace, gameState)
+                ]);
+                return gameState;
+            }
+            catch (RequestFailedException ex) when (ex.Status == 409)
+            {
+                _logger.LogInformation(
+                    "Task assignment lock already held for {email}",
+                    email);
+                return null;
+            }
         }
 
         public async Task<GameState> CompleteTaskAsync(string email, string game, string npc, string taskName, int reward)
@@ -135,6 +175,23 @@ namespace GraderFunctionApp.Services
             gameState.CurrentTaskFilter = "";
             gameState.CurrentTaskReward = 0;
 
+            gameState.LastUpdated = DateTime.UtcNow;
+            var taskLock = await GetActiveTaskLockAsync(email);
+            if (taskLock != null &&
+                taskLock.Game == game &&
+                taskLock.Npc == npc)
+            {
+                await _tableClient.SubmitTransactionAsync(
+                [
+                    new TableTransactionAction(TableTransactionActionType.UpsertReplace, gameState),
+                    new TableTransactionAction(
+                        TableTransactionActionType.Delete,
+                        taskLock,
+                        ETag.All)
+                ]);
+                return gameState;
+            }
+
             return await CreateOrUpdateGameStateAsync(gameState);
         }
 
@@ -145,7 +202,10 @@ namespace GraderFunctionApp.Services
                 var gameStates = new List<GameState>();
                 await foreach (var entity in _tableClient.QueryAsync<GameState>(filter: $"PartitionKey eq '{email}'"))
                 {
-                    gameStates.Add(entity);
+                    if (entity.RowKey != GameTaskLock.LockRowKey)
+                    {
+                        gameStates.Add(entity);
+                    }
                 }
                 return gameStates;
             }

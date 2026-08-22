@@ -61,6 +61,17 @@ namespace GraderFunctionApp.Functions
                 var mainCharacter = await _storageService.GetNPCCharacterAsync("main_character");
                 
                 // Check if user has an active task with a DIFFERENT NPC
+                var activeTaskLock = await _gameStateService.GetActiveTaskLockAsync(email);
+                if (activeTaskLock != null &&
+                    (activeTaskLock.Game != game || activeTaskLock.Npc != npc))
+                {
+                    return await CreateBusyResponseAsync(
+                        gameState,
+                        npc,
+                        activeTaskLock.Npc,
+                        activeTaskLock.TaskName);
+                }
+
                 var allUserStates = await _gameStateService.GetAllGameStatesForUserAsync(email);
                 var activeTaskWithOtherNPC = allUserStates.FirstOrDefault(s => 
                     s.HasActiveTask && 
@@ -71,17 +82,11 @@ namespace GraderFunctionApp.Functions
                 {
                     // Extract the other NPC name from RowKey (format: "game-npc")
                     var otherNpcName = activeTaskWithOtherNPC.RowKey.Split('-').LastOrDefault() ?? "another NPC";
-                    
-                    // Use GameMessageService for consistent messaging
-                    var personalizedResponse = await _unifiedMessageService.GetBusyWithOtherNPCMessageAsync(npc, otherNpcName);
-                    
-                    var response = GameResponse.Success(personalizedResponse, "BUSY_WITH_OTHER_NPC");
-                    response.Score = gameState.TotalScore;
-                    response.CompletedTasks = gameState.CompletedTasks;
-                    response.AdditionalData["activeTaskNPC"] = otherNpcName;
-                    response.AdditionalData["activeTaskName"] = activeTaskWithOtherNPC.CurrentTaskName;
-                    
-                    return new JsonResult(response);
+                    return await CreateBusyResponseAsync(
+                        gameState,
+                        npc,
+                        otherNpcName,
+                        activeTaskWithOtherNPC.CurrentTaskName);
                 }
 
                 // Check if user has an active task with THIS NPC
@@ -163,7 +168,45 @@ namespace GraderFunctionApp.Functions
                 // Assign new task with personalized message
                 var personalizedTaskMessage = await _unifiedMessageService.GetTaskAssignedMessageAsync(npc, nextTask.Name, nextTask.Instruction);
                     
-                gameState = await _gameStateService.AssignTaskAsync(email, game, npc, nextTask.Name, nextTask.Filter, nextTask.Reward, personalizedTaskMessage);
+                gameState = await _gameStateService.TryAssignTaskAsync(
+                    email,
+                    game,
+                    npc,
+                    nextTask.Name,
+                    nextTask.Filter,
+                    nextTask.Reward,
+                    personalizedTaskMessage);
+
+                if (gameState == null)
+                {
+                    activeTaskLock = await _gameStateService.GetActiveTaskLockAsync(email);
+                    if (activeTaskLock == null)
+                    {
+                        throw new InvalidOperationException(
+                            "Task assignment lock was lost during concurrent assignment.");
+                    }
+
+                    var currentState = await _gameStateService.GetGameStateAsync(
+                        email,
+                        activeTaskLock.Game,
+                        activeTaskLock.Npc) ?? new GameState();
+                    if (activeTaskLock.Game == game && activeTaskLock.Npc == npc)
+                    {
+                        var activeResponse = GameResponse.Success(
+                            currentState.LastMessage,
+                            "TASK_ASSIGNED");
+                        activeResponse.TaskName = activeTaskLock.TaskName;
+                        activeResponse.Score = currentState.TotalScore;
+                        activeResponse.CompletedTasks = currentState.CompletedTasks;
+                        return new JsonResult(activeResponse);
+                    }
+
+                    return await CreateBusyResponseAsync(
+                        currentState,
+                        npc,
+                        activeTaskLock.Npc,
+                        activeTaskLock.TaskName);
+                }
 
                 var taskResponse = GameResponse.Success(personalizedTaskMessage, "TASK_ASSIGNED");
                 taskResponse.TaskName = nextTask.Name;
@@ -186,6 +229,26 @@ namespace GraderFunctionApp.Functions
                     StatusCode = 500
                 };
             }
+        }
+
+        private async Task<IActionResult> CreateBusyResponseAsync(
+            GameState gameState,
+            string requestedNpc,
+            string activeNpc,
+            string activeTaskName)
+        {
+            var personalizedResponse =
+                await _unifiedMessageService.GetBusyWithOtherNPCMessageAsync(
+                    requestedNpc,
+                    activeNpc);
+            var response = GameResponse.Success(
+                personalizedResponse,
+                "BUSY_WITH_OTHER_NPC");
+            response.Score = gameState.TotalScore;
+            response.CompletedTasks = gameState.CompletedTasks;
+            response.AdditionalData["activeTaskNPC"] = activeNpc;
+            response.AdditionalData["activeTaskName"] = activeTaskName;
+            return new JsonResult(response);
         }
 
         private async Task<string> PersonalizeMessageAsync(string originalMessage, NPCCharacter npcCharacter)
