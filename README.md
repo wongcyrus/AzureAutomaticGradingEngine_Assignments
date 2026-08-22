@@ -119,7 +119,8 @@ scripts/onboard-managed-identity.sh \
   -s <student-subscription-id> \
   -p <grading_identity_principal_id> \
   -t <grading_identity_tenant_id> \
-  -e <azure-isekai-sign-in-email>
+  -e <azure-isekai-sign-in-email> \
+  -i <instructor-user-object-id>
 ```
 
 This grants `Reader` at subscription scope and `Website Contributor` only on
@@ -127,6 +128,8 @@ the `projProd` resource group. It also tags that resource group with the
 student's sign-in email so another student cannot claim the subscription. The
 script is idempotent. After RBAC propagates, the student signs in to Azure
 Isekai with the same email and registers only the subscription ID.
+The optional instructor object ID grants the same limited access for local
+Azure CLI test runs.
 
 ## Testing Locally
 

@@ -133,7 +133,8 @@ scripts/onboard-managed-identity.sh \
   -s <student-subscription-id> \
   -p <grading-identity-principal-id> \
   -t <grading-identity-tenant-id> \
-  -e <azure-isekai-sign-in-email>
+  -e <azure-isekai-sign-in-email> \
+  -i <instructor-user-object-id>
 ```
 
 The subscription must belong to the grading identity's Entra tenant, and
@@ -143,6 +144,10 @@ The subscription must belong to the grading identity's Entra tenant, and
 - `Website Contributor` on `projProd`.
 - A `GradingStudentEmail` tag on `projProd`, binding registration to the
   student's authenticated Azure Isekai email.
+
+The optional `-i` argument grants the same limited roles to an instructor user
+for local test execution. Use an instructor-only principal; never use the
+student access group.
 
 Students then register only the subscription ID in Azure Isekai. RBAC changes
 can take several minutes to propagate. No student service-principal password is

@@ -19,4 +19,5 @@ echo "Resource group 'projProd' is ready."
   -s "$SUBSCRIPTION_ID" \
   -p 8feba365-a613-4d15-adfd-162e7feee3ec \
   -t 8ff7db19-435d-4c3c-83d3-ca0a46234f51 \
-  -e "$STUDENT_EMAIL"
+  -e "$STUDENT_EMAIL" \
+  -i 76407111-df2d-4199-b496-fd6b68c4bb91

@@ -6,6 +6,7 @@ SUBSCRIPTION_ID=""
 GRADING_PRINCIPAL_ID=""
 GRADING_TENANT_ID=""
 STUDENT_EMAIL=""
+INSTRUCTOR_PRINCIPAL_ID=""
 RESOURCE_GROUP="projProd"
 
 usage() {
@@ -16,6 +17,7 @@ Usage:
     -p <grading-managed-identity-principal-id> \
     -t <grading-tenant-id> \
     -e <azure-isekai-sign-in-email> \
+    [-i <instructor-user-object-id>] \
     [-g <assignment-resource-group>]
 
 Grants:
@@ -24,12 +26,13 @@ Grants:
 EOF
 }
 
-while getopts ":s:p:t:e:g:h" opt; do
+while getopts ":s:p:t:e:i:g:h" opt; do
   case "$opt" in
     s) SUBSCRIPTION_ID="$OPTARG" ;;
     p) GRADING_PRINCIPAL_ID="$OPTARG" ;;
     t) GRADING_TENANT_ID="$OPTARG" ;;
     e) STUDENT_EMAIL="${OPTARG,,}" ;;
+    i) INSTRUCTOR_PRINCIPAL_ID="$OPTARG" ;;
     g) RESOURCE_GROUP="$OPTARG" ;;
     h) usage; exit 0 ;;
     :) echo "Missing argument for -$OPTARG" >&2; usage; exit 2 ;;
@@ -75,14 +78,16 @@ READER_ROLE_ID="acdd72a7-3385-48ef-bd42-f606fba81ae7"
 WEBSITE_CONTRIBUTOR_ROLE_ID="de139f84-1756-47ae-9be6-808fbbe84772"
 
 ensure_role_assignment() {
-  local role_id="$1"
-  local scope="$2"
-  local label="$3"
+  local principal_id="$1"
+  local principal_type="$2"
+  local role_id="$3"
+  local scope="$4"
+  local label="$5"
   local assignment_count
 
   assignment_count=$(az role assignment list \
     --subscription "$SUBSCRIPTION_ID" \
-    --assignee-object-id "$GRADING_PRINCIPAL_ID" \
+    --assignee-object-id "$principal_id" \
     --scope "$scope" \
     --query "[?ends_with(roleDefinitionId, '$role_id')] | length(@)" \
     -o tsv)
@@ -94,8 +99,8 @@ ensure_role_assignment() {
 
   az role assignment create \
     --subscription "$SUBSCRIPTION_ID" \
-    --assignee-object-id "$GRADING_PRINCIPAL_ID" \
-    --assignee-principal-type ServicePrincipal \
+    --assignee-object-id "$principal_id" \
+    --assignee-principal-type "$principal_type" \
     --role "$role_id" \
     --scope "$scope" \
     --only-show-errors \
@@ -103,8 +108,21 @@ ensure_role_assignment() {
   echo "Assigned $label at $scope."
 }
 
-ensure_role_assignment "$READER_ROLE_ID" "$SUBSCRIPTION_SCOPE" "Reader"
-ensure_role_assignment "$WEBSITE_CONTRIBUTOR_ROLE_ID" "$RESOURCE_GROUP_SCOPE" "Website Contributor"
+ensure_role_assignment \
+  "$GRADING_PRINCIPAL_ID" ServicePrincipal \
+  "$READER_ROLE_ID" "$SUBSCRIPTION_SCOPE" "Grader Reader"
+ensure_role_assignment \
+  "$GRADING_PRINCIPAL_ID" ServicePrincipal \
+  "$WEBSITE_CONTRIBUTOR_ROLE_ID" "$RESOURCE_GROUP_SCOPE" "Grader Website Contributor"
+
+if [[ -n "$INSTRUCTOR_PRINCIPAL_ID" ]]; then
+  ensure_role_assignment \
+    "$INSTRUCTOR_PRINCIPAL_ID" User \
+    "$READER_ROLE_ID" "$SUBSCRIPTION_SCOPE" "Instructor Reader"
+  ensure_role_assignment \
+    "$INSTRUCTOR_PRINCIPAL_ID" User \
+    "$WEBSITE_CONTRIBUTOR_ROLE_ID" "$RESOURCE_GROUP_SCOPE" "Instructor Website Contributor"
+fi
 
 az group update \
   --subscription "$SUBSCRIPTION_ID" \
