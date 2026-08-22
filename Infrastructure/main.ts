@@ -67,7 +67,8 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       azureFunctionConstruct.functionUrls!,
       azureADConstruct.application,
       azureADConstruct.applicationPassword,
-      staticWebAppConstruct.staticWebApp
+      staticWebAppConstruct.staticWebApp,
+      azureADConstruct.studentGroup.objectId
     );
   }
 
@@ -125,7 +126,8 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     functionUrls: Record<string, string>,
     application: any,
     applicationPassword: any,
-    staticWebApp: any
+    staticWebApp: any,
+    studentGroupObjectId: string
   ) {
     FUNCTION_NAMES.forEach((fn) => {
       new TerraformOutput(this, `${PREFIX}${fn}Url`, {
@@ -157,6 +159,10 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
 
     new TerraformOutput(this, "static_web_app_resource_group_name", {
       value: staticWebApp.resourceGroupName,
+    });
+
+    new TerraformOutput(this, "student_group_object_id", {
+      value: studentGroupObjectId,
     });
 
     new TerraformOutput(this, "static_web_app_api_key", {

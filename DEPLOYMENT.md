@@ -46,6 +46,11 @@ npx cdktn deploy
 
 # Read the deployment token from CDKTN and upload azure-isekai directly.
 npm run frontend:deploy
+
+# Create a roster with one email address per line. Include instructors who
+# need to sign in, then invite/add everyone to the CDKTN-managed security group.
+cp students.example.txt students.txt
+npm run students:invite -- students.txt
 ```
 
 This creates:
@@ -53,7 +58,14 @@ This creates:
 - Storage Account
 - Application Insights
 - Log Analytics Workspace
-- Required IAM roles
+- Entra application and Enterprise Application
+- `GradingEngineAssignmentStudents` Entra security group
+- Group-only Enterprise Application assignment
+
+The account running `students:invite` needs permission to invite external
+users and update group membership (for example, an appropriate Entra directory
+role). Group assignment to an Enterprise Application may require Microsoft
+Entra ID P1. Invited users receive no Azure subscription RBAC permissions.
 
 ### 4. Build and Deploy Function App
 
@@ -75,16 +87,16 @@ dotnet publish -r win-x64 -c Release
 azcopy copy "bin/Release/net8.0/win-x64/publish/*" "https://<storage>.blob.core.windows.net/testlib/<SAS-token>" --recursive
 ```
 
-### 6. Deploy Game Frontend
+### 6. Update Student Access
+
+Edit `Infrastructure/students.txt`, then rerun:
 
 ```bash
-cd ../azure-isekai
-npm install
-npm run build
-
-# Deploy to static website storage
-az storage blob upload-batch -d '$web' -s dist/ --account-name <storage-account>
+cd Infrastructure
+npm run students:invite -- students.txt
 ```
+
+The command is idempotent: existing guests and memberships are reused.
 
 ### 7. Verification
 
@@ -93,8 +105,8 @@ Test the deployment:
 # Test function app
 curl "https://<function-app>.azurewebsites.net/api/game-task?email=test@example.com&npc=Stella&game=azure-learning"
 
-# Test game frontend
-open https://<storage-account>.z13.web.core.windows.net/
+# Test game frontend (the hostname is a CDKTN output)
+npx cdktn output AzureAutomaticGradingEngineGrader
 ```
 
 ## Post-Deployment Configuration

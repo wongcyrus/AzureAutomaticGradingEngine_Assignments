@@ -10,6 +10,7 @@
     "build": "tsc",
     "synth": "cdktn synth",
     "frontend:deploy": "./deploy-static-web-app.sh",
+    "students:invite": "./invite-students.sh",
     "compile": "tsc --pretty",
     "watch": "tsc -w",
     "test": "jest",

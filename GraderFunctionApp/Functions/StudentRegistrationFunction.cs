@@ -21,7 +21,7 @@ namespace GraderFunctionApp.Functions
 
         [Function(nameof(StudentRegistrationFunction))]
         public async Task<IActionResult> RunAsync(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req)
+            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req)
         {
             return req.Method switch
             {

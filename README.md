@@ -39,10 +39,16 @@ This project provides automated assessment of student Azure infrastructure deplo
    cd Infrastructure
    npx cdktn deploy
    npm run frontend:deploy
+   cp students.example.txt students.txt
+   # Add one instructor/student email per line, then:
+   npm run students:invite -- students.txt
    ```
 
    The frontend deployment reads the Azure Static Web Apps token directly from
    CDKTN output. It does not use GitHub Actions or a GitHub token.
+   CDKTN restricts sign-in to the `GradingEngineAssignmentStudents` Entra
+   security group; the invitation script idempotently invites guests and adds
+   existing or new users to that group.
 
 3. **Build and Deploy Tests**
    ```bash
