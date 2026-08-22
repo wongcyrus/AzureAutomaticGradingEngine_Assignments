@@ -40,6 +40,12 @@ export class StaticWebAppConstruct extends Construct {
       skuTier: "Standard",
       skuSize: "Standard",
       appSettings,
+      lifecycle: {
+        ignoreChanges: [
+          'app_settings["AADB2C_PROVIDER_CLIENT_ID"]',
+          'app_settings["AADB2C_PROVIDER_CLIENT_SECRET"]',
+        ],
+      },
     });
   }
 }
