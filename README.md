@@ -131,6 +131,17 @@ Isekai with the same email and registers only the subscription ID.
 The optional instructor object ID grants the same limited access for local
 Azure CLI test runs.
 
+An instructor can register an already-onboarded subscription without asking
+the student to use the registration page:
+
+```bash
+cd Infrastructure
+npm run students:import -- <student-email> <subscription-id>
+```
+
+The import refuses subscriptions whose `projProd` ownership tag or grader RBAC
+does not match.
+
 ## Testing Locally
 
 Sign in with Azure CLI and run tests against an explicit subscription:

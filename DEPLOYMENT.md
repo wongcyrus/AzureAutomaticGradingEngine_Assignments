@@ -153,6 +153,17 @@ Students then register only the subscription ID in Azure Isekai. RBAC changes
 can take several minutes to propagate. No student service-principal password is
 created or stored.
 
+Alternatively, an instructor can write the same registration record after
+onboarding:
+
+```bash
+cd Infrastructure
+npm run students:import -- <student-email> <subscription-id>
+```
+
+The command is idempotent and refuses conflicting registrations, ownership
+tags, or missing grader RBAC.
+
 To revoke grading access, delete both role assignments for the grading identity
 from the student subscription.
 
