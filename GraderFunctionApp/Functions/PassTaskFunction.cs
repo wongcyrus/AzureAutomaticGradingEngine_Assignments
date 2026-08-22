@@ -29,7 +29,7 @@ namespace GraderFunctionApp.Functions
                 return new BadRequestObjectResult(ApiResponse.ErrorResult("Email parameter is missing."));
             }
 
-            string email = req.Query["email"]!;
+            string email = req.Query["email"].ToString().Trim().ToLowerInvariant();
             _logger.LogInformation("Fetching passed tasks for email: {email}", email);
 
             try

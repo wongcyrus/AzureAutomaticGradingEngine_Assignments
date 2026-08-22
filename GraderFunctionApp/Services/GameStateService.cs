@@ -73,7 +73,17 @@ namespace GraderFunctionApp.Services
                 HasActiveTask = false
             };
 
-            return await CreateOrUpdateGameStateAsync(gameState);
+            try
+            {
+                await _tableClient.AddEntityAsync(gameState);
+                return gameState;
+            }
+            catch (RequestFailedException ex) when (ex.Status == 409)
+            {
+                return await GetGameStateAsync(email, game, npc)
+                    ?? throw new InvalidOperationException(
+                        "Game state was created concurrently but could not be read.");
+            }
         }
 
         public async Task<GameState> UpdateGamePhaseAsync(string email, string game, string npc, string phase, string message = "")
@@ -155,11 +165,24 @@ namespace GraderFunctionApp.Services
             var gameState = await GetGameStateAsync(email, game, npc);
             if (gameState == null)
             {
-                gameState = await InitializeGameStateAsync(email, game, npc);
+                throw new InvalidOperationException(
+                    $"Cannot complete task '{taskName}' because its game state no longer exists.");
             }
 
             // Update completed tasks list
             var completedTasks = JsonConvert.DeserializeObject<List<string>>(gameState.CompletedTasksList) ?? new List<string>();
+            if (!gameState.HasActiveTask ||
+                !string.Equals(gameState.CurrentTaskName, taskName, StringComparison.Ordinal))
+            {
+                if (completedTasks.Contains(taskName))
+                {
+                    return gameState;
+                }
+
+                throw new InvalidOperationException(
+                    $"Cannot complete task '{taskName}' because the active task changed.");
+            }
+
             if (!completedTasks.Contains(taskName))
             {
                 completedTasks.Add(taskName);
@@ -181,18 +204,95 @@ namespace GraderFunctionApp.Services
                 taskLock.Game == game &&
                 taskLock.Npc == npc)
             {
-                await _tableClient.SubmitTransactionAsync(
-                [
-                    new TableTransactionAction(TableTransactionActionType.UpsertReplace, gameState),
-                    new TableTransactionAction(
-                        TableTransactionActionType.Delete,
-                        taskLock,
-                        ETag.All)
-                ]);
-                return gameState;
+                try
+                {
+                    await _tableClient.SubmitTransactionAsync(
+                    [
+                        new TableTransactionAction(
+                            TableTransactionActionType.UpdateReplace,
+                            gameState,
+                            gameState.ETag),
+                        new TableTransactionAction(
+                            TableTransactionActionType.Delete,
+                            taskLock,
+                            taskLock.ETag)
+                    ]);
+                    return gameState;
+                }
+                catch (RequestFailedException ex) when (ex.Status is 404 or 412)
+                {
+                    return await ResolveConcurrentCompletionAsync(
+                        email,
+                        game,
+                        npc,
+                        taskName,
+                        ex);
+                }
             }
 
-            return await CreateOrUpdateGameStateAsync(gameState);
+            if (taskLock != null)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot complete task '{taskName}' because another task owns the active lock.");
+            }
+
+            try
+            {
+                await _tableClient.UpdateEntityAsync(
+                    gameState,
+                    gameState.ETag,
+                    TableUpdateMode.Replace);
+                return gameState;
+            }
+            catch (RequestFailedException ex) when (ex.Status is 404 or 412)
+            {
+                return await ResolveConcurrentCompletionAsync(
+                    email,
+                    game,
+                    npc,
+                    taskName,
+                    ex);
+            }
+        }
+
+        public async Task<GameState?> TryUpdateActiveTaskMessageAsync(
+            string email,
+            string game,
+            string npc,
+            string taskName,
+            string message)
+        {
+            var gameState = await GetGameStateAsync(email, game, npc);
+            if (gameState == null ||
+                !gameState.HasActiveTask ||
+                !string.Equals(gameState.CurrentTaskName, taskName, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            gameState.LastMessage = message;
+            gameState.LastUpdated = DateTime.UtcNow;
+
+            try
+            {
+                await _tableClient.UpdateEntityAsync(
+                    gameState,
+                    gameState.ETag,
+                    TableUpdateMode.Replace);
+                return gameState;
+            }
+            catch (RequestFailedException ex) when (ex.Status is 404 or 412)
+            {
+                var latestState = await GetGameStateAsync(email, game, npc);
+                return latestState != null &&
+                    latestState.HasActiveTask &&
+                    string.Equals(
+                        latestState.CurrentTaskName,
+                        taskName,
+                        StringComparison.Ordinal)
+                    ? latestState
+                    : null;
+            }
         }
 
         public async Task<List<GameState>> GetAllGameStatesForUserAsync(string email)
@@ -222,13 +322,61 @@ namespace GraderFunctionApp.Services
             {
                 var partitionKey = email;
                 var rowKey = $"{game}-{npc}";
-                await _tableClient.DeleteEntityAsync(partitionKey, rowKey);
+                var gameState = await _tableClient.GetEntityAsync<GameState>(
+                    partitionKey,
+                    rowKey);
+                var taskLock = await GetActiveTaskLockAsync(email);
+                if (taskLock != null &&
+                    taskLock.Game == game &&
+                    taskLock.Npc == npc)
+                {
+                    await _tableClient.SubmitTransactionAsync(
+                    [
+                        new TableTransactionAction(
+                            TableTransactionActionType.Delete,
+                            gameState.Value,
+                            gameState.Value.ETag),
+                        new TableTransactionAction(
+                            TableTransactionActionType.Delete,
+                            taskLock,
+                            taskLock.ETag)
+                    ]);
+                    return;
+                }
+
+                await _tableClient.DeleteEntityAsync(
+                    partitionKey,
+                    rowKey,
+                    gameState.Value.ETag);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting game state for {email}, {game}, {npc}", email, game, npc);
                 throw;
             }
+        }
+
+        private async Task<GameState> ResolveConcurrentCompletionAsync(
+            string email,
+            string game,
+            string npc,
+            string taskName,
+            RequestFailedException concurrencyException)
+        {
+            var latestState = await GetGameStateAsync(email, game, npc);
+            var completedTasks = latestState == null
+                ? []
+                : JsonConvert.DeserializeObject<List<string>>(
+                    latestState.CompletedTasksList) ?? [];
+
+            if (latestState != null && completedTasks.Contains(taskName))
+            {
+                return latestState;
+            }
+
+            throw new InvalidOperationException(
+                $"Task '{taskName}' changed while completion was being saved.",
+                concurrencyException);
         }
     }
 }

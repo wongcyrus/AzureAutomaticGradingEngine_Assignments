@@ -167,7 +167,9 @@ namespace GraderFunctionApp.Functions
         {
             try
             {
-                var email = req.Query["email"].FirstOrDefault() ?? "unknown";
+                var email = (req.Query["email"].FirstOrDefault() ?? "unknown")
+                    .Trim()
+                    .ToLowerInvariant();
                 var game = req.Query["game"].FirstOrDefault() ?? "unknown";
                 var npc = req.Query["npc"].FirstOrDefault() ?? "unknown";
 
@@ -407,8 +409,18 @@ namespace GraderFunctionApp.Functions
                         ? personalizedMessage 
                         : $"{personalizedMessage}\n\n{personalizedTaskInstruction}";
                     
-                    gameState.LastMessage = combinedMessage;
-                    await _gameStateService.CreateOrUpdateGameStateAsync(gameState);
+                    var updatedGameState = await _gameStateService.TryUpdateActiveTaskMessageAsync(
+                        email,
+                        game,
+                        npc,
+                        gameState.CurrentTaskName,
+                        combinedMessage);
+                    if (updatedGameState == null)
+                    {
+                        return GameResponse.Error(
+                            "The task changed while grading was running. Talk to the NPC again for the current task status.");
+                    }
+                    gameState = updatedGameState;
                     
                     var response = GameResponse.Success(gameState.LastMessage, "TASK_ASSIGNED");
                     response.Score = gameState.TotalScore;

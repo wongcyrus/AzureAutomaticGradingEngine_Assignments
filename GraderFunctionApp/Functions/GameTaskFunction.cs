@@ -39,7 +39,9 @@ namespace GraderFunctionApp.Functions
         public async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", "post")] HttpRequest req)
         {
-            var email = req.Query["email"].FirstOrDefault() ?? "unknown";
+            var email = (req.Query["email"].FirstOrDefault() ?? "unknown")
+                .Trim()
+                .ToLowerInvariant();
             var npc = req.Query["npc"].FirstOrDefault() ?? "unknown";
             var game = req.Query["game"].FirstOrDefault() ?? "unknown";
 

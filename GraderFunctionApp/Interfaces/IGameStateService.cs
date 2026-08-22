@@ -11,6 +11,7 @@ namespace GraderFunctionApp.Interfaces
         Task<GameState?> TryAssignTaskAsync(string email, string game, string npc, string taskName, string taskFilter, int reward, string personalizedMessage);
         Task<GameTaskLock?> GetActiveTaskLockAsync(string email);
         Task<GameState> CompleteTaskAsync(string email, string game, string npc, string taskName, int reward);
+        Task<GameState?> TryUpdateActiveTaskMessageAsync(string email, string game, string npc, string taskName, string message);
         Task<List<GameState>> GetAllGameStatesForUserAsync(string email);
         Task DeleteGameStateAsync(string email, string game, string npc);
     }
