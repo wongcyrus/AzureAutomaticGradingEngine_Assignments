@@ -11,11 +11,16 @@ namespace GraderFunctionApp.Functions
     {
         private readonly ILogger<PassTaskFunction> _logger;
         private readonly IStorageService _storageService;
+        private readonly IRequestAuthenticator _requestAuthenticator;
 
-        public PassTaskFunction(ILogger<PassTaskFunction> logger, IStorageService storageService)
+        public PassTaskFunction(
+            ILogger<PassTaskFunction> logger,
+            IStorageService storageService,
+            IRequestAuthenticator requestAuthenticator)
         {
             _logger = logger;
             _storageService = storageService;
+            _requestAuthenticator = requestAuthenticator;
         }
 
         [Function(nameof(PassTaskFunction))]
@@ -24,12 +29,13 @@ namespace GraderFunctionApp.Functions
         {
             _logger.LogInformation("Start PassTaskFunction");
 
-            if (!req.Query.ContainsKey("email"))
+            var email = _requestAuthenticator.GetAuthenticatedEmail(req);
+            if (email == null)
             {
-                return new BadRequestObjectResult(ApiResponse.ErrorResult("Email parameter is missing."));
+                return new UnauthorizedObjectResult(
+                    ApiResponse.ErrorResult("Authentication required."));
             }
 
-            string email = req.Query["email"].ToString().Trim().ToLowerInvariant();
             _logger.LogInformation("Fetching passed tasks for email: {email}", email);
 
             try

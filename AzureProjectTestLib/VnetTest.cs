@@ -1,25 +1,28 @@
+﻿#pragma warning disable CS0618
+using Azure.ResourceManager;
+using Azure.ResourceManager.Network;
+using Azure.ResourceManager.Network.Models;
 using AzureProjectTestLib.Helper;
-using Microsoft.Azure.Management.Network;
-using Microsoft.Azure.Management.Network.Models;
 using NUnit.Framework;
+using Assert = NUnit.Framework.Legacy.ClassicAssert;
 
 namespace AzureProjectTestLib;
 
 [GameClass(3)]
-[Parallelizable(ParallelScope.Children), Timeout(Constants.Timeout)]
+[Parallelizable(ParallelScope.Children)]
 public class VnetTests
 {
     [GameTask(
-        "Create 2 VNets: 'projVnet1Prod' in 'southeastasia' with CIDR '10.0.0.0/16' and 'projVnet2Prod' in 'eastasia' with CIDR '10.1.0.0/16'.",
+        "Create VNet 'projVnet1Prod' in the Azure Southeast Asia region with first address prefix '10.0.0.0/16', and VNet 'projVnet2Prod' in the Azure East Asia region with first address prefix '10.1.0.0/16'.",
         2, 10, 1)]
     [Test]
     public void Test01_Have2VnetsIn2Regions()
     {
         using var scope = new TestScope();
         Assert.IsNotNull(scope.Vnet1);
-        Assert.AreEqual("southeastasia", scope.Vnet1.Location);
+        Assert.AreEqual("southeastasia", scope.Vnet1.Location.ToString());
         Assert.IsNotNull(scope.Vnet2);
-        Assert.AreEqual("eastasia", scope.Vnet2.Location);
+        Assert.AreEqual("eastasia", scope.Vnet2.Location.ToString());
     }
 
     [GameTask(1)]
@@ -69,16 +72,15 @@ public class VnetTests
     public void Test06_Vnet1PublicSubnetsRoutes()
     {
         using var scope = new TestScope();
-    var publicSubnet = scope.GetVnet1PublicSubnet();
-    publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, publicSubnet!.Name,
-            "RouteTable");
+        var publicSubnet = scope.GetVnet1PublicSubnet();
+        var routeTable = scope.GetRouteTable(publicSubnet);
 
         var localRoute =
-            publicSubnet.RouteTable.Routes.FirstOrDefault(c =>
-                c.AddressPrefix == "10.0.0.0/16" && c.NextHopType == "VnetLocal");
+            routeTable?.Routes.FirstOrDefault(c =>
+                c.AddressPrefix == "10.0.0.0/16" && c.NextHopType.ToString() == "VnetLocal");
         var internetRoute =
-            publicSubnet.RouteTable.Routes.FirstOrDefault(c =>
-                c.AddressPrefix == "0.0.0.0/0" && c.NextHopType == "Internet");
+            routeTable?.Routes.FirstOrDefault(c =>
+                c.AddressPrefix == "0.0.0.0/0" && c.NextHopType.ToString() == "Internet");
 
         Assert.IsNotNull(localRoute);
         Assert.IsNotNull(internetRoute);
@@ -89,16 +91,15 @@ public class VnetTests
     public void Test07_Vnet2PublicSubnetsRoutes()
     {
         using var scope = new TestScope();
-    var publicSubnet = scope.GetVnet2PublicSubnet();
-    publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet2.Name, publicSubnet!.Name,
-            "RouteTable");
+        var publicSubnet = scope.GetVnet2PublicSubnet();
+        var routeTable = scope.GetRouteTable(publicSubnet);
 
         var localRoute =
-            publicSubnet.RouteTable.Routes.FirstOrDefault(c =>
-                c.AddressPrefix == "10.1.0.0/16" && c.NextHopType == "VnetLocal");
+            routeTable?.Routes.FirstOrDefault(c =>
+                c.AddressPrefix == "10.1.0.0/16" && c.NextHopType.ToString() == "VnetLocal");
         var internetRoute =
-            publicSubnet.RouteTable.Routes.FirstOrDefault(c =>
-                c.AddressPrefix == "0.0.0.0/0" && c.NextHopType == "Internet");
+            routeTable?.Routes.FirstOrDefault(c =>
+                c.AddressPrefix == "0.0.0.0/0" && c.NextHopType.ToString() == "Internet");
 
         Assert.IsNotNull(localRoute);
         Assert.IsNotNull(internetRoute);
@@ -109,52 +110,44 @@ public class VnetTests
     public void Test08_Vnet1PrivateSubnetsRoutes()
     {
         using var scope = new TestScope();
-    var privateSubnet = scope.GetVnet1PrivateSubnet();
-    privateSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, privateSubnet!.Name,
-            "RouteTable");
+        var privateSubnet = scope.GetVnet1PrivateSubnet();
+        var routeTable = scope.GetRouteTable(privateSubnet);
 
         var localRoute =
-            privateSubnet.RouteTable.Routes.FirstOrDefault(c =>
-                c.AddressPrefix == "10.0.0.0/16" && c.NextHopType == "VnetLocal");
+            routeTable?.Routes.FirstOrDefault(c =>
+                c.AddressPrefix == "10.0.0.0/16" && c.NextHopType.ToString() == "VnetLocal");
         Assert.IsNotNull(localRoute);
     }
 
     [GameTask("In vnet 'projVnet2Prod', for subnet 10.1.0.0/24, attach a route table with a VnetLocal route to 10.1.0.0/16 (private subnet).", 5, 10)]
-
     [Test]
     public void Test09_Vnet2PrivateSubnetsRoutes()
     {
         using var scope = new TestScope();
-    var privateSubnet = scope.GetVnet2PrivateSubnet();
-    privateSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet2.Name, privateSubnet!.Name,
-            "RouteTable");
+        var privateSubnet = scope.GetVnet2PrivateSubnet();
+        var routeTable = scope.GetRouteTable(privateSubnet);
 
         var localRoute =
-            privateSubnet.RouteTable.Routes.FirstOrDefault(c =>
-                c.AddressPrefix == "10.1.0.0/16" && c.NextHopType == "VnetLocal");
+            routeTable?.Routes.FirstOrDefault(c =>
+                c.AddressPrefix == "10.1.0.0/16" && c.NextHopType.ToString() == "VnetLocal");
         Assert.IsNotNull(localRoute);
     }
 
-    [GameTask("Add a Standard NAT Gateway (zone 1) for subnet 10.0.1.0/24.", 5, 10)]
-
+    [GameTask("Attach a Standard SKU NAT Gateway in availability zone 1 to subnet 10.0.1.0/24.", 5, 10)]
     [Test]
     public void Test10_Vnet1PublicSubnetsNatGateway()
     {
         using var scope = new TestScope();
-    var publicSubnet = scope.GetVnet1PublicSubnet();
-    publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, publicSubnet!.Name,
-            "NatGateway");
-        Assert.IsNotNull(publicSubnet.NatGateway);
-        var natGatewayId = publicSubnet.NatGateway.Id;
-        var natGateways = scope.Client.NatGateways.List(Constants.ResourceGroupName);
-        var natGateway = natGateways.FirstOrDefault(c => c.Id == natGatewayId);
+        var publicSubnet = scope.GetVnet1PublicSubnet();
+        Assert.IsNotNull(publicSubnet);
+        var natGateway = scope.GetNatGateway(publicSubnet!);
 
-        Assert.AreEqual("Standard", natGateway!.Sku.Name);
+        Assert.IsNotNull(natGateway);
+        Assert.AreEqual("Standard", natGateway!.SkuName.ToString());
         Assert.AreEqual("1", natGateway.Zones[0]);
     }
 
     [GameTask("Add a Virtual Network Peering from 'projVnet1Prod' to 'projVnet2Prod' (remote). Allow Forwarded Traffic and Virtual Network Access; do not allow Gateway Transit.", 5, 10)]
-
     [Test]
     public void Test11_VnetGlobalPeering()
     {
@@ -167,130 +160,153 @@ public class VnetTests
         Assert.IsFalse(virtualNetworkPeering.AllowGatewayTransit);
     }
 
-    [GameTask("Add 2 NSG rules to subnet 10.0.1.0/24: (1) Allow HTTP inbound from anywhere with priority 201; (2) Allow all TCP outbound to anywhere with priority 100.", 5, 10)]
+    [GameTask("Attach an NSG to subnet 10.0.1.0/24 containing: (1) an Allow TCP inbound rule from source address and port '*' to destination 10.0.1.0/24 on port 80 with priority 201; (2) an Allow TCP outbound rule from source address and port '*' to destination address and port '*' with priority 100.", 5, 10)]
     [Test]
     public void Test12_Vnet1PublicSubnetNetworkSecurityGroup()
     {
         using var scope = new TestScope();
-    var publicSubnet = scope.GetVnet1PublicSubnet();
-    publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, publicSubnet!.Name,
-            "NetworkSecurityGroup");
-        var networkSecurityGroup = publicSubnet.NetworkSecurityGroup;
+        var publicSubnet = scope.GetVnet1PublicSubnet();
+        Assert.IsNotNull(publicSubnet);
+        var resolvedPublicSubnet = publicSubnet!;
+        var networkSecurityGroup = scope.GetNetworkSecurityGroup(resolvedPublicSubnet);
         Assert.IsNotNull(networkSecurityGroup);
+        var resolvedNetworkSecurityGroup = networkSecurityGroup!;
 
-        var allowHttpInbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "80");
-        Assert.AreEqual("Allow", allowHttpInbound!.Access);
-        Assert.AreEqual("Inbound", allowHttpInbound.Direction);
-        Assert.AreEqual("*", allowHttpInbound.SourcePortRange);
-        Assert.AreEqual("*", allowHttpInbound.SourceAddressPrefix);
-        Assert.AreEqual("TCP", allowHttpInbound.Protocol.ToUpper());
-        Assert.AreEqual(201, allowHttpInbound.Priority);
-        Assert.IsTrue(SecurityRuleTargetsSubnet(allowHttpInbound, publicSubnet));
+        var allowHttpInbound = resolvedNetworkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "80");
+        Assert.IsNotNull(allowHttpInbound);
+        var resolvedAllowHttpInbound = allowHttpInbound!;
+        Assert.AreEqual("Allow", resolvedAllowHttpInbound.Access.ToString());
+        Assert.AreEqual("Inbound", resolvedAllowHttpInbound.Direction.ToString());
+        Assert.AreEqual("*", resolvedAllowHttpInbound.SourcePortRange);
+        Assert.AreEqual("*", resolvedAllowHttpInbound.SourceAddressPrefix);
+        Assert.AreEqual("TCP", Convert.ToString(resolvedAllowHttpInbound.Protocol)?.ToUpperInvariant());
+        Assert.AreEqual(201, resolvedAllowHttpInbound.Priority);
+        Assert.IsTrue(SecurityRuleTargetsSubnet(resolvedAllowHttpInbound, resolvedPublicSubnet));
 
-
-        var allowAllTcpOutbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "*");
-        Assert.AreEqual("Allow", allowAllTcpOutbound!.Access);
-        Assert.AreEqual("Outbound", allowAllTcpOutbound.Direction);
-        Assert.AreEqual("*", allowAllTcpOutbound.SourcePortRange);
-        Assert.AreEqual("*", allowAllTcpOutbound.SourceAddressPrefix);
-        Assert.AreEqual("TCP", allowAllTcpOutbound.Protocol.ToUpper());
-        Assert.AreEqual(100, allowAllTcpOutbound.Priority);
-        Assert.AreEqual("*", allowAllTcpOutbound.DestinationAddressPrefix);
+        var allowAllTcpOutbound = resolvedNetworkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "*");
+        Assert.IsNotNull(allowAllTcpOutbound);
+        var resolvedAllowAllTcpOutbound = allowAllTcpOutbound!;
+        Assert.AreEqual("Allow", resolvedAllowAllTcpOutbound.Access.ToString());
+        Assert.AreEqual("Outbound", resolvedAllowAllTcpOutbound.Direction.ToString());
+        Assert.AreEqual("*", resolvedAllowAllTcpOutbound.SourcePortRange);
+        Assert.AreEqual("*", resolvedAllowAllTcpOutbound.SourceAddressPrefix);
+        Assert.AreEqual("TCP", Convert.ToString(resolvedAllowAllTcpOutbound.Protocol)?.ToUpperInvariant());
+        Assert.AreEqual(100, resolvedAllowAllTcpOutbound.Priority);
+        Assert.AreEqual("*", resolvedAllowAllTcpOutbound.DestinationAddressPrefix);
     }
 
-    [GameTask("Add 2 NSG rules to subnet 10.1.1.0/24: (1) Allow HTTP inbound from anywhere with priority 201; (2) Allow all TCP outbound to anywhere with priority 100.", 5, 10)]
+    [GameTask("Attach an NSG to subnet 10.1.1.0/24 containing: (1) an Allow TCP inbound rule from source address and port '*' to destination 10.1.1.0/24 on port 80 with priority 201; (2) an Allow TCP outbound rule from source address and port '*' to destination address and port '*' with priority 100.", 5, 10)]
     [Test]
     public void Test13_Vnet2PublicSubnetNetworkSecurityGroup()
     {
         using var scope = new TestScope();
-    var publicSubnet = scope.GetVnet2PublicSubnet();
-    publicSubnet = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet2.Name, publicSubnet!.Name,
-            "NetworkSecurityGroup");
-        var networkSecurityGroup = publicSubnet.NetworkSecurityGroup;
+        var publicSubnet = scope.GetVnet2PublicSubnet();
+        Assert.IsNotNull(publicSubnet);
+        var resolvedPublicSubnet = publicSubnet!;
+        var networkSecurityGroup = scope.GetNetworkSecurityGroup(resolvedPublicSubnet);
         Assert.IsNotNull(networkSecurityGroup);
+        var resolvedNetworkSecurityGroup = networkSecurityGroup!;
 
-        var allowHttpInbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "80");
-        Assert.AreEqual("Allow", allowHttpInbound!.Access);
-        Assert.AreEqual("Inbound", allowHttpInbound.Direction);
-        Assert.AreEqual("*", allowHttpInbound.SourcePortRange);
-        Assert.AreEqual("*", allowHttpInbound.SourceAddressPrefix);
-        Assert.AreEqual("TCP", allowHttpInbound.Protocol.ToUpper());
-        Assert.AreEqual(201, allowHttpInbound.Priority);
-        Assert.IsTrue(SecurityRuleTargetsSubnet(allowHttpInbound, publicSubnet));
+        var allowHttpInbound = resolvedNetworkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "80");
+        Assert.IsNotNull(allowHttpInbound);
+        var resolvedAllowHttpInbound = allowHttpInbound!;
+        Assert.AreEqual("Allow", resolvedAllowHttpInbound.Access.ToString());
+        Assert.AreEqual("Inbound", resolvedAllowHttpInbound.Direction.ToString());
+        Assert.AreEqual("*", resolvedAllowHttpInbound.SourcePortRange);
+        Assert.AreEqual("*", resolvedAllowHttpInbound.SourceAddressPrefix);
+        Assert.AreEqual("TCP", Convert.ToString(resolvedAllowHttpInbound.Protocol)?.ToUpperInvariant());
+        Assert.AreEqual(201, resolvedAllowHttpInbound.Priority);
+        Assert.IsTrue(SecurityRuleTargetsSubnet(resolvedAllowHttpInbound, resolvedPublicSubnet));
 
-        var allowAllTcpOutbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "*");
-        Assert.AreEqual("Allow", allowAllTcpOutbound!.Access);
-        Assert.AreEqual("Outbound", allowAllTcpOutbound.Direction);
-        Assert.AreEqual("*", allowAllTcpOutbound.SourcePortRange);
-        Assert.AreEqual("*", allowAllTcpOutbound.SourceAddressPrefix);
-        Assert.AreEqual("TCP", allowAllTcpOutbound.Protocol.ToUpper());
-        Assert.AreEqual(100, allowAllTcpOutbound.Priority);
-        Assert.AreEqual("*", allowAllTcpOutbound.DestinationAddressPrefix);
+        var allowAllTcpOutbound = resolvedNetworkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "*");
+        Assert.IsNotNull(allowAllTcpOutbound);
+        var resolvedAllowAllTcpOutbound = allowAllTcpOutbound!;
+        Assert.AreEqual("Allow", resolvedAllowAllTcpOutbound.Access.ToString());
+        Assert.AreEqual("Outbound", resolvedAllowAllTcpOutbound.Direction.ToString());
+        Assert.AreEqual("*", resolvedAllowAllTcpOutbound.SourcePortRange);
+        Assert.AreEqual("*", resolvedAllowAllTcpOutbound.SourceAddressPrefix);
+        Assert.AreEqual("TCP", Convert.ToString(resolvedAllowAllTcpOutbound.Protocol)?.ToUpperInvariant());
+        Assert.AreEqual(100, resolvedAllowAllTcpOutbound.Priority);
+        Assert.AreEqual("*", resolvedAllowAllTcpOutbound.DestinationAddressPrefix);
     }
 
-    [GameTask("Add 2 NSG rules to subnet 10.0.0.0/24: (1) Allow HTTP inbound from 10.1.0.0/24 with priority 201; (2) Allow all TCP outbound to anywhere with priority 100.", 5, 10)]
+    [GameTask("Attach an NSG to subnet 10.0.0.0/24 containing: (1) an Allow TCP inbound rule from source subnet 10.1.0.0/24 and source port '*' to destination 10.0.0.0/24 on port 80 with priority 201; (2) an Allow TCP outbound rule from source address and port '*' to destination address and port '*' with priority 100.", 5, 10)]
     [Test]
     public void Test14_Vnet1PrivateSubnetNetworkSecurityGroup()
     {
         using var scope = new TestScope();
-    var privateSubnet1 = scope.GetVnet1PrivateSubnet();
-    privateSubnet1 = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet1.Name, privateSubnet1!.Name,
-            "NetworkSecurityGroup");
-        var networkSecurityGroup = privateSubnet1.NetworkSecurityGroup;
+        var privateSubnet1 = scope.GetVnet1PrivateSubnet();
+        Assert.IsNotNull(privateSubnet1);
+        var resolvedPrivateSubnet1 = privateSubnet1!;
+        var networkSecurityGroup = scope.GetNetworkSecurityGroup(resolvedPrivateSubnet1);
         Assert.IsNotNull(networkSecurityGroup);
+        var resolvedNetworkSecurityGroup = networkSecurityGroup!;
 
-        var allowAllTcpOutbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "*");
-        Assert.AreEqual("Allow", allowAllTcpOutbound!.Access);
-        Assert.AreEqual("Outbound", allowAllTcpOutbound.Direction);
-        Assert.AreEqual("*", allowAllTcpOutbound.SourcePortRange);
-        Assert.AreEqual("*", allowAllTcpOutbound.SourceAddressPrefix);
-        Assert.AreEqual("TCP", allowAllTcpOutbound.Protocol.ToUpper());
-        Assert.AreEqual(100, allowAllTcpOutbound.Priority);
-        Assert.AreEqual("*", allowAllTcpOutbound.DestinationAddressPrefix);
+        var allowAllTcpOutbound = resolvedNetworkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "*");
+        Assert.IsNotNull(allowAllTcpOutbound);
+        var resolvedAllowAllTcpOutbound = allowAllTcpOutbound!;
+        Assert.AreEqual("Allow", resolvedAllowAllTcpOutbound.Access.ToString());
+        Assert.AreEqual("Outbound", resolvedAllowAllTcpOutbound.Direction.ToString());
+        Assert.AreEqual("*", resolvedAllowAllTcpOutbound.SourcePortRange);
+        Assert.AreEqual("*", resolvedAllowAllTcpOutbound.SourceAddressPrefix);
+        Assert.AreEqual("TCP", Convert.ToString(resolvedAllowAllTcpOutbound.Protocol)?.ToUpperInvariant());
+        Assert.AreEqual(100, resolvedAllowAllTcpOutbound.Priority);
+        Assert.AreEqual("*", resolvedAllowAllTcpOutbound.DestinationAddressPrefix);
 
-        var crossVnetInbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c =>
-            SecurityRuleSourcesSubnet(c, scope.GetVnet2PrivateSubnet()!));
-        Assert.AreEqual("Allow", crossVnetInbound!.Access);
-        Assert.AreEqual("Inbound", crossVnetInbound.Direction);
-        Assert.AreEqual("*", crossVnetInbound.SourcePortRange);
-        Assert.AreEqual("TCP", crossVnetInbound.Protocol.ToUpper());
-        Assert.AreEqual("80", crossVnetInbound.DestinationPortRange);
-        Assert.AreEqual(201, crossVnetInbound.Priority);
-        Assert.IsTrue(SecurityRuleTargetsSubnet(crossVnetInbound, privateSubnet1));
+        var vnet2PrivateSubnet = scope.GetVnet2PrivateSubnet();
+        Assert.IsNotNull(vnet2PrivateSubnet);
+        var crossVnetInbound = resolvedNetworkSecurityGroup.SecurityRules.FirstOrDefault(c =>
+            SecurityRuleSourcesSubnet(c, vnet2PrivateSubnet!));
+        Assert.IsNotNull(crossVnetInbound);
+        var resolvedCrossVnetInbound = crossVnetInbound!;
+        Assert.AreEqual("Allow", resolvedCrossVnetInbound.Access.ToString());
+        Assert.AreEqual("Inbound", resolvedCrossVnetInbound.Direction.ToString());
+        Assert.AreEqual("*", resolvedCrossVnetInbound.SourcePortRange);
+        Assert.AreEqual("TCP", Convert.ToString(resolvedCrossVnetInbound.Protocol)?.ToUpperInvariant());
+        Assert.AreEqual("80", resolvedCrossVnetInbound.DestinationPortRange);
+        Assert.AreEqual(201, resolvedCrossVnetInbound.Priority);
+        Assert.IsTrue(SecurityRuleTargetsSubnet(resolvedCrossVnetInbound, resolvedPrivateSubnet1));
     }
 
-    [GameTask("Add 2 NSG rules to subnet 10.1.0.0/24: (1) Allow HTTP inbound from 10.0.0.0/24 with priority 201; (2) Allow all TCP outbound to anywhere with priority 100.", 5, 10)]
+    [GameTask("Attach an NSG to subnet 10.1.0.0/24 containing: (1) an Allow TCP inbound rule from source subnet 10.0.0.0/24 and source port '*' to destination 10.1.0.0/24 on port 80 with priority 201; (2) an Allow TCP outbound rule from source address and port '*' to destination address and port '*' with priority 100.", 5, 10)]
     [Test]
     public void Test15_Vnet2PrivateSubnetNetworkSecurityGroup()
     {
         using var scope = new TestScope();
-    var privateSubnet2 = scope.GetVnet2PrivateSubnet();
-    privateSubnet2 = scope.Client.Subnets.Get(Constants.ResourceGroupName, scope.Vnet2.Name, privateSubnet2!.Name,
-            "NetworkSecurityGroup");
-        var networkSecurityGroup = privateSubnet2.NetworkSecurityGroup;
+        var privateSubnet2 = scope.GetVnet2PrivateSubnet();
+        Assert.IsNotNull(privateSubnet2);
+        var resolvedPrivateSubnet2 = privateSubnet2!;
+        var networkSecurityGroup = scope.GetNetworkSecurityGroup(resolvedPrivateSubnet2);
         Assert.IsNotNull(networkSecurityGroup);
+        var resolvedNetworkSecurityGroup = networkSecurityGroup!;
 
-        var allowAllTcpOutbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "*");
-        Assert.AreEqual("Allow", allowAllTcpOutbound!.Access);
-        Assert.AreEqual("Outbound", allowAllTcpOutbound.Direction);
-        Assert.AreEqual("*", allowAllTcpOutbound.SourcePortRange);
-        Assert.AreEqual("*", allowAllTcpOutbound.SourceAddressPrefix);
-        Assert.AreEqual("TCP", allowAllTcpOutbound.Protocol.ToUpper());
-        Assert.AreEqual(100, allowAllTcpOutbound.Priority);
-        Assert.AreEqual("*", allowAllTcpOutbound.DestinationAddressPrefix);
+        var allowAllTcpOutbound = resolvedNetworkSecurityGroup.SecurityRules.FirstOrDefault(c => c.DestinationPortRange == "*");
+        Assert.IsNotNull(allowAllTcpOutbound);
+        var resolvedAllowAllTcpOutbound = allowAllTcpOutbound!;
+        Assert.AreEqual("Allow", resolvedAllowAllTcpOutbound.Access.ToString());
+        Assert.AreEqual("Outbound", resolvedAllowAllTcpOutbound.Direction.ToString());
+        Assert.AreEqual("*", resolvedAllowAllTcpOutbound.SourcePortRange);
+        Assert.AreEqual("*", resolvedAllowAllTcpOutbound.SourceAddressPrefix);
+        Assert.AreEqual("TCP", Convert.ToString(resolvedAllowAllTcpOutbound.Protocol)?.ToUpperInvariant());
+        Assert.AreEqual(100, resolvedAllowAllTcpOutbound.Priority);
+        Assert.AreEqual("*", resolvedAllowAllTcpOutbound.DestinationAddressPrefix);
 
-        var crossVnetInbound = networkSecurityGroup.SecurityRules.FirstOrDefault(c =>
-            SecurityRuleSourcesSubnet(c, scope.GetVnet1PrivateSubnet()!));
-        Assert.AreEqual("Allow", crossVnetInbound!.Access);
-        Assert.AreEqual("Inbound", crossVnetInbound.Direction);
-        Assert.AreEqual("*", crossVnetInbound.SourcePortRange);
-        Assert.AreEqual("TCP", crossVnetInbound.Protocol.ToUpper());
-        Assert.AreEqual("80", crossVnetInbound.DestinationPortRange);
-        Assert.AreEqual(201, crossVnetInbound.Priority);
-        Assert.IsTrue(SecurityRuleTargetsSubnet(crossVnetInbound, privateSubnet2));
+        var vnet1PrivateSubnet = scope.GetVnet1PrivateSubnet();
+        Assert.IsNotNull(vnet1PrivateSubnet);
+        var crossVnetInbound = resolvedNetworkSecurityGroup.SecurityRules.FirstOrDefault(c =>
+            SecurityRuleSourcesSubnet(c, vnet1PrivateSubnet!));
+        Assert.IsNotNull(crossVnetInbound);
+        var resolvedCrossVnetInbound = crossVnetInbound!;
+        Assert.AreEqual("Allow", resolvedCrossVnetInbound.Access.ToString());
+        Assert.AreEqual("Inbound", resolvedCrossVnetInbound.Direction.ToString());
+        Assert.AreEqual("*", resolvedCrossVnetInbound.SourcePortRange);
+        Assert.AreEqual("TCP", Convert.ToString(resolvedCrossVnetInbound.Protocol)?.ToUpperInvariant());
+        Assert.AreEqual("80", resolvedCrossVnetInbound.DestinationPortRange);
+        Assert.AreEqual(201, resolvedCrossVnetInbound.Priority);
+        Assert.IsTrue(SecurityRuleTargetsSubnet(resolvedCrossVnetInbound, resolvedPrivateSubnet2));
     }
 
-    private static string? GetSubnetAddressPrefix(Subnet? subnet)
+    private static string? GetSubnetAddressPrefix(SubnetData? subnet)
     {
         return !string.IsNullOrEmpty(subnet?.AddressPrefix)
             ? subnet.AddressPrefix
@@ -298,8 +314,8 @@ public class VnetTests
     }
 
     private static bool SecurityRuleSourcesSubnet(
-        SecurityRule securityRule,
-        Subnet subnet)
+        SecurityRuleData securityRule,
+        SubnetData subnet)
     {
         var subnetAddressPrefix = GetSubnetAddressPrefix(subnet);
         return subnetAddressPrefix != null &&
@@ -309,8 +325,8 @@ public class VnetTests
     }
 
     private static bool SecurityRuleTargetsSubnet(
-        SecurityRule securityRule,
-        Subnet subnet)
+        SecurityRuleData securityRule,
+        SubnetData subnet)
     {
         var subnetAddressPrefix = GetSubnetAddressPrefix(subnet);
         if (subnetAddressPrefix == null)
@@ -325,47 +341,83 @@ public class VnetTests
 
     private sealed class TestScope : IDisposable
     {
-        public readonly NetworkManagementClient Client;
-        public readonly VirtualNetwork Vnet1;
-        public readonly VirtualNetwork Vnet2;
+        public readonly ArmClient Client;
+        private readonly VirtualNetworkResource vnet1Resource;
+        private readonly VirtualNetworkResource vnet2Resource;
 
         public TestScope()
         {
             var config = new Config();
-            Client = new NetworkManagementClient(config.Credentials);
-            Client.SubscriptionId = config.SubscriptionId;
-            Vnet1 = Client.VirtualNetworks.Get(Constants.ResourceGroupName, Constants.Vnet1Name);
-            Vnet2 = Client.VirtualNetworks.Get(Constants.ResourceGroupName, Constants.Vnet2Name);
+            Client = config.ArmClient;
+
+            var resourceGroup = config.GetResourceGroupResource(Constants.ResourceGroupName);
+            vnet1Resource = resourceGroup.GetVirtualNetworks().Get(Constants.Vnet1Name).Value;
+            vnet2Resource = resourceGroup.GetVirtualNetworks().Get(Constants.Vnet2Name).Value;
         }
+
+        public VirtualNetworkData Vnet1 => vnet1Resource.Data;
+        public VirtualNetworkData Vnet2 => vnet2Resource.Data;
 
         public void Dispose()
         {
-            Client.Dispose();
         }
 
-        public Subnet? GetVnet1PublicSubnet()
+        public SubnetData? GetVnet1PublicSubnet()
         {
             return Vnet1.Subnets.FirstOrDefault(
                 c => GetSubnetAddressPrefix(c) == "10.0.1.0/24");
         }
 
-
-        public Subnet? GetVnet2PublicSubnet()
+        public SubnetData? GetVnet2PublicSubnet()
         {
             return Vnet2.Subnets.FirstOrDefault(
                 c => GetSubnetAddressPrefix(c) == "10.1.1.0/24");
         }
 
-        public Subnet? GetVnet1PrivateSubnet()
+        public SubnetData? GetVnet1PrivateSubnet()
         {
             return Vnet1.Subnets.FirstOrDefault(
                 c => GetSubnetAddressPrefix(c) == "10.0.0.0/24");
         }
 
-        public Subnet? GetVnet2PrivateSubnet()
+        public SubnetData? GetVnet2PrivateSubnet()
         {
             return Vnet2.Subnets.FirstOrDefault(
                 c => GetSubnetAddressPrefix(c) == "10.1.0.0/24");
         }
+
+        public RouteTableData? GetRouteTable(SubnetData? subnet)
+        {
+            var routeTableId = subnet?.RouteTable?.Id;
+            if (routeTableId is null)
+            {
+                return null;
+            }
+
+            return Client.GetRouteTableResource(routeTableId).Get().Value.Data;
+        }
+
+        public NetworkSecurityGroupData? GetNetworkSecurityGroup(SubnetData? subnet)
+        {
+            var networkSecurityGroupId = subnet?.NetworkSecurityGroup?.Id;
+            if (networkSecurityGroupId is null)
+            {
+                return null;
+            }
+
+            return Client.GetNetworkSecurityGroupResource(networkSecurityGroupId).Get().Value.Data;
+        }
+
+        public NatGatewayData? GetNatGateway(SubnetData? subnet)
+        {
+            var natGatewayId = subnet?.NatGatewayId;
+            if (natGatewayId is null)
+            {
+                return null;
+            }
+
+            return Client.GetNatGatewayResource(natGatewayId).Get().Value.Data;
+        }
     }
 }
+#pragma warning restore CS0618

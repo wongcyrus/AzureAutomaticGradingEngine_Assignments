@@ -4,18 +4,20 @@
 
 Students call the Azure Static Web Apps routes shown below. Static Web Apps
 requires Microsoft Entra authentication and injects the trusted student
-principal. The API proxy derives the email from that principal; callers cannot
-select another student's email.
+principal. The API proxy derives the email from that principal and signs the
+email, HTTP method, backend path/query, and a short-lived timestamp with a
+CDKTN-managed HMAC key. Callers cannot select another student's email.
 
 The underlying Function App endpoints use function-level authorization and are
-for service-to-service or instructor diagnostics only:
+for service-to-service or instructor diagnostics only. They require both a
+Function key in the `x-functions-key` header and valid `x-grader-email`,
+`x-grader-timestamp`, and `x-grader-signature` headers. A Function key alone
+returns `401`.
 
-```
-?code=<function-key>
-```
-
-Do not expose Function keys in the browser. Static Web Apps stores the complete
-backend URL (including its key) in application settings.
+Do not expose Function or proxy-signing keys in the browser. Static Web Apps
+stores them only in server-side application settings. The proxy removes
+`?code=` from configured backend URLs before forwarding and never logs
+key-bearing URLs.
 
 ## Core Endpoints
 
@@ -39,7 +41,7 @@ The authenticated student's email is supplied by the Static Web Apps proxy.
   "score": 0,
   "completed_tasks": 0,
   "additional_data": {
-    "instruction": "Create a resource group named 'projProd' in Hong Kong",
+    "instruction": "Create a resource group named 'projProd' in the Azure East Asia region.",
     "reward": 10,
     "tests": ["Test01_ResourceGroupExist", "Test02_ResourceGroupLocation"]
   }
@@ -125,6 +127,10 @@ View completed tasks and scores.
 
 ## Admin Endpoints
 
+Admin endpoints are not routed by the student-facing Static Web Apps API. They
+require the same signed service-to-service headers and are exercised only by
+operator tooling.
+
 ### GET /api/pregeneratedmessagestats
 
 View message cache statistics.
@@ -208,6 +214,7 @@ All endpoints return errors in this format:
 **Common HTTP Status Codes:**
 - `200`: Success
 - `400`: Bad Request (missing parameters)
+- `401`: Missing, expired, or invalid signed identity
 - `404`: Not Found (resource doesn't exist)
 - `500`: Internal Server Error
 
@@ -216,6 +223,10 @@ All endpoints return errors in this format:
 - NPC interactions: 1 hour cooldown between task assignments
 - Grading: No limit (students can retry failed tasks)
 - Admin endpoints: No limit
+
+Signed assertions expire after five minutes and bind the identity to the exact
+HTTP method and backend path/query. Replaying a signature for another student,
+endpoint, or query fails authentication.
 
 ## Student Registration
 

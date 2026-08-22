@@ -9,6 +9,7 @@ This project provides automated assessment of student Azure infrastructure deplo
 ## Architecture
 
 - **GraderFunctionApp**: Azure Functions backend for grading and game logic
+- **GraderFunctionApp.Tests**: NUnit unit and component tests for the Function App
 - **azure-isekai**: RPG Maker game frontend for student interaction
 - **Infrastructure**: CDK Terrain deployment code
 - **packages/**: Git submodules containing shared provider bindings and Azure constructs
@@ -22,12 +23,15 @@ not created or stored.
 
 1. The student signs in to Azure Static Web Apps with Microsoft Entra ID.
 2. The Static Web Apps API reads the trusted authenticated principal and adds
-   the student's email when proxying to the Function App.
-3. The Function App resolves that email to one explicitly registered
+   a short-lived HMAC signature over the student's email and exact backend
+   request.
+3. The Function App validates the signature and ignores browser-supplied
+   `email`, form-email, and diagnostic `trace` identities.
+4. The Function App resolves the signed email to one explicitly registered
    subscription in the `Subscription` table.
-4. `DefaultAzureCredential` selects the Function App's user-assigned managed
+5. `DefaultAzureCredential` selects the Function App's user-assigned managed
    identity through `AZURE_CLIENT_ID`.
-5. The grader runs only the tests for the student's active task against that
+6. The grader runs only the tests for the student's active task against that
    subscription.
 
 Frontend sign-in, subscription registration, and Azure RBAC are separate:
@@ -42,7 +46,7 @@ cross-tenant delegation design.
 ### Prerequisites
 
 - Azure subscription with appropriate permissions
-- Node.js 22.19+ and npm
+- Node.js 24.19+ and npm
 - .NET SDK versions selected by `global.json` and the dev container
 - Azure CLI
 
@@ -166,6 +170,24 @@ does not match.
 
 ## Testing Locally
 
+Run the Function App unit tests:
+
+```bash
+dotnet test GraderFunctionApp.Tests/GraderFunctionApp.Tests.csproj
+```
+
+Collect Cobertura code coverage:
+
+```bash
+dotnet test GraderFunctionApp.Tests/GraderFunctionApp.Tests.csproj \
+    --collect:"XPlat Code Coverage" \
+    --settings GraderFunctionApp.Tests/coverlet.runsettings
+```
+
+The current suite contains 237 tests and covers 91.1% of Function App lines
+and 81.0% of branches. Coverage excludes only generated Function SDK files
+under `obj`; production source files remain included.
+
 Sign in with Azure CLI and run tests against an explicit subscription:
 
 ```bash
@@ -174,11 +196,32 @@ dotnet run --project AzureProjectTest/AzureProjectTest.csproj --configuration De
     --subscription=<subscription-id> --work=$(pwd)/testing --trace=local
 ```
 
+Run HTTP integration tests against the deployed Function App. Pass a grading
+subscription as the third argument to execute all 35 Azure resource assertions
+through the deployed Function:
+
+```bash
+az login
+scripts/test-deployed-function.sh \
+  GradingEngineAssignmentResourceGroup \
+  azureisekai2026 \
+  <subscription-id>
+```
+
+The script obtains the host-level Function key through Azure CLI without
+printing it and signs every request with the proxy-signing key. Without the
+third argument, it runs seven non-destructive endpoint and authentication
+tests. With a subscription, it also runs the complete Azure resource suite
+through the Function and persists that grading result under the integration
+test identity.
+
 ## Performance Features
 
-- **Message Caching**: Pre-generated AI responses for common scenarios
+- **Message Caching**: Pre-generated AI responses use deterministic persisted keys that remain valid across restarts and scale-out
 - **Hit Count Tracking**: Monitor cache effectiveness
 - **Batch Processing**: Optimized message generation
+- **Observable batch outcomes**: Retry exhaustion is reported as failure rather
+  than counted as a successful generation
 - **Atomic task ownership**: One fixed lock row per student is acquired in the
   same Azure Table transaction as task assignment
 - **Concurrency-safe completion**: ETag-conditional transactions prevent
@@ -201,6 +244,9 @@ as their Azure Table partition key. Assignment atomically adds
 ## Security
 
 - Function-level authorization for all endpoints
+- Short-lived HMAC-signed SWA-to-Function identity assertions
+- Function keys are forwarded in headers and are insufficient without a valid
+  signed identity
 - User-assigned managed identity with student-delegated, least-privilege RBAC
 - No student application secrets are stored
 - SAS URLs for secure test result access

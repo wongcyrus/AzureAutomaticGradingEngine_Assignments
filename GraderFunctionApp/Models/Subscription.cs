@@ -5,7 +5,7 @@ using Azure.Data.Tables;
 namespace GraderFunctionApp.Models;
 
 
-internal class Subscription : ITableEntity
+public class Subscription : ITableEntity
 {
     public const string RegistrationRowKey = "registration";
 

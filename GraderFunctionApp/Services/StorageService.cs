@@ -20,9 +20,22 @@ namespace GraderFunctionApp.Services
         private readonly StorageOptions _options;
 
         public StorageService(string connectionString, ILogger<StorageService> logger, IOptions<StorageOptions> options)
+            : this(
+                new BlobServiceClient(connectionString),
+                new TableServiceClient(connectionString),
+                logger,
+                options)
         {
-            _blobServiceClient = new BlobServiceClient(connectionString);
-            _tableServiceClient = new TableServiceClient(connectionString);
+        }
+
+        public StorageService(
+            BlobServiceClient blobServiceClient,
+            TableServiceClient tableServiceClient,
+            ILogger<StorageService> logger,
+            IOptions<StorageOptions> options)
+        {
+            _blobServiceClient = blobServiceClient;
+            _tableServiceClient = tableServiceClient;
             _logger = logger;
             _options = options.Value;
         }
@@ -469,8 +482,7 @@ namespace GraderFunctionApp.Services
                     return null;
                 }
 
-                var random = new Random();
-                var selectedEgg = easterEggs[random.Next(easterEggs.Count)];
+                var selectedEgg = easterEggs[Random.Shared.Next(easterEggs.Count)];
                 return selectedEgg.Link;
             }
             catch (Exception ex)

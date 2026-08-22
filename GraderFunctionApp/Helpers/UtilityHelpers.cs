@@ -28,7 +28,11 @@ namespace GraderFunctionApp.Helpers
 
         public static string GetTemporaryDirectory(string trace)
         {
-            var tempDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName(), Math.Abs(trace.GetHashCode()).ToString());
+            var traceHash = unchecked((uint)trace.GetHashCode()).ToString();
+            var tempDirectory = Path.Combine(
+                Path.GetTempPath(),
+                Path.GetRandomFileName(),
+                traceHash);
             Directory.CreateDirectory(tempDirectory);
             return tempDirectory;
         }

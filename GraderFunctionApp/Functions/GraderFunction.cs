@@ -3,7 +3,6 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using GraderFunctionApp.Interfaces;
-using GraderFunctionApp.Helpers;
 using GraderFunctionApp.Constants;
 using GraderFunctionApp.Models;
 
@@ -18,6 +17,7 @@ namespace GraderFunctionApp.Functions
         private readonly ITestResultParser _testResultParser;
         private readonly IGameStateService _gameStateService;
         private readonly IUnifiedMessageService _unifiedMessageService;
+        private readonly IRequestAuthenticator _requestAuthenticator;
 
         public GraderFunction(
             ILogger<GraderFunction> logger,
@@ -26,7 +26,8 @@ namespace GraderFunctionApp.Functions
             ITestRunner testRunner,
             ITestResultParser testResultParser,
             IGameStateService gameStateService,
-            IUnifiedMessageService unifiedMessageService)
+            IUnifiedMessageService unifiedMessageService,
+            IRequestAuthenticator requestAuthenticator)
         {
             _logger = logger;
             _storageService = storageService;
@@ -35,6 +36,7 @@ namespace GraderFunctionApp.Functions
             _testResultParser = testResultParser;
             _gameStateService = gameStateService;
             _unifiedMessageService = unifiedMessageService;
+            _requestAuthenticator = requestAuthenticator;
         }
 
         [Function(nameof(GraderFunction))]
@@ -45,10 +47,17 @@ namespace GraderFunctionApp.Functions
 
             try
             {
+                var email = _requestAuthenticator.GetAuthenticatedEmail(req);
+                if (email == null)
+                {
+                    return new UnauthorizedObjectResult(
+                        ApiResponse.ErrorResult("Authentication required."));
+                }
+
                 return req.Method switch
                 {
-                    "GET" => await HandleGetRequestAsync(req),
-                    "POST" => await HandlePostRequestAsync(req),
+                    "GET" => await HandleGetRequestAsync(req, email),
+                    "POST" => await HandlePostRequestAsync(req, email),
                     _ => new BadRequestObjectResult(ApiResponse.ErrorResult("Unsupported HTTP method"))
                 };
             }
@@ -62,12 +71,14 @@ namespace GraderFunctionApp.Functions
             }
         }
 
-        private async Task<IActionResult> HandleGetRequestAsync(HttpRequest req)
+        private async Task<IActionResult> HandleGetRequestAsync(
+            HttpRequest req,
+            string email)
         {
             // Check if this is a game mode request
             if (req.Query.ContainsKey("gameMode") && req.Query["gameMode"] == "true")
             {
-                return await HandleGameModeRequestAsync(req);
+                return await HandleGameModeRequestAsync(req, email);
             }
 
             if (!req.Query.ContainsKey("subscriptionId"))
@@ -83,8 +94,6 @@ namespace GraderFunctionApp.Functions
             string subscriptionId = req.Query["subscriptionId"]!;
             string filter = req.Query["filter"]!;
             string taskName = filter;
-            string email = "Anonymous";
-
             if (!Guid.TryParse(subscriptionId, out _))
             {
                 return new BadRequestObjectResult("A valid subscriptionId is required.");
@@ -96,7 +105,6 @@ namespace GraderFunctionApp.Functions
             if (req.Query.ContainsKey("trace"))
             {
                 string trace = req.Query["trace"]!;
-                email = UtilityHelpers.ExtractEmail(trace);
                 _logger.LogInformation("start:" + trace);
                 xml = await _testRunner.RunUnitTestProcessAsync(_logger, subscriptionId, email, filter);
                 _logger.LogInformation("end:" + trace);
@@ -120,7 +128,9 @@ namespace GraderFunctionApp.Functions
             return new ContentResult { Content = xml, ContentType = "application/xml", StatusCode = 200 };
         }
 
-        private async Task<IActionResult> HandlePostRequestAsync(HttpRequest req)
+        private async Task<IActionResult> HandlePostRequestAsync(
+            HttpRequest req,
+            string email)
         {
             _logger.LogInformation("POST Request");
             
@@ -141,7 +151,11 @@ namespace GraderFunctionApp.Functions
                 };
             }
 
-            var xml = await _testRunner.RunUnitTestProcessAsync(_logger, subscriptionId, "Anonymous", filter);
+            var xml = await _testRunner.RunUnitTestProcessAsync(
+                _logger,
+                subscriptionId,
+                email,
+                filter);
             if (string.IsNullOrEmpty(xml))
             {
                 return new ContentResult 
@@ -152,7 +166,7 @@ namespace GraderFunctionApp.Functions
                 };
             }
 
-            await SaveTestResultsToStorageAsync("Anonymous", taskName, xml);
+            await SaveTestResultsToStorageAsync(email, taskName, xml);
 
             if (string.IsNullOrEmpty(needXml))
             {
@@ -163,13 +177,12 @@ namespace GraderFunctionApp.Functions
             return new ContentResult { Content = xml, ContentType = "application/xml", StatusCode = 200 };
         }
 
-        private async Task<IActionResult> HandleGameModeRequestAsync(HttpRequest req)
+        private async Task<IActionResult> HandleGameModeRequestAsync(
+            HttpRequest req,
+            string email)
         {
             try
             {
-                var email = (req.Query["email"].FirstOrDefault() ?? "unknown")
-                    .Trim()
-                    .ToLowerInvariant();
                 var game = req.Query["game"].FirstOrDefault() ?? "unknown";
                 var npc = req.Query["npc"].FirstOrDefault() ?? "unknown";
 
@@ -311,7 +324,7 @@ namespace GraderFunctionApp.Functions
                             "Wrong teacher! I can only grade assignments I gave out myself."
                         };
 
-                        var randomResponse = casualGradingResponses[new Random().Next(casualGradingResponses.Length)];
+                        var randomResponse = casualGradingResponses[Random.Shared.Next(casualGradingResponses.Length)];
                         return GameResponse.Success(randomResponse, "WRONG_NPC_FOR_GRADING");
                     }
 

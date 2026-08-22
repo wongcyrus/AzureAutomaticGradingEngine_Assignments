@@ -13,7 +13,8 @@ export class StaticWebAppConstruct extends Construct {
     resourceGroup: ResourceGroup,
     functionUrls: Record<string, string>,
     functionNames: string[],
-    prefix: string
+    prefix: string,
+    proxySigningKey: string
   ) {
     super(scope, id);
 
@@ -31,6 +32,7 @@ export class StaticWebAppConstruct extends Construct {
       }, {} as Record<string, string>),
       APPLICATIONINSIGHTS_CONNECTION_STRING: this.appInsights.connectionString,
       APPINSIGHTS_INSTRUMENTATIONKEY: this.appInsights.instrumentationKey,
+      GRADER_PROXY_SIGNING_KEY: proxySigningKey,
     };
 
     this.staticWebApp = new StaticWebApp(this, "StaticWebApp", {

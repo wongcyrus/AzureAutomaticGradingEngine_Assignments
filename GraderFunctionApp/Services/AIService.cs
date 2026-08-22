@@ -4,24 +4,69 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using OpenAI.Chat;
 using System.Runtime.Caching;
-using System.Security.Cryptography;
-using System.Text;
+using GraderFunctionApp.Helpers;
 using GraderFunctionApp.Interfaces;
 
 namespace GraderFunctionApp.Services
 {
+    internal interface IAIServiceChatClient
+    {
+        Task<IReadOnlyList<string?>> CompleteChatAsync(IReadOnlyList<ChatMessage> messages, ChatCompletionOptions options);
+    }
+
+    internal interface IAIServiceChatClientFactory
+    {
+        IAIServiceChatClient Create(Uri endpoint, string apiKey, string deploymentOrModelName);
+    }
+
+    internal sealed class AzureAIServiceChatClientFactory : IAIServiceChatClientFactory
+    {
+        public IAIServiceChatClient Create(Uri endpoint, string apiKey, string deploymentOrModelName)
+        {
+            var azureClient = new AzureOpenAIClient(endpoint, new AzureKeyCredential(apiKey));
+            var chatClient = azureClient.GetChatClient(deploymentOrModelName);
+            return new AzureAIServiceChatClient(chatClient);
+        }
+
+        private sealed class AzureAIServiceChatClient(ChatClient chatClient) : IAIServiceChatClient
+        {
+            public async Task<IReadOnlyList<string?>> CompleteChatAsync(IReadOnlyList<ChatMessage> messages, ChatCompletionOptions options)
+            {
+                var response = await chatClient.CompleteChatAsync(messages, options);
+                return response?.Value?.Content?.Select(content => content.Text).ToArray() ?? Array.Empty<string?>();
+            }
+        }
+    }
+
     public class AIService : IAIService
     {
         private readonly ILogger<AIService> _logger;
-        private static readonly ObjectCache TokenCache = MemoryCache.Default;
+        private static readonly ObjectCache DefaultTokenCache = MemoryCache.Default;
         private readonly IServiceProvider _serviceProvider;
         private readonly IStorageService? _storageService;
+        private readonly IAIServiceChatClientFactory _chatClientFactory;
+        private readonly ObjectCache _tokenCache;
+        private readonly Func<int> _instructionVersionSelector;
 
         public AIService(ILogger<AIService> logger, IServiceProvider serviceProvider, IStorageService? storageService = null)
+            : this(logger, serviceProvider, storageService, null, null, null)
+        {
+        }
+
+        internal AIService(
+            ILogger<AIService> logger,
+            IServiceProvider serviceProvider,
+            IStorageService? storageService,
+            IAIServiceChatClientFactory? chatClientFactory,
+            ObjectCache? tokenCache,
+            Func<int>? instructionVersionSelector)
         {
             _logger = logger;
             _serviceProvider = serviceProvider;
             _storageService = storageService;
+            _chatClientFactory = chatClientFactory ?? new AzureAIServiceChatClientFactory();
+            _tokenCache = tokenCache ?? DefaultTokenCache;
+            _instructionVersionSelector = instructionVersionSelector ?? (() => Random.Shared.Next(1, 3));
         }
 
         public async Task<string?> PersonalizeNPCMessageAsync(string message, int age, string gender, string background)
@@ -83,9 +128,11 @@ namespace GraderFunctionApp.Services
 
             // Cache key: current NPC + message content
             // The message already contains the full context including task instruction
-            var messageHash = ComputeHash(message);
-            var npcKey = $"{age}_{gender.GetHashCode()}_{background.GetHashCode()}";
-            var cacheKey = $"npc_{npcKey}_{messageHash}";
+            var cacheKey = MessageCacheKeyHelper.CreateNpcKey(
+                message,
+                age,
+                gender,
+                background);
             
             // Skip in-memory cache to ensure we always check pre-generated messages for hit counting
             // This way, even if we've seen this message before, we'll still increment hit counts
@@ -107,8 +154,7 @@ namespace GraderFunctionApp.Services
                 _logger.LogDebug("Creating Azure OpenAI client with endpoint: {endpoint}, deployment: {deployment}", azureOpenAiEndpoint, deploymentOrModelName);
                 
                 var endpoint = new Uri(azureOpenAiEndpoint);
-                var azureClient = new AzureOpenAIClient(endpoint, new AzureKeyCredential(azureOpenAiApiKey));
-                var chatClient = azureClient.GetChatClient(deploymentOrModelName);
+                var chatClient = _chatClientFactory.Create(endpoint, azureOpenAiApiKey, deploymentOrModelName);
 
                 var messages = new List<ChatMessage>
                 {
@@ -125,12 +171,11 @@ namespace GraderFunctionApp.Services
                 _logger.LogDebug("Sending request to Azure OpenAI for NPC personalization. Message: {message}, Age: {age}, Gender: {gender}, Background: {background}", 
                     message, age, gender, background);
                 
-                var response = await chatClient.CompleteChatAsync(messages, requestOptions);
+                var responseContent = await chatClient.CompleteChatAsync(messages, requestOptions);
 
-                _logger.LogDebug("Received response from Azure OpenAI. HasValue: {hasValue}, ContentCount: {contentCount}", 
-                    response?.Value != null, response?.Value?.Content?.Count ?? 0);
+                _logger.LogDebug("Received response from Azure OpenAI. ContentCount: {contentCount}", responseContent.Count);
 
-                if (response?.Value?.Content == null || response.Value.Content.Count == 0)
+                if (responseContent.Count == 0)
                 {
                     _logger.LogWarning("Azure OpenAI returned empty response for NPC personalization. Trying fallback approach. Message: {message}", message);
                     
@@ -141,11 +186,11 @@ namespace GraderFunctionApp.Services
                         new UserChatMessage(message)
                     };
                     
-                    var fallbackResponse = await chatClient.CompleteChatAsync(fallbackMessages, requestOptions);
+                    var fallbackResponseContent = await chatClient.CompleteChatAsync(fallbackMessages, requestOptions);
                     
-                    if (fallbackResponse?.Value?.Content != null && fallbackResponse.Value.Content.Count > 0)
+                    if (fallbackResponseContent.Count > 0)
                     {
-                        var fallbackResult = fallbackResponse.Value.Content[0].Text?.Trim();
+                        var fallbackResult = fallbackResponseContent[0]?.Trim();
                         if (!string.IsNullOrEmpty(fallbackResult))
                         {
                             _logger.LogDebug("Fallback approach succeeded. Result: {result}", fallbackResult);
@@ -157,7 +202,7 @@ namespace GraderFunctionApp.Services
                     return $"Tek, {message}";
                 }
 
-                var result = response.Value.Content[0].Text?.Trim();
+                var result = responseContent[0]?.Trim();
                 
                 _logger.LogDebug("Azure OpenAI response content: {content}", result);
                 
@@ -229,13 +274,12 @@ namespace GraderFunctionApp.Services
                 }
             }
 
-            var rnd = new Random();
-            var version = rnd.Next(1, 3);
+            var version = _instructionVersionSelector();
             // Simple cache key for instruction rephrasing (not NPC-specific)
-            var instructionHash = ComputeHash(instruction);
+            var instructionHash = MessageCacheKeyHelper.ComputeHash(instruction);
             var cacheKey = $"instruction_{instructionHash}_{version}";
 
-            var tokenContents = TokenCache?.GetCacheItem(cacheKey);
+            var tokenContents = _tokenCache.GetCacheItem(cacheKey);
             if (tokenContents != null && tokenContents.Value != null)
             {
                 _logger.LogDebug("Returning cached rephrased instruction");
@@ -269,8 +313,7 @@ namespace GraderFunctionApp.Services
                 
                 // Follow the official SDK pattern from the documentation
                 var endpoint = new Uri(azureOpenAiEndpoint);
-                var azureClient = new AzureOpenAIClient(endpoint, new AzureKeyCredential(azureOpenAiApiKey));
-                var chatClient = azureClient.GetChatClient(deploymentOrModelName);
+                var chatClient = _chatClientFactory.Create(endpoint, azureOpenAiApiKey, deploymentOrModelName);
                 
                 _logger.LogDebug("Created chat client for deployment: {deployment}", deploymentOrModelName);
 
@@ -301,17 +344,17 @@ namespace GraderFunctionApp.Services
                 };
 
                 // Use the async method as recommended
-                var response = await chatClient.CompleteChatAsync(messages, requestOptions);
+                var responseContent = await chatClient.CompleteChatAsync(messages, requestOptions);
 
                 _logger.LogDebug("Received response from Azure OpenAI");
 
-                if (response?.Value?.Content == null || response.Value.Content.Count == 0)
+                if (responseContent.Count == 0)
                 {
                     _logger.LogWarning("Azure OpenAI returned empty response");
                     return instruction;
                 }
 
-                var chatMessage = response.Value.Content[0].Text;
+                var chatMessage = responseContent[0];
                 
                 if (string.IsNullOrEmpty(chatMessage))
                 {
@@ -326,7 +369,7 @@ namespace GraderFunctionApp.Services
                 };
                 
                 tokenContents = new CacheItem(cacheKey, chatMessage);
-                TokenCache?.Set(tokenContents, policy);
+                _tokenCache.Set(tokenContents, policy);
                 
                 _logger.LogInformation("Successfully rephrased instruction using Azure OpenAI. Original length: {originalLength}, Rephrased length: {rephrasedLength}", 
                     instruction.Length, chatMessage.Length);
@@ -372,11 +415,5 @@ namespace GraderFunctionApp.Services
             }
         }
 
-        private static string ComputeHash(string input)
-        {
-            using var sha256 = SHA256.Create();
-            var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
-            return Convert.ToBase64String(hashedBytes).Replace("/", "_").Replace("+", "-").Replace("=", "");
-        }
     }
 }

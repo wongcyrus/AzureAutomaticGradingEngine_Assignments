@@ -7,6 +7,7 @@ import { AzapiProvider } from "./.gen/providers/azapi/provider";
 import { ResourceGroup } from "cdktf-azure-providers/.gen/providers/azurerm/resource-group";
 import { StorageAccount } from "cdktf-azure-providers/.gen/providers/azurerm/storage-account";
 import { UserAssignedIdentity } from "cdktf-azure-providers/.gen/providers/azurerm/user-assigned-identity";
+import { Bytes } from "cdktf-azure-providers/.gen/providers/random/bytes";
 import { Construct } from "constructs";
 import path = require("path");
 
@@ -39,7 +40,14 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
 
     const resourceGroup = this.createResourceGroup();
     const gradingIdentity = this.createGradingIdentity(resourceGroup);
-    const azureFunctionConstruct = this.createAzureFunction(resourceGroup, gradingIdentity);
+    const proxySigningKey = new Bytes(this, "ProxySigningKey", {
+      length: 32,
+    }).base64;
+    const azureFunctionConstruct = this.createAzureFunction(
+      resourceGroup,
+      gradingIdentity,
+      proxySigningKey
+    );
     const storageConstruct = this.createStorageResources(azureFunctionConstruct.storageAccount);
     
     // Add storage dependencies to function
@@ -53,7 +61,8 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       resourceGroup,
       azureFunctionConstruct.functionUrls!,
       FUNCTION_NAMES,
-      PREFIX
+      PREFIX,
+      proxySigningKey
     );
 
     const azureADConstruct = new AzureADApplicationConstruct(
@@ -71,7 +80,8 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       azureADConstruct.applicationPassword,
       staticWebAppConstruct.staticWebApp,
       azureADConstruct.studentGroup.objectId,
-      gradingIdentity
+      gradingIdentity,
+      proxySigningKey
     );
   }
 
@@ -104,7 +114,8 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
 
   private createAzureFunction(
     resourceGroup: ResourceGroup,
-    gradingIdentity: UserAssignedIdentity
+    gradingIdentity: UserAssignedIdentity,
+    proxySigningKey: string
   ) {
     const appSettings = {
       AZURE_OPENAI_ENDPOINT: process.env.AZURE_OPENAI_ENDPOINT!,
@@ -112,6 +123,7 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       DEPLOYMENT_OR_MODEL_NAME: process.env.DEPLOYMENT_OR_MODEL_NAME!,
       AZURE_CLIENT_ID: gradingIdentity.clientId,
       ASSIGNMENT_RESOURCE_GROUP: "projProd",
+      GRADER_PROXY_SIGNING_KEY: proxySigningKey,
     };
 
     const azureFunctionConstruct = new AzureFunctionWindowsConstruct(
@@ -151,12 +163,19 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     applicationPassword: any,
     staticWebApp: any,
     studentGroupObjectId: string,
-    gradingIdentity: UserAssignedIdentity
+    gradingIdentity: UserAssignedIdentity,
+    proxySigningKey: string
   ) {
     FUNCTION_NAMES.forEach((fn) => {
       new TerraformOutput(this, `${PREFIX}${fn}Url`, {
         value: functionUrls[fn],
+        sensitive: true,
       });
+    });
+
+    new TerraformOutput(this, "grader_proxy_signing_key", {
+      value: proxySigningKey,
+      sensitive: true,
     });
 
     new TerraformOutput(this, "Output_AADB2C_PROVIDER_CLIENT_ID", {

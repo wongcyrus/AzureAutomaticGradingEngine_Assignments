@@ -59,5 +59,6 @@ var serializerSettings = new JsonSerializerSettings
 allTasks = allTasks.OrderBy(c => c.GameClassOrder).ThenBy(c => c.Tests.First()).ToList();
 var json = JsonConvert.SerializeObject(allTasks.ToArray(), serializerSettings);
 Console.WriteLine(json);
-File.WriteAllText(@"tasks.json", json);
-File.WriteAllText(Path.Combine("..", "..", "..", "..", "TaskRunnerTest", "tasks.json"), json);
+var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
+File.WriteAllText(Path.Combine(repositoryRoot, "tasks.json"), json);
+File.WriteAllText(Path.Combine(repositoryRoot, "TaskRunnerTest", "tasks.json"), json);

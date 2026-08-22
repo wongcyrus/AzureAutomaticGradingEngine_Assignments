@@ -1,6 +1,3 @@
-using GraderFunctionApp.Functions;
-using GraderFunctionApp.Services;
-using GraderFunctionApp.Interfaces;
 using GraderFunctionApp.Configuration;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Configuration;
@@ -19,81 +16,10 @@ var host = new HostBuilder()
     })
     .ConfigureServices((hostContext, services) =>
     {
-        var configuration = hostContext.Configuration;
-
-        // Application Insights
-        services.AddApplicationInsightsTelemetryWorkerService();
-        services.ConfigureFunctionsApplicationInsights();
-
-        // Configuration Options
-        services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
-        services.Configure<TestRunnerOptions>(configuration.GetSection(TestRunnerOptions.SectionName));
-
-        // Register StorageService with connection string
-        services.AddSingleton<IStorageService>(provider =>
-        {
-            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-            var logger = loggerFactory.CreateLogger<StorageService>();
-            var connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage")
-                ?? throw new InvalidOperationException("AzureWebJobsStorage connection string not found");
-            var storageOptions = Microsoft.Extensions.Options.Options.Create(new StorageOptions());
-            return new StorageService(connectionString, logger, storageOptions);
-        });
-
-        // Register GameStateService with TableServiceClient
-        services.AddSingleton<IGameStateService>(provider =>
-        {
-            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-            var logger = loggerFactory.CreateLogger<GameStateService>();
-            var connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage")
-                ?? throw new InvalidOperationException("AzureWebJobsStorage connection string not found");
-            var tableServiceClient = new Azure.Data.Tables.TableServiceClient(connectionString);
-            return new GameStateService(tableServiceClient, logger);
-        });
-
-        // Register TableServiceClient for shared use
-        services.AddSingleton<Azure.Data.Tables.TableServiceClient>(provider =>
-        {
-            var connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage")
-                ?? throw new InvalidOperationException("AzureWebJobsStorage connection string not found");
-            return new Azure.Data.Tables.TableServiceClient(connectionString);
-        });
-
-        // Register core services without circular dependencies
-        services.AddSingleton<IGameTaskService, GameTaskService>();
-        
-        // Register AIService without PreGeneratedMessageService to break circular dependency
-        services.AddSingleton<IAIService>(provider =>
-        {
-            var logger = provider.GetRequiredService<ILogger<AIService>>();
-            var storageService = provider.GetRequiredService<IStorageService>();
-            return new AIService(logger, provider, storageService);
-        });
-        
-        // Register PreGeneratedMessageService with dependencies
-        services.AddSingleton<IPreGeneratedMessageService>(provider =>
-        {
-            var logger = provider.GetRequiredService<ILogger<PreGeneratedMessageService>>();
-            var tableServiceClient = provider.GetRequiredService<Azure.Data.Tables.TableServiceClient>();
-            var storageOptions = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<StorageOptions>>();
-            var aiService = provider.GetRequiredService<IAIService>();
-            var gameTaskService = provider.GetRequiredService<IGameTaskService>();
-            return new PreGeneratedMessageService(logger, tableServiceClient, storageOptions, aiService, gameTaskService);
-        });
-        
-        services.AddSingleton<IUnifiedMessageService, UnifiedMessageService>();
-        services.AddSingleton<ITestResultParser, TestResultParser>();
-        services.AddSingleton<ITestRunner, TestRunner>();
-
-        // Register Functions (for backward compatibility)
-        services.AddSingleton<GameTaskFunction>();
+        services.AddGraderServices(hostContext.Configuration);
     })
     .ConfigureLogging((hostingContext, logging) =>
     {
-        logging.AddApplicationInsights(console =>
-        {
-            console.IncludeScopes = true;
-        });
         logging.AddConfiguration(hostingContext.Configuration.GetSection("Logging"));
 
         // Remove default Application Insights filter

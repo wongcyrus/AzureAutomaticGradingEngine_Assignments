@@ -16,32 +16,36 @@ namespace GraderFunctionApp.Functions
         private readonly IGameTaskService _gameTaskService;
         private readonly IGameStateService _gameStateService;
         private readonly IStorageService _storageService;
-        private readonly IAIService _aiService;
         private readonly IUnifiedMessageService _unifiedMessageService;
+        private readonly IRequestAuthenticator _requestAuthenticator;
 
         public GameTaskFunction(
             ILogger<GameTaskFunction> logger, 
             IGameTaskService gameTaskService,
             IGameStateService gameStateService,
             IStorageService storageService,
-            IAIService aiService,
-            IUnifiedMessageService unifiedMessageService)
+            IUnifiedMessageService unifiedMessageService,
+            IRequestAuthenticator requestAuthenticator)
         {
             _logger = logger;
             _gameTaskService = gameTaskService;
             _gameStateService = gameStateService;
             _storageService = storageService;
-            _aiService = aiService;
             _unifiedMessageService = unifiedMessageService;
+            _requestAuthenticator = requestAuthenticator;
         }
 
         [Function(nameof(GameTaskFunction))]
         public async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", "post")] HttpRequest req)
         {
-            var email = (req.Query["email"].FirstOrDefault() ?? "unknown")
-                .Trim()
-                .ToLowerInvariant();
+            var email = _requestAuthenticator.GetAuthenticatedEmail(req);
+            if (email == null)
+            {
+                return new UnauthorizedObjectResult(
+                    GameResponse.Error("Authentication required."));
+            }
+
             var npc = req.Query["npc"].FirstOrDefault() ?? "unknown";
             var game = req.Query["game"].FirstOrDefault() ?? "unknown";
 
@@ -251,20 +255,6 @@ namespace GraderFunctionApp.Functions
             response.AdditionalData["activeTaskNPC"] = activeNpc;
             response.AdditionalData["activeTaskName"] = activeTaskName;
             return new JsonResult(response);
-        }
-
-        private async Task<string> PersonalizeMessageAsync(string originalMessage, NPCCharacter npcCharacter)
-        {
-            try
-            {
-                var result = await _aiService.PersonalizeNPCMessageAsync(originalMessage, npcCharacter.Age, npcCharacter.Gender, npcCharacter.Background);
-                return !string.IsNullOrEmpty(result) ? result : $"Tek, {originalMessage}";
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error personalizing message with AI, using fallback");
-                return $"Tek, {originalMessage}";
-            }
         }
 
         // Keep these methods for backward compatibility with existing code

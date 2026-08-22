@@ -3,9 +3,9 @@
 ## Prerequisites
 
 - Azure subscription with Owner or Contributor permissions
-- Node.js 22.19+ and npm
+- Node.js 24.19+ and npm
 - .NET SDK versions selected by `global.json` (the dev container installs both
-  the pinned .NET 9 SDK and the .NET 8 target runtime/SDK)
+  the pinned .NET 10 SDK and the .NET 8 target runtime/SDK)
 - Azure CLI
 - CDK Terrain (cdktn)
 
@@ -75,6 +75,7 @@ creation, including:
 - `GraderFunctionUrl`
 - `PassTaskFunctionUrl`
 - `StudentRegistrationFunctionUrl`
+- `GRADER_PROXY_SIGNING_KEY`
 
 Terraform intentionally ignores subsequent drift in the complete Static Web
 Apps settings map so a later infrastructure deployment does not erase these
@@ -96,6 +97,22 @@ is on `PATH`; in environments using the local installer:
 ```bash
 PATH="$HOME/.dotnet:$PATH" npx cdktn deploy
 ```
+
+Before deployment, validate every deployment surface:
+
+```bash
+dotnet test AzureProjectGrader.sln --configuration Release
+npm run build
+npm test
+npm run synth
+terraform -chdir=Infrastructure/cdktf.out/stacks/AzureAutomaticGradingEngineGrader validate
+```
+
+The Function uses `Microsoft.ApplicationInsights.WorkerService` 3.x.
+`Microsoft.Azure.Functions.Worker.ApplicationInsights` currently targets the
+older Application Insights API and is binary-incompatible with 3.x; do not add
+`ConfigureFunctionsApplicationInsights()` unless the package versions become
+compatible.
 
 ### 5. Update Student Access
 
@@ -123,6 +140,32 @@ Then sign in through a browser and verify
 `/api/game-task?npc=Stella&game=azure-learning`. A plain anonymous `curl` cannot
 exercise the student API because it has no Static Web Apps authentication
 cookie.
+
+Run the external Function integration suite after every deployment. Include
+the grading subscription so the check executes all 35 Azure resource tests
+inside the deployed Function:
+
+```bash
+cd ..
+scripts/test-deployed-function.sh \
+  GradingEngineAssignmentResourceGroup \
+  azureisekai2026 \
+  <subscription-id>
+```
+
+The runner retrieves a host key with the current Azure CLI identity and passes
+it through the `x-functions-key` header. It also retrieves the proxy-signing
+key and creates the same short-lived identity signatures as Static Web Apps.
+Keys are never written to source, command output, or test-result files. The
+subscription argument adds one full grading test to the seven non-destructive
+HTTP checks and writes its NUnit result through the normal grading storage
+path. Omit that argument when only endpoint and authentication checks are
+required.
+
+Function URL outputs and the proxy-signing-key output are marked sensitive in
+Terraform. The frontend deployment script is the only supported consumer of
+those outputs; proxy code removes URL query keys before forwarding and does
+not log backend URLs.
 
 ## Post-Deployment Configuration
 
@@ -206,6 +249,11 @@ Populate message cache:
 ```bash
 curl -X GET "https://<function-app>.azurewebsites.net/api/RefreshPreGeneratedMessages"
 ```
+
+NPC message rows use deterministic SHA-256 key components. Cached messages
+therefore remain readable after Function restarts and across scaled-out
+instances. Existing rows created with process-randomized `GetHashCode()` keys
+cannot be migrated reliably and may be removed before refreshing the cache.
 
 ## Troubleshooting
 

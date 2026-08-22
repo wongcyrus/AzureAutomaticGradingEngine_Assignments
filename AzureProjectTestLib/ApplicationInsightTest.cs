@@ -1,41 +1,43 @@
-﻿using Azure.Core;
+﻿#pragma warning disable CS0618
+using Azure.Core;
+using Azure.ResourceManager.ApplicationInsights;
 using AzureProjectTestLib.Helper;
-using Microsoft.Azure.Management.ApplicationInsights.Management;
-using Microsoft.Azure.Management.ApplicationInsights.Management.Models;
 using NUnit.Framework;
+using Assert = NUnit.Framework.Legacy.ClassicAssert;
 
 namespace AzureProjectTestLib;
 
 [GameClass(4)]
-[Parallelizable(ParallelScope.Children), Timeout(Constants.Timeout)]
+[Parallelizable(ParallelScope.Children)]
 internal class ApplicationInsightTest
 {
-    private ApplicationInsightsComponent? applicationInsight;
-    private ApplicationInsightsManagementClient? client;
-
+    private ApplicationInsightsComponentResource? applicationInsight;
 
     public ApplicationInsightTest()
     {
         Setup();
     }
 
-    public ApplicationInsightsComponent? GetApplicationInsights()
+    public ApplicationInsightsComponentResource? GetApplicationInsights()
     {
-        return client!.Components.List()
-            .FirstOrDefault(c => c.Tags.ContainsKey("key") && c.Tags["key"] == "ApplicationInsights");
+        return applicationInsight;
     }
 
     [SetUp]
     public void Setup()
     {
         var config = new Config();
-        client = new ApplicationInsightsManagementClient(config.Credentials, new HttpClient(), true);
-        client.SubscriptionId = config.SubscriptionId;
-        applicationInsight = GetApplicationInsights();
+        var resourceGroup = config.GetResourceGroupResource(Constants.ResourceGroupName);
+        applicationInsight = resourceGroup
+            .GetApplicationInsightsComponents()
+            .GetAll()
+            .FirstOrDefault(c =>
+                c.Data.Tags.TryGetValue("key", out var tagValue) &&
+                tagValue == "ApplicationInsights");
     }
 
     [GameTask(
-    "Can you create an Application Insights in Hong Kong? Type is 'other', keep logs for 30 days, and add tag 'key'='ApplicationInsights'.",    
+    "Create an Application Insights component in the Azure East Asia region with application type 'other', 30-day data retention, and tag 'key'='ApplicationInsights'.",
     3, 10, 1)]
     [Test]
     public void Test01_AppServicePlanWithTag()
@@ -47,8 +49,9 @@ internal class ApplicationInsightTest
     [Test]
     public void Test02_AppServicePlanSettings()
     {
-        Assert.AreEqual(AzureLocation.EastAsia.ToString(), applicationInsight!.Location);
-        Assert.AreEqual("other", applicationInsight.ApplicationType);
-        Assert.AreEqual(30, applicationInsight.RetentionInDays);
+        Assert.AreEqual(AzureLocation.EastAsia.ToString(), applicationInsight!.Data.Location.ToString());
+        Assert.AreEqual("other", applicationInsight.Data.ApplicationType?.ToString().ToLowerInvariant());
+        Assert.AreEqual(30, applicationInsight.Data.RetentionInDays);
     }
 }
+#pragma warning restore CS0618

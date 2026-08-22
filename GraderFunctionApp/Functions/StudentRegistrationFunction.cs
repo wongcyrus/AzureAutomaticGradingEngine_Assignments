@@ -1,6 +1,7 @@
 using System.Net;
 using Azure;
 using Azure.Data.Tables;
+using GraderFunctionApp.Interfaces;
 using GraderFunctionApp.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -13,30 +14,54 @@ public class StudentRegistrationFunction
 {
     private readonly ILogger<StudentRegistrationFunction> _logger;
     private readonly TableServiceClient _tableServiceClient;
+    private readonly Func<string, string, Task<bool>> _hasStudentSubscriptionAccessAsync;
+    private readonly IRequestAuthenticator _requestAuthenticator;
 
     public StudentRegistrationFunction(
         ILogger<StudentRegistrationFunction> logger,
-        TableServiceClient tableServiceClient)
+        TableServiceClient tableServiceClient,
+        IRequestAuthenticator requestAuthenticator)
+        : this(
+            logger,
+            tableServiceClient,
+            Services.Azure.HasStudentSubscriptionAccessAsync,
+            requestAuthenticator)
+    {
+    }
+
+    internal StudentRegistrationFunction(
+        ILogger<StudentRegistrationFunction> logger,
+        TableServiceClient tableServiceClient,
+        Func<string, string, Task<bool>> hasStudentSubscriptionAccessAsync,
+        IRequestAuthenticator requestAuthenticator)
     {
         _logger = logger;
         _tableServiceClient = tableServiceClient;
+        _hasStudentSubscriptionAccessAsync = hasStudentSubscriptionAccessAsync;
+        _requestAuthenticator = requestAuthenticator;
     }
 
     [Function(nameof(StudentRegistrationFunction))]
     public async Task<IActionResult> RunAsync(
         [HttpTrigger(AuthorizationLevel.Function, "get", "post")] HttpRequest req)
     {
+        var email = _requestAuthenticator.GetAuthenticatedEmail(req);
+        if (email == null)
+        {
+            return new UnauthorizedObjectResult("Authentication required.");
+        }
+
         return req.Method switch
         {
-            var method when method == HttpMethods.Get => HandleGet(req),
-            var method when method == HttpMethods.Post => await HandlePostAsync(req),
+            var method when method == HttpMethods.Get => HandleGet(email),
+            var method when method == HttpMethods.Post => await HandlePostAsync(req, email),
             _ => new BadRequestObjectResult("Unsupported HTTP method.")
         };
     }
 
-    private static IActionResult HandleGet(HttpRequest req)
+    private static IActionResult HandleGet(string email)
     {
-        var email = WebUtility.HtmlEncode(req.Query["email"].ToString());
+        email = WebUtility.HtmlEncode(email);
         var form = $"""
                     <!DOCTYPE html>
                     <html>
@@ -60,9 +85,10 @@ public class StudentRegistrationFunction
         };
     }
 
-    private async Task<IActionResult> HandlePostAsync(HttpRequest req)
+    private async Task<IActionResult> HandlePostAsync(
+        HttpRequest req,
+        string email)
     {
-        var email = req.Form["email"].ToString().Trim().ToLowerInvariant();
         var subscriptionId = req.Form["subscriptionId"].ToString().Trim();
 
         if (string.IsNullOrWhiteSpace(email) || !Guid.TryParse(subscriptionId, out var parsedSubscriptionId))
@@ -78,7 +104,7 @@ public class StudentRegistrationFunction
 
         try
         {
-            if (!await Services.Azure.HasStudentSubscriptionAccessAsync(subscriptionId, email))
+            if (!await _hasStudentSubscriptionAccessAsync(subscriptionId, email))
             {
                 _logger.LogWarning(
                     "Subscription {subscriptionId} is not bound to {email}",

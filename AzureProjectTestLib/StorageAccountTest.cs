@@ -1,18 +1,18 @@
-﻿using AzureProjectTestLib.Helper;
-using Microsoft.Azure.Management.Storage;
-using Microsoft.Azure.Management.Storage.Models;
-using Microsoft.Rest.Azure;
+﻿#pragma warning disable CS0618
+using Azure.ResourceManager.Storage;
+using Azure.ResourceManager.Storage.Models;
+using AzureProjectTestLib.Helper;
 using NUnit.Framework;
+using Assert = NUnit.Framework.Legacy.ClassicAssert;
 
 namespace AzureProjectTestLib;
 
-[GameClass(2), Timeout(Constants.Timeout)]
+[GameClass(2)]
 internal class StorageAccountTest
 {
     private static readonly HttpClient HttpClient = new();
-    private StorageManagementClient? client;
-    private StorageAccount? storageAccount;
-    private StorageAccount? webStorageAccount;
+    private StorageAccountResource? storageAccount;
+    private StorageAccountResource? webStorageAccount;
 
     public StorageAccountTest()
     {
@@ -22,45 +22,67 @@ internal class StorageAccountTest
     [SetUp]
     public void Setup()
     {
-        var config = new Config();
-        client = new StorageManagementClient(config.Credentials);
-        client.SubscriptionId = config.SubscriptionId;
-
-
         var storageAccounts = GetStorageAccounts();
         storageAccount = GetLogicStorageAccount(storageAccounts);
-        webStorageAccount =
-            storageAccounts!.FirstOrDefault(c => c.Tags.ContainsKey("usage") && c.Tags["usage"] == "StaticWeb");
+        webStorageAccount = storageAccounts.FirstOrDefault(c =>
+            c.Data.Tags.TryGetValue("usage", out var tagValue) &&
+            tagValue == "StaticWeb");
     }
 
-    public StorageAccount? GetLogicStorageAccount(IPage<StorageAccount>? storageAccounts)
+    public StorageAccountResource? GetLogicStorageAccount(IEnumerable<StorageAccountResource>? storageAccounts)
     {
-        return storageAccounts!.FirstOrDefault(c => c.Tags.ContainsKey("usage") && c.Tags["usage"] == "logic");
+        return storageAccounts?.FirstOrDefault(c =>
+            c.Data.Tags.TryGetValue("usage", out var tagValue) &&
+            tagValue == "logic");
     }
 
-    public IPage<StorageAccount>? GetStorageAccounts()
+    public IReadOnlyList<StorageAccountResource> GetStorageAccounts()
     {
-        return client?.StorageAccounts.ListByResourceGroup(Constants.ResourceGroupName);
+        var config = new Config();
+        return config
+            .GetResourceGroupResource(Constants.ResourceGroupName)
+            .GetStorageAccounts()
+            .GetAll()
+            .ToList();
     }
 
-    public Table? GetMessageTable()
+    public TableResource? GetMessageTable()
     {
-        return client?.Table.Get(Constants.ResourceGroupName, storageAccount!.Name, "message");
+        if (storageAccount is null)
+        {
+            return null;
+        }
+
+        var tableResponse = storageAccount
+            .GetTableService()
+            .GetTables()
+            .GetIfExists("message");
+
+        return tableResponse.HasValue ? tableResponse.Value : null;
     }
 
-    public StorageQueue? GetJobQueue()
+    public StorageQueueResource? GetJobQueue()
     {
-        return client?.Queue.Get(Constants.ResourceGroupName, storageAccount!.Name, "job");
+        if (storageAccount is null)
+        {
+            return null;
+        }
+
+        var queueResponse = storageAccount
+            .GetQueueService()
+            .GetStorageQueues()
+            .GetIfExists("job");
+
+        return queueResponse.HasValue ? queueResponse.Value : null;
     }
 
     [TearDown]
     public void TearDown()
     {
-        client?.Dispose();
     }
 
     [GameTask(
-        "Can you create a Storage account in resource group 'projProd' and add tag name 'usage' and value 'logic'?",
+        "Create a Storage account in resource group 'projProd' with tag 'usage'='logic'.",
         2, 10)]
     [Test]
     public void Test01_StorageAccountsWithTag()
@@ -69,7 +91,7 @@ internal class StorageAccountTest
     }
 
     [GameTask(
-        "Can you create a Storage account in resource group 'projProd' and add tag name 'usage' and value 'StaticWeb'?",
+        "Create a Storage account in resource group 'projProd' with tag 'usage'='StaticWeb'.",
         2, 10)]
     [Test]
     public void Test02_StorageAccountsWithTag()
@@ -78,63 +100,76 @@ internal class StorageAccountTest
     }
 
     [GameTask(
-        "Can you change your Storage account tagged 'usage' with 'logic' to southeastasia, AccessTier to Hot, StorageV2, Standard_LRS and allow public access?",
+        "Configure the Storage account tagged 'usage'='logic' in the Azure Southeast Asia region with Hot access tier, StorageV2 kind, Standard_LRS SKU, and public blob access enabled.",
         2, 20)]
     [Test]
     public void Test03_StorageAccountSettings()
     {
         Assert.IsNotNull(storageAccount, "StorageAccount Plans with tag {usage:logic}.");
-        Assert.AreEqual("southeastasia", storageAccount?.Location);
-        Assert.AreEqual("Hot", storageAccount?.AccessTier!.ToString());
-        Assert.AreEqual("StorageV2", storageAccount?.Kind);
-        Assert.AreEqual("Standard_LRS", storageAccount?.Sku.Name);
-        Assert.IsTrue(storageAccount?.AllowBlobPublicAccess);
+        Assert.AreEqual("southeastasia", storageAccount?.Data.Location.ToString());
+        Assert.AreEqual("Hot", storageAccount?.Data.AccessTier?.ToString());
+        Assert.AreEqual("StorageV2", storageAccount?.Data.Kind.ToString());
+        Assert.AreEqual("Standard_LRS", storageAccount?.Data.Sku.Name.ToString());
+        Assert.IsTrue(storageAccount?.Data.AllowBlobPublicAccess ?? false);
     }
 
     [GameTask(
-        "Can you change your Storage account tagged 'usage' with 'StaticWeb' to eastasia, AccessTier to Hot, StorageV2, Standard_LRS and allow public access?" +
-        "I need the index page of text 'This is index page.' and the error page of text 'This is error page.'.", 2, 30)]
+        "Configure the Storage account tagged 'usage'='StaticWeb' in the Azure East Asia region with Hot access tier, StorageV2 kind, Standard_LRS SKU, and public blob access enabled. " +
+        "Enable static website hosting so its root returns exactly 'This is index page.' and a missing page returns HTTP 404 with the body exactly 'This is error page.'.", 2, 30)]
     [Test]
     public async Task Test04_WebStorageAccountSettings()
     {
         Assert.IsNotNull(webStorageAccount, "Static Web StorageAccount Plans with tag {usage:StaticWeb}.");
-        Assert.AreEqual("eastasia", webStorageAccount!.Location);
-        Assert.AreEqual("Hot", webStorageAccount!.AccessTier?.ToString());
-        Assert.AreEqual("StorageV2", webStorageAccount.Kind);
-        Assert.AreEqual("Standard_LRS", webStorageAccount.Sku.Name);
-        Assert.IsTrue(webStorageAccount.AllowBlobPublicAccess);
+        Assert.AreEqual("eastasia", webStorageAccount!.Data.Location.ToString());
+        Assert.AreEqual("Hot", webStorageAccount.Data.AccessTier?.ToString());
+        Assert.AreEqual("StorageV2", webStorageAccount.Data.Kind.ToString());
+        Assert.AreEqual("Standard_LRS", webStorageAccount.Data.Sku.Name.ToString());
+        Assert.IsTrue(webStorageAccount.Data.AllowBlobPublicAccess ?? false);
 
-        var webContainer = await client!.BlobContainers.GetAsync(Constants.ResourceGroupName, webStorageAccount.Name, "$web");
-        Assert.IsNotNull(webContainer);
+        var webContainerResponse = webStorageAccount
+            .GetBlobService()
+            .GetBlobContainers()
+            .GetIfExists("$web");
+        Assert.IsTrue(webContainerResponse.HasValue);
 
-        var webUrl = webStorageAccount.PrimaryEndpoints.Web;
-        var index = await HttpClient.GetStringAsync(webUrl);
+        var webUrl = webStorageAccount.Data.PrimaryEndpoints?.WebUri?.ToString().TrimEnd('/');
+        Assert.IsNotNull(webUrl);
+        var resolvedWebUrl = webUrl!;
+
+        var index = await HttpClient.GetStringAsync(resolvedWebUrl);
         Assert.AreEqual("This is index page.", index);
 
-        var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        AsyncTestDelegate requestMissingPage = async () =>
         {
-            var error = await HttpClient.GetStringAsync(webUrl + "/PageIsNotExist" + DateTime.Now.Ticks);
-        });
+            _ = await HttpClient.GetStringAsync(resolvedWebUrl + "/PageIsNotExist" + DateTime.Now.Ticks);
+        };
+        var ex = Assert.ThrowsAsync<HttpRequestException>(requestMissingPage);
 
         Assert.AreEqual("Response status code does not indicate success: 404 (The requested content does not exist.).",
             ex!.Message);
 
-        var response = await HttpClient.GetAsync(webUrl + "/PageIsNotExist" + DateTime.Now.Ticks);
+        var response = await HttpClient.GetAsync(resolvedWebUrl + "/PageIsNotExist" + DateTime.Now.Ticks);
         var error = await response.Content.ReadAsStringAsync();
         Assert.AreEqual("This is error page.", error);
     }
 
-    [GameTask("I need a Blob container named 'code' in Storage account tagged 'usage' with 'logic'. Can you help?", 2,
+    [GameTask("Create a Blob container named 'code' with anonymous Blob-level public access in the Storage account tagged 'usage'='logic'.", 2,
         10)]
     [Test]
     public void Test05_StorageAccountCodeContainer()
     {
-        var codeContainer = client!.BlobContainers.Get(Constants.ResourceGroupName, storageAccount!.Name, "code");
+        var codeContainerResponse = storageAccount!
+            .GetBlobService()
+            .GetBlobContainers()
+            .GetIfExists("code");
+        Assert.IsTrue(codeContainerResponse.HasValue);
+        var codeContainer = codeContainerResponse.HasValue ? codeContainerResponse.Value : null;
         Assert.IsNotNull(codeContainer);
-        Assert.AreEqual("Blob", codeContainer!.PublicAccess!.Value.ToString());
+        Assert.AreEqual("Blob", codeContainer!.Data.PublicAccess?.ToString());
     }
+    #pragma warning restore CS0618
 
-    [GameTask("I need a Azure table named 'message' in Storage account tagged 'usage' with 'logic'. Can you help?", 2,
+    [GameTask("Create an Azure Table named 'message' in the Storage account tagged 'usage'='logic'.", 2,
         10)]
     [Test]
     public void Test06_StorageAccountMessageTable()
@@ -143,7 +178,7 @@ internal class StorageAccountTest
         Assert.IsNotNull(messageTable);
     }
 
-    [GameTask("I need a Azure Storage Queue named 'job' in Storage account tagged 'usage' with 'logic'. Can you help?",
+    [GameTask("Create an Azure Storage queue named 'job' in the Storage account tagged 'usage'='logic'.",
         2, 10)]
     [Test]
     public void Test07_StorageAccountJobQueue()

@@ -1,9 +1,5 @@
 using Azure.Core;
 using Azure.Identity;
-using Microsoft.Azure.Management.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Rest;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Resources;
 
@@ -20,21 +16,6 @@ internal static class Azure
         });
     }
 
-    public static async Task<IAzure> Get()
-    {
-        var defaultCredential = GetTokenCredential();
-        var defaultToken = (await defaultCredential
-            .GetTokenAsync(
-                new TokenRequestContext(["https://management.azure.com/.default"]),
-                CancellationToken.None)).Token;
-        var defaultTokenCredentials = new TokenCredentials(defaultToken);
-        var azureCredentials = new AzureCredentials(defaultTokenCredentials, defaultTokenCredentials, null,
-            AzureEnvironment.AzureGlobalCloud);
-
-        var azure = await Microsoft.Azure.Management.Fluent.Azure.Authenticate(azureCredentials)
-            .WithDefaultSubscriptionAsync();
-        return azure;
-    }
     public static async Task<bool> HasStudentSubscriptionAccessAsync(
         string subscriptionId,
         string studentEmail)
@@ -43,8 +24,9 @@ internal static class Azure
         var resourceGroupName =
             Environment.GetEnvironmentVariable("ASSIGNMENT_RESOURCE_GROUP") ?? "projProd";
         var resourceGroup = armClient.GetResourceGroupResource(
-            new ResourceIdentifier(
-                $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}"));
+            ResourceGroupResource.CreateResourceIdentifier(
+                subscriptionId,
+                resourceGroupName));
         var response = await resourceGroup.GetAsync();
         var registeredEmail = response.Value.Data.Tags
             .FirstOrDefault(tag => string.Equals(

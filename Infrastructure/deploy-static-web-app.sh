@@ -36,12 +36,14 @@ game_task_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignme
 grader_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentGraderFunctionUrl // empty' "$outputs_file")"
 pass_task_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentPassTaskFunctionUrl // empty' "$outputs_file")"
 registration_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentStudentRegistrationFunctionUrl // empty' "$outputs_file")"
+proxy_signing_key="$(jq -r '.AzureAutomaticGradingEngineGrader.grader_proxy_signing_key // empty' "$outputs_file")"
 tenant_id="$(az account show --query tenantId --output tsv)"
 
 if [[ -z "$static_web_apps_token" || -z "$client_id" || -z "$client_secret" ||
       -z "$static_web_app_name" || -z "$resource_group_name" ||
       -z "$game_task_url" || -z "$grader_url" || -z "$pass_task_url" ||
-      -z "$registration_url" || -z "$tenant_id" ]]; then
+      -z "$registration_url" || -z "$proxy_signing_key" ||
+      -z "$tenant_id" ]]; then
   echo "Error: missing required CDKTN output or Azure tenant ID." >&2
   exit 1
 fi
@@ -56,6 +58,7 @@ az staticwebapp appsettings set \
     "GraderFunctionUrl=$grader_url" \
     "PassTaskFunctionUrl=$pass_task_url" \
     "StudentRegistrationFunctionUrl=$registration_url" \
+    "GRADER_PROXY_SIGNING_KEY=$proxy_signing_key" \
   --output none
 
 jq --arg issuer "https://login.microsoftonline.com/$tenant_id/v2.0" \

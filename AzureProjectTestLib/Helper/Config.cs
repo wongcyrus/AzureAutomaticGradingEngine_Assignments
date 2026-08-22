@@ -1,8 +1,7 @@
 ﻿using Azure.Core;
 using Azure.Identity;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Rest;
+using Azure.ResourceManager;
+using Azure.ResourceManager.Resources;
 using NUnit.Framework;
 
 namespace AzureProjectTestLib.Helper;
@@ -22,16 +21,7 @@ public class Config
 
         SubscriptionId = subscriptionId;
         TokenCredential = CreateTokenCredential();
-
-        var token = TokenCredential.GetToken(
-            new TokenRequestContext(["https://management.azure.com/.default"]),
-            CancellationToken.None);
-        var tokenCredentials = new TokenCredentials(token.Token);
-        Credentials = new AzureCredentials(
-            tokenCredentials,
-            tokenCredentials,
-            tenantId: null,
-            AzureEnvironment.AzureGlobalCloud);
+        ArmClient = new ArmClient(TokenCredential, SubscriptionId);
     }
 
     private static TokenCredential CreateTokenCredential()
@@ -44,6 +34,18 @@ public class Config
     }
 
     public TokenCredential TokenCredential { get; }
-    public AzureCredentials Credentials { get; }
+    public ArmClient ArmClient { get; }
     public string SubscriptionId { get; }
+
+    public SubscriptionResource GetSubscriptionResource()
+    {
+        return ArmClient.GetSubscriptionResource(
+            SubscriptionResource.CreateResourceIdentifier(SubscriptionId));
+    }
+
+    public ResourceGroupResource GetResourceGroupResource(string resourceGroupName)
+    {
+        return ArmClient.GetResourceGroupResource(
+            ResourceGroupResource.CreateResourceIdentifier(SubscriptionId, resourceGroupName));
+    }
 }

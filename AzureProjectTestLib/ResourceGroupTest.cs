@@ -3,10 +3,11 @@ using Azure.ResourceManager;
 using Azure.ResourceManager.Resources;
 using AzureProjectTestLib.Helper;
 using NUnit.Framework;
+using Assert = NUnit.Framework.Legacy.ClassicAssert;
 
 namespace AzureProjectTestLib;
 
-[GameClass(1), Timeout(Constants.Timeout)]
+[GameClass(1)]
 internal class ResourceGroupTest
 {
     private ArmClient? armClient;
@@ -26,7 +27,7 @@ internal class ResourceGroupTest
         rg = (await subscription.GetResourceGroups()!.GetAsync(Constants.ResourceGroupName)).Value.Data;
     }
 
-    [GameTask("Can you create a resource group named 'projProd' in Hong Kong?", 2, 10, 1)]
+    [GameTask("Create a resource group named 'projProd' in the Azure East Asia region.", 2, 10, 1)]
     [Test]
     public void Test01_ResourceGroupExist()
     {

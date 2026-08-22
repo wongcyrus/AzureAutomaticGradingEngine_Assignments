@@ -26,8 +26,6 @@ namespace GraderFunctionApp.Services
 
         public async Task<string?> RunUnitTestProcessAsync(ILogger log, string subscriptionId, string trace, string filter)
         {
-            var tempDir = UtilityHelpers.GetTemporaryDirectory(trace);
-
             var workingDirectoryInfo = GetTestsWorkingDirectory();
             var exeLocation = Path.Combine(workingDirectoryInfo, "AzureProjectTest.exe");
             var dllLocation = Path.Combine(workingDirectoryInfo, "AzureProjectTest.dll");
@@ -39,6 +37,8 @@ namespace GraderFunctionApp.Services
             {
                 return null;
             }
+
+            var tempDir = UtilityHelpers.GetTemporaryDirectory(trace);
 
             log.LogInformation(
                 "Running tests for subscription {subscriptionId}, trace {trace}, filter {filter}",
