@@ -21,7 +21,7 @@ internal class ResourceGroupTest
     public async Task Setup()
     {
         var config = new Config();
-        armClient = new ArmClient(config.ClientSecretCredential, config.SubscriptionId);
+        armClient = new ArmClient(config.TokenCredential, config.SubscriptionId);
         var subscription = await armClient.GetDefaultSubscriptionAsync();
         rg = (await subscription.GetResourceGroups()!.GetAsync(Constants.ResourceGroupName)).Value.Data;
     }

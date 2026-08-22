@@ -70,7 +70,7 @@ namespace GraderFunctionApp.Functions
                 return await HandleGameModeRequestAsync(req);
             }
 
-            if (!req.Query.ContainsKey("credentials"))
+            if (!req.Query.ContainsKey("subscriptionId"))
             {
                 return new ContentResult
                 {
@@ -80,10 +80,15 @@ namespace GraderFunctionApp.Functions
                 };
             }
 
-            string credentials = req.Query["credentials"]!;
+            string subscriptionId = req.Query["subscriptionId"]!;
             string filter = req.Query["filter"]!;
             string taskName = filter;
             string email = "Anonymous";
+
+            if (!Guid.TryParse(subscriptionId, out _))
+            {
+                return new BadRequestObjectResult("A valid subscriptionId is required.");
+            }
 
             _logger.LogInformation("GET Request - filter: '{filter}', taskName: '{taskName}'", filter, taskName);
 
@@ -93,12 +98,12 @@ namespace GraderFunctionApp.Functions
                 string trace = req.Query["trace"]!;
                 email = UtilityHelpers.ExtractEmail(trace);
                 _logger.LogInformation("start:" + trace);
-                xml = await _testRunner.RunUnitTestProcessAsync(_logger, credentials, email, filter);
+                xml = await _testRunner.RunUnitTestProcessAsync(_logger, subscriptionId, email, filter);
                 _logger.LogInformation("end:" + trace);
             }
             else
             {
-                xml = await _testRunner.RunUnitTestProcessAsync(_logger, credentials, email, filter);
+                xml = await _testRunner.RunUnitTestProcessAsync(_logger, subscriptionId, email, filter);
             }
 
             if (string.IsNullOrEmpty(xml))
@@ -120,23 +125,23 @@ namespace GraderFunctionApp.Functions
             _logger.LogInformation("POST Request");
             
             string needXml = req.Query["xml"]!;
-            string credentials = req.Form["credentials"]!;
+            string subscriptionId = req.Form["subscriptionId"]!;
             string filter = req.Form["filter"]!;
             string taskName = filter;
 
             _logger.LogInformation("POST Request - filter: '{filter}', taskName: '{taskName}'", filter, taskName);
 
-            if (string.IsNullOrWhiteSpace(credentials))
+            if (!Guid.TryParse(subscriptionId, out _))
             {
                 return new ContentResult
                 {
-                    Content = "<result><value>No credentials</value></result>",
+                    Content = "<result><value>A valid subscriptionId is required</value></result>",
                     ContentType = "application/xml",
                     StatusCode = 422
                 };
             }
 
-            var xml = await _testRunner.RunUnitTestProcessAsync(_logger, credentials, "Anonymous", filter);
+            var xml = await _testRunner.RunUnitTestProcessAsync(_logger, subscriptionId, "Anonymous", filter);
             if (string.IsNullOrEmpty(xml))
             {
                 return new ContentResult 
@@ -168,8 +173,7 @@ namespace GraderFunctionApp.Functions
 
                 _logger.LogInformation("Game mode request: {email}, {game}, {npc}", email, game, npc);
 
-                // Credentials will be retrieved from storage in HandleGameGradingAsync
-                var gameResponse = await HandleGameGradingAsync(email, game, npc, "", "");
+                var gameResponse = await HandleGameGradingAsync(email, game, npc);
                 return new JsonResult(gameResponse);
             }
             catch (Exception ex)
@@ -264,7 +268,7 @@ namespace GraderFunctionApp.Functions
             }
         }
 
-        public async Task<GameResponse> HandleGameGradingAsync(string email, string game, string npc, string phrase, string credentials)
+        public async Task<GameResponse> HandleGameGradingAsync(string email, string game, string npc)
         {
             try
             {
@@ -313,7 +317,7 @@ namespace GraderFunctionApp.Functions
                 }
 
                 // Run the grading for the current task
-                return await RunTaskGradingAsync(email, game, npc, credentials, gameState);
+                return await RunTaskGradingAsync(email, game, npc, gameState);
             }
             catch (Exception ex)
             {
@@ -322,28 +326,29 @@ namespace GraderFunctionApp.Functions
             }
         }
 
-        private async Task<GameResponse> RunTaskGradingAsync(string email, string game, string npc, string credentials, GameState gameState)
+        private async Task<GameResponse> RunTaskGradingAsync(
+            string email,
+            string game,
+            string npc,
+            GameState gameState)
         {
             try
             {
                 _logger.LogInformation("Running grading for task: {taskName}", gameState.CurrentTaskName);
 
-                // Retrieve credentials from storage if not provided
-                string credentialsToUse = credentials;
-                if (string.IsNullOrEmpty(credentialsToUse))
+                var subscriptionId = await _storageService.GetSubscriptionIdAsync(email);
+                if (string.IsNullOrEmpty(subscriptionId))
                 {
-                    _logger.LogInformation("No credentials provided, retrieving from storage for email: {email}", email);
-                    credentialsToUse = await _storageService.GetCredentialJsonAsync(email) ?? "";
-                    
-                    if (string.IsNullOrEmpty(credentialsToUse))
-                    {
-                        var errorMessage = "No Azure credentials found. Please register your credentials first.";
-                        return GameResponse.Error(errorMessage);
-                    }
+                    return GameResponse.Error(
+                        "No Azure subscription is registered. Complete managed-identity onboarding first.");
                 }
 
                 // Run the unit tests
-                var xml = await _testRunner.RunUnitTestProcessAsync(_logger, credentialsToUse, email, gameState.CurrentTaskFilter);
+                var xml = await _testRunner.RunUnitTestProcessAsync(
+                    _logger,
+                    subscriptionId,
+                    email,
+                    gameState.CurrentTaskFilter);
                 
                 if (string.IsNullOrEmpty(xml))
                 {

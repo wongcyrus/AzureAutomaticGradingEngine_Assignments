@@ -15,15 +15,10 @@ class Program
         AzureFunctionUrl = Environment.GetEnvironmentVariable("AZURE_FUNCTION_URL")
         ?? throw new InvalidOperationException("AZURE_FUNCTION_URL environment variable not set");
 
-        // Load credentials from scripts/sp.json
-        string spPath = Environment.GetEnvironmentVariable("SP_PATH")
-        ?? throw new InvalidOperationException("SP_PATH environment variable not set");
-        if (!File.Exists(spPath))
-        {
-            Console.WriteLine("sp.json not found.");
-            return;
-        }
-        var spJson = await File.ReadAllTextAsync(spPath);
+        string subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID")
+            ?? throw new InvalidOperationException("AZURE_SUBSCRIPTION_ID environment variable not set");
+        if (!Guid.TryParse(subscriptionId, out _))
+            throw new InvalidOperationException("AZURE_SUBSCRIPTION_ID must be a valid GUID.");
 
         // Load tasks.json
         string tasksPath = Path.Combine(Directory.GetCurrentDirectory(), "tasks.json");
@@ -69,7 +64,7 @@ class Program
 
             var formData = new Dictionary<string, string>
             {
-                { "credentials", spJson },
+                { "subscriptionId", subscriptionId },
                 { "filter", filterValue }
             };
             var content = new FormUrlEncodedContent(formData);
@@ -113,14 +108,6 @@ class Program
     {
         public string? Name { get; set; }
         public string? Filter { get; set; } // Added Filter property
-    }
-
-    public class SpCredentials
-    {
-        public string? clientId { get; set; }
-        public string? clientSecret { get; set; }
-        public string? tenantId { get; set; }
-        public string? subscriptionId { get; set; }
     }
 
     public class ReportRow

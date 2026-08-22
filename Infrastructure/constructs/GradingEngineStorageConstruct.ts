@@ -5,7 +5,6 @@ import { StorageAccount } from "cdktf-azure-providers/.gen/providers/azurerm/sto
 
 const STORAGE_TABLES = [
   "Subscription",
-  "Credential", 
   "PassTests",
   "FailTests",
   "GameStates",

@@ -10,7 +10,6 @@ namespace GraderFunctionApp.Configuration
         public string PassTestTableName { get; set; } = "PassTests";
         public string FailTestTableName { get; set; } = "FailTests";
         public string SubscriptionTableName { get; set; } = "Subscription";
-        public string CredentialTableName { get; set; } = "Credential";
         public string NPCCharacterTableName { get; set; } = "NPCCharacter";
         public string PreGeneratedMessageTableName { get; set; } = "PreGeneratedMessages";
     }

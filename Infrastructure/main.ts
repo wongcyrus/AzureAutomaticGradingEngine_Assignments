@@ -6,6 +6,7 @@ import { AzureadProvider } from "./.gen/providers/azuread/provider";
 import { AzapiProvider } from "./.gen/providers/azapi/provider";
 import { ResourceGroup } from "cdktf-azure-providers/.gen/providers/azurerm/resource-group";
 import { StorageAccount } from "cdktf-azure-providers/.gen/providers/azurerm/storage-account";
+import { UserAssignedIdentity } from "cdktf-azure-providers/.gen/providers/azurerm/user-assigned-identity";
 import { Construct } from "constructs";
 import path = require("path");
 
@@ -37,7 +38,8 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     this.configureProviders();
 
     const resourceGroup = this.createResourceGroup();
-    const azureFunctionConstruct = this.createAzureFunction(resourceGroup);
+    const gradingIdentity = this.createGradingIdentity(resourceGroup);
+    const azureFunctionConstruct = this.createAzureFunction(resourceGroup, gradingIdentity);
     const storageConstruct = this.createStorageResources(azureFunctionConstruct.storageAccount);
     
     // Add storage dependencies to function
@@ -68,7 +70,8 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       azureADConstruct.application,
       azureADConstruct.applicationPassword,
       staticWebAppConstruct.staticWebApp,
-      azureADConstruct.studentGroup.objectId
+      azureADConstruct.studentGroup.objectId,
+      gradingIdentity
     );
   }
 
@@ -91,14 +94,27 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     });
   }
 
-  private createAzureFunction(resourceGroup: ResourceGroup) {
+  private createGradingIdentity(resourceGroup: ResourceGroup) {
+    return new UserAssignedIdentity(this, "GradingIdentity", {
+      name: `${PREFIX}Identity`,
+      location: resourceGroup.location,
+      resourceGroupName: resourceGroup.name,
+    });
+  }
+
+  private createAzureFunction(
+    resourceGroup: ResourceGroup,
+    gradingIdentity: UserAssignedIdentity
+  ) {
     const appSettings = {
       AZURE_OPENAI_ENDPOINT: process.env.AZURE_OPENAI_ENDPOINT!,
       AZURE_OPENAI_API_KEY: process.env.AZURE_OPENAI_API_KEY!,
       DEPLOYMENT_OR_MODEL_NAME: process.env.DEPLOYMENT_OR_MODEL_NAME!,
+      AZURE_CLIENT_ID: gradingIdentity.clientId,
+      ASSIGNMENT_RESOURCE_GROUP: "projProd",
     };
 
-    return new AzureFunctionWindowsConstruct(
+    const azureFunctionConstruct = new AzureFunctionWindowsConstruct(
       this,
       "AzureFunctionConstruct",
       {
@@ -112,6 +128,13 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
         functionNames: [...FUNCTION_NAMES],
       }
     );
+
+    azureFunctionConstruct.functionApp.putIdentity({
+      type: "UserAssigned",
+      identityIds: [gradingIdentity.id],
+    });
+
+    return azureFunctionConstruct;
   }
 
   private createStorageResources(storageAccount: StorageAccount) {
@@ -127,7 +150,8 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     application: any,
     applicationPassword: any,
     staticWebApp: any,
-    studentGroupObjectId: string
+    studentGroupObjectId: string,
+    gradingIdentity: UserAssignedIdentity
   ) {
     FUNCTION_NAMES.forEach((fn) => {
       new TerraformOutput(this, `${PREFIX}${fn}Url`, {
@@ -163,6 +187,18 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
 
     new TerraformOutput(this, "student_group_object_id", {
       value: studentGroupObjectId,
+    });
+
+    new TerraformOutput(this, "grading_identity_client_id", {
+      value: gradingIdentity.clientId,
+    });
+
+    new TerraformOutput(this, "grading_identity_principal_id", {
+      value: gradingIdentity.principalId,
+    });
+
+    new TerraformOutput(this, "grading_identity_tenant_id", {
+      value: gradingIdentity.tenantId,
     });
 
     new TerraformOutput(this, "static_web_app_api_key", {

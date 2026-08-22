@@ -14,6 +14,10 @@ This project provides automated assessment of student Azure infrastructure deplo
 - **packages/**: Git submodules containing shared provider bindings and Azure constructs
 - **AzureProjectTest**: Unit test library for Azure resource validation
 
+The grader uses one user-assigned managed identity to inspect explicitly
+registered student subscriptions. Student service principals and passwords are
+not created or stored.
+
 ## Quick Start
 
 ### Prerequisites
@@ -97,35 +101,41 @@ AZURE_OPENAI_API_KEY=your-api-key
 DEPLOYMENT_OR_MODEL_NAME=gpt-35-turbo
 ```
 
-### Service Principal Setup
+### Student Subscription Onboarding
 
-Create a service principal with required permissions:
-
-```bash
-chmod +x scripts/create-sp-cloudshell.sh
-scripts/create-sp-cloudshell.sh -s <subscriptionID>
-```
-
-#### In Azure Cloud Shell
-Get your subscription ID
-```bash
-az account list -o table
-```
+The instructor gets the identity values after deployment:
 
 ```bash
-wget -O create-sp-cloudshell.sh https://gist.githubusercontent.com/wongcyrus/3d83d5f26e39da685bb10b7187087ba6/raw/ea1c1e6a1ad195a2d82cf5dcfab64e01762c4aed/create-sp-cloudshell.sh
-chmod +x create-sp-cloudshell.sh
-create-sp-cloudshell.sh -s <subscriptionID>
+cd Infrastructure
+npx cdktn output AzureAutomaticGradingEngineGrader
 ```
 
+Each student must be an Owner or User Access Administrator on their assignment
+subscription and must use the same Entra tenant as the grader. After creating
+the assignment resource group, the student runs:
+
+```bash
+scripts/onboard-managed-identity.sh \
+  -s <student-subscription-id> \
+  -p <grading_identity_principal_id> \
+  -t <grading_identity_tenant_id> \
+  -e <azure-isekai-sign-in-email>
+```
+
+This grants `Reader` at subscription scope and `Website Contributor` only on
+the `projProd` resource group. It also tags that resource group with the
+student's sign-in email so another student cannot claim the subscription. The
+script is idempotent. After RBAC propagates, the student signs in to Azure
+Isekai with the same email and registers only the subscription ID.
 
 ## Testing Locally
 
-Run tests with generated service principal credentials:
+Sign in with Azure CLI and run tests against an explicit subscription:
 
 ```bash
+az login
 dotnet run --project AzureProjectTest/AzureProjectTest.csproj --configuration Debug -- \
-    $(pwd)/testing/sp.json $(pwd)/testing trace ""
+    --subscription=<subscription-id> --work=$(pwd)/testing --trace=local
 ```
 
 ## Performance Features
@@ -138,7 +148,8 @@ dotnet run --project AzureProjectTest/AzureProjectTest.csproj --configuration De
 ## Security
 
 - Function-level authorization for all endpoints
-- Service principal with minimal required permissions
+- User-assigned managed identity with student-delegated, least-privilege RBAC
+- No student application secrets are stored
 - SAS URLs for secure test result access
 - Input validation and sanitization
 

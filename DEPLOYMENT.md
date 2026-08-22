@@ -55,6 +55,7 @@ npm run students:invite -- students.txt
 
 This creates:
 - Azure Function App
+- User-assigned grading identity attached to the Function App
 - Storage Account
 - Application Insights
 - Log Analytics Workspace
@@ -65,7 +66,8 @@ This creates:
 The account running `students:invite` needs permission to invite external
 users and update group membership (for example, an appropriate Entra directory
 role). Group assignment to an Enterprise Application may require Microsoft
-Entra ID P1. Invited users receive no Azure subscription RBAC permissions.
+Entra ID P1. Invited users receive no Azure subscription RBAC permissions. Student
+subscription access is delegated separately to the grading identity.
 
 ### 4. Build and Deploy Function App
 
@@ -111,13 +113,43 @@ npx cdktn output AzureAutomaticGradingEngineGrader
 
 ## Post-Deployment Configuration
 
-### Service Principal Setup
+### Student Subscription Onboarding
 
-Create service principal for students:
+Read these deployment outputs and distribute the values to students:
+
 ```bash
-chmod +x scripts/create-sp-cloudshell.sh
-./scripts/create-sp-cloudshell.sh -s <subscription-id>
+cd Infrastructure
+npx cdktn output AzureAutomaticGradingEngineGrader
 ```
+
+- `grading_identity_principal_id`
+- `grading_identity_tenant_id`
+
+Each student runs the following while signed in as an Owner or User Access
+Administrator of the assignment subscription:
+
+```bash
+scripts/onboard-managed-identity.sh \
+  -s <student-subscription-id> \
+  -p <grading-identity-principal-id> \
+  -t <grading-identity-tenant-id> \
+  -e <azure-isekai-sign-in-email>
+```
+
+The subscription must belong to the grading identity's Entra tenant, and
+`projProd` must already exist. The script idempotently assigns:
+
+- `Reader` on the subscription.
+- `Website Contributor` on `projProd`.
+- A `GradingStudentEmail` tag on `projProd`, binding registration to the
+  student's authenticated Azure Isekai email.
+
+Students then register only the subscription ID in Azure Isekai. RBAC changes
+can take several minutes to propagate. No student service-principal password is
+created or stored.
+
+To revoke grading access, delete both role assignments for the grading identity
+from the student subscription.
 
 ### Pre-generate AI Messages
 
