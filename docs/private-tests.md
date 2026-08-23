@@ -75,6 +75,15 @@ restore configuration, including Function and hosted test-runner publication.
 
 ## Security Boundary
 
+`TestSuiteIdentity.Name` reports `Public` or `Private` in owner-only Function
+and hosted-runner logs so deployment mode can be verified without exposing test
+source.
+
+When `WEBSITE_RUN_FROM_PACKAGE=1`, Kudu's `site/wwwroot` can retain files from
+an older extraction. Verify the active zip named by
+`data/SitePackages/packagename.txt` instead of treating `wwwroot` hashes as the
+running Function package.
+
 Private source remains hidden, but compiled .NET assemblies still contain type
 and method metadata. Keep the grading Function, deployment storage, reports,
 symbols, and package token inaccessible to students. Do not return stack traces

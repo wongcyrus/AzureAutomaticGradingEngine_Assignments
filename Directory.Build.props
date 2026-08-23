@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
     <UsePrivateTests Condition="'$(UsePrivateTests)' == ''">false</UsePrivateTests>
-    <PrivateTestPackageVersion Condition="'$(PrivateTestPackageVersion)' == ''">1.0.0</PrivateTestPackageVersion>
+    <PrivateTestPackageVersion Condition="'$(PrivateTestPackageVersion)' == ''">1.0.1</PrivateTestPackageVersion>
   </PropertyGroup>
 </Project>

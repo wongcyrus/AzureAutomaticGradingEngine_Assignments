@@ -99,7 +99,10 @@ namespace GraderFunctionApp.Services
             var assembly = Assembly.GetAssembly(typeof(GameClassAttribute))!;
             var tasks = new List<GameTaskData>();
             
-            _logger.LogDebug("Loading tasks from assembly: {assemblyName}", assembly.FullName);
+            _logger.LogInformation(
+                "Loading {testSuite} grading tasks from assembly {assemblyName}",
+                TestSuiteIdentity.Name,
+                assembly.FullName);
             
             var typesWithAttribute = GetTypesWithHelpAttribute(assembly).ToList();
             _logger.LogDebug("Found {count} types with GameClassAttribute", typesWithAttribute.Count);

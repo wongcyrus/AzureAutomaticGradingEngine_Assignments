@@ -81,7 +81,7 @@ internal class Run
             return 2;
         }
 
-        Console.WriteLine($"AzureProjectTest starting with:\n  subscription: {subscriptionId}\n  work:  {tempDir}\n  trace: {trace}\n  where: {where}");
+        Console.WriteLine($"AzureProjectTest starting with:\n  suite: {TestSuiteIdentity.Name}\n  subscription: {subscriptionId}\n  work:  {tempDir}\n  trace: {trace}\n  where: {where}");
 
 
         var strWriter = new StringWriter();

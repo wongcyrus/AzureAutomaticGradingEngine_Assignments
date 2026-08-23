@@ -62,6 +62,28 @@ cp students.example.txt students.txt
 npm run students:invite -- students.txt
 ```
 
+The command above uses the public `AzureProjectTestLib` submodule. Public
+deployments require no package credentials.
+
+For an owner deployment using the private grading package, set a classic GitHub
+token with `read:packages` and `repo` access, then wrap the CDKTF command:
+
+```bash
+export GITHUB_PACKAGES_TOKEN="<token>"
+export GITHUB_PACKAGES_USER="wongcyrus"
+
+cd ..
+scripts/with-private-tests.sh \
+  bash -lc 'cd Infrastructure && npx cdktn deploy --auto-approve'
+```
+
+The wrapper sets `UsePrivateTests=true` for every nested Function and hosted
+runner build and deletes its temporary authenticated NuGet configuration on
+exit. A normal `gh auth token` is insufficient unless it explicitly includes
+`read:packages`. See [Public and private grading tests](docs/private-tests.md)
+for package publication and version updates. Owner-only build logs identify the
+selected suite as `Public` or `Private`.
+
 `npx cdktn deploy` creates the Azure tables but does not populate table
 entities. Run `npm run storage:seed` after every clean deployment to import the
 version-controlled NPC personalities and Easter egg links from
