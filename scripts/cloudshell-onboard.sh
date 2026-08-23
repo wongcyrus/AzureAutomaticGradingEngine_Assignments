@@ -12,6 +12,7 @@ grading_principal_id="8feba365-a613-4d15-adfd-162e7feee3ec"
 grading_tenant_id="8ff7db19-435d-4c3c-83d3-ca0a46234f51"
 instructor_principal_id="${AZURE_ISEKAI_DEBUG_INSTRUCTOR_ID:-}"
 gist_base="https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw"
+gist_cache_buster="$(date +%s%N)"
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
 
@@ -46,13 +47,13 @@ fi
 
 mkdir -p "$work_dir/lighthouse"
 curl -fsSLo "$work_dir/onboard-managed-identity.sh" \
-  "$gist_base/onboard-managed-identity.sh"
+  "$gist_base/onboard-managed-identity.sh?v=$gist_cache_buster"
 curl -fsSLo "$work_dir/grading-access-common.sh" \
-  "$gist_base/grading-access-common.sh"
+  "$gist_base/grading-access-common.sh?v=$gist_cache_buster"
 curl -fsSLo "$work_dir/lighthouse/subscription.json" \
-  "$gist_base/subscription.json"
+  "$gist_base/subscription.json?v=$gist_cache_buster"
 curl -fsSLo "$work_dir/lighthouse/resource-group.json" \
-  "$gist_base/resource-group.json"
+  "$gist_base/resource-group.json?v=$gist_cache_buster"
 chmod +x "$work_dir/onboard-managed-identity.sh"
 
 az group create \

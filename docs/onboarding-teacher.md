@@ -21,7 +21,9 @@ deployment tenant changes.
 Before destroying the old stack, ask every student to run the shared
 `cloudshell-offboard.sh` launcher while it still contains the old principal ID.
 The launcher automatically removes direct RBAC for same-tenant subscriptions
-or Azure Lighthouse delegations for different-tenant subscriptions.
+or Azure Lighthouse delegations for different-tenant subscriptions. Both modes
+preserve `projProd`, remove the ownership tag, and can be rerun safely after a
+partial cleanup.
 
 ## 2. Grant Azure Isekai Sign-In Access
 
@@ -87,7 +89,7 @@ Only when interactive Azure portal or CLI debugging is required, ask the
 student to run:
 
 ```bash
-curl -fsSL https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-debug-access.sh \
+curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-debug-access.sh?v=$(date +%s)" \
   | bash -s -- grant
 ```
 
@@ -96,7 +98,7 @@ This adds the configured teacher principal as subscription `Reader` and
 debugging while keeping grader access:
 
 ```bash
-curl -fsSL https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-debug-access.sh \
+curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-debug-access.sh?v=$(date +%s)" \
   | bash -s -- revoke
 ```
 

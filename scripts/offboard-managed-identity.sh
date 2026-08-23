@@ -104,60 +104,101 @@ remove_direct_assignment() {
   echo "Removed $label from $scope."
 }
 
-remove_lighthouse_resource() {
-  local resource_type="$1"
-  local resource_id="$2"
-  local resource_group="$3"
-  local label="$4"
-  local -a scope_args=()
+list_lighthouse_assignment_ids() {
+  local definition_id="$1"
+  local management_url="https://management.azure.com"
+  local api_version="2022-10-01"
+  local subscription_scope="/subscriptions/$SUBSCRIPTION_ID"
+  local resource_group_scope="$subscription_scope/resourceGroups/$RESOURCE_GROUP"
+  local query="[?ends_with(properties.registrationDefinitionId, '/$definition_id')].id"
 
-  if [[ -n "$resource_group" ]]; then
-    scope_args=(--resource-group "$resource_group")
+  az rest \
+    --method get \
+    --url "$management_url$subscription_scope/providers/Microsoft.ManagedServices/registrationAssignments?api-version=$api_version" \
+    --query "value$query" \
+    --output tsv
+
+  if az group show \
+    --subscription "$SUBSCRIPTION_ID" \
+    --name "$RESOURCE_GROUP" \
+    --output none 2>/dev/null; then
+    az rest \
+      --method get \
+      --url "$management_url$resource_group_scope/providers/Microsoft.ManagedServices/registrationAssignments?api-version=$api_version" \
+      --query "value$query" \
+      --output tsv
+  fi
+}
+
+remove_lighthouse_assignments() {
+  local definition_id="$1"
+  local label="$2"
+  local assignment_ids assignment_id
+
+  assignment_ids="$(list_lighthouse_assignment_ids "$definition_id" | sort -u)"
+  if [[ -z "$assignment_ids" ]]; then
+    echo "$label assignments do not exist."
+    return
   fi
 
-  if ! az managedservices "$resource_type" show \
+  while IFS= read -r assignment_id; do
+    [[ -z "$assignment_id" ]] && continue
+    az rest \
+      --method delete \
+      --url "https://management.azure.com$assignment_id?api-version=2022-10-01" \
+      --output none
+    echo "Removed $label assignment $assignment_id."
+  done <<<"$assignment_ids"
+}
+
+remove_lighthouse_definition() {
+  local definition_id="$1"
+  local label="$2"
+  local attempt output
+
+  if ! az managedservices definition show \
     --subscription "$SUBSCRIPTION_ID" \
-    "${scope_args[@]}" \
-    "--$resource_type" "$resource_id" \
+    --definition "$definition_id" \
     --output none 2>/dev/null; then
     echo "$label does not exist."
     return
   fi
 
-  az managedservices "$resource_type" delete \
-    --subscription "$SUBSCRIPTION_ID" \
-    "${scope_args[@]}" \
-    "--$resource_type" "$resource_id" \
-    --yes \
-    --only-show-errors \
-    --output none
-  echo "Removed $label."
+  for attempt in {1..10}; do
+    if output=$(az managedservices definition delete \
+      --subscription "$SUBSCRIPTION_ID" \
+      --definition "$definition_id" \
+      --yes \
+      --only-show-errors \
+      --output none 2>&1); then
+      echo "Removed $label."
+      return
+    fi
+
+    if [[ "$output" != *"InvalidRegistrationDefinitionDeleteRequest"* ||
+          "$attempt" -eq 10 ]]; then
+      echo "$output" >&2
+      return 1
+    fi
+    sleep 3
+  done
 }
 
 remove_lighthouse_access() {
-  local subscription_definition_id subscription_assignment_id
-  local resource_group_definition_id resource_group_assignment_id
+  local subscription_definition_id resource_group_definition_id
 
   subscription_definition_id=$(lighthouse_definition_id \
-    "$SUBSCRIPTION_ID" "$GRADING_TENANT_ID" "$GRADING_PRINCIPAL_ID" \
-    "subscription" "reader")
-  subscription_assignment_id=$(lighthouse_assignment_id \
     "$SUBSCRIPTION_ID" "$GRADING_TENANT_ID" "$GRADING_PRINCIPAL_ID" \
     "subscription" "reader")
   resource_group_definition_id=$(lighthouse_definition_id \
     "$SUBSCRIPTION_ID" "$GRADING_TENANT_ID" "$GRADING_PRINCIPAL_ID" \
     "resource-group" "$RESOURCE_GROUP")
-  resource_group_assignment_id=$(lighthouse_assignment_id \
-    "$SUBSCRIPTION_ID" "$GRADING_TENANT_ID" "$GRADING_PRINCIPAL_ID" \
-    "resource-group" "$RESOURCE_GROUP")
 
-  remove_lighthouse_resource assignment "$resource_group_assignment_id" "$RESOURCE_GROUP" \
-    "resource-group assignment"
-  remove_lighthouse_resource assignment "$subscription_assignment_id" "" \
-    "subscription Reader assignment"
-  remove_lighthouse_resource definition "$resource_group_definition_id" "" \
+  remove_lighthouse_assignments "$resource_group_definition_id" "resource-group"
+  remove_lighthouse_assignments "$subscription_definition_id" "subscription Reader"
+  remove_lighthouse_definition "$resource_group_definition_id" \
     "resource-group definition"
-  remove_lighthouse_resource definition "$subscription_definition_id" "" \
+  remove_lighthouse_definition "$subscription_definition_id" \
     "subscription Reader definition"
 }
 
@@ -190,11 +231,16 @@ else
   remove_lighthouse_access
 fi
 
-az group update \
-  --subscription "$SUBSCRIPTION_ID" \
-  --name "$RESOURCE_GROUP" \
-  --remove tags.GradingStudentEmail \
-  --only-show-errors \
-  >/dev/null
+if [[ -n "$REGISTERED_EMAIL" ]]; then
+  az tag update \
+    --resource-id "$RESOURCE_GROUP_SCOPE" \
+    --operation Delete \
+    --tags "GradingStudentEmail=$REGISTERED_EMAIL" \
+    --only-show-errors \
+    --output none
+  echo "Removed the Azure Isekai ownership tag."
+else
+  echo "Azure Isekai ownership tag does not exist."
+fi
 
 echo "Offboarding complete. Access mode: $ACCESS_MODE"
