@@ -9,10 +9,11 @@ namespace GraderFunctionApp.IntegrationTests;
 [Category("DeployedFunction")]
 public class DeployedFunctionTests
 {
-    private const string TestEmail = "deployment-test@example.com";
+    private const string DefaultTestEmail = "deployment-test@example.com";
 
     private HttpClient client = null!;
     private byte[] signingKey = null!;
+    private string testEmail = null!;
 
     [OneTimeSetUp]
     public void OneTimeSetUp()
@@ -31,6 +32,11 @@ public class DeployedFunctionTests
         }
 
         signingKey = Convert.FromBase64String(proxySigningKey);
+        var configuredTestEmail = Environment.GetEnvironmentVariable(
+            "GRADER_TEST_EMAIL");
+        testEmail = string.IsNullOrWhiteSpace(configuredTestEmail)
+            ? DefaultTestEmail
+            : configuredTestEmail.Trim().ToLowerInvariant();
         client = new HttpClient
         {
             BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/", UriKind.Absolute),
@@ -58,7 +64,7 @@ public class DeployedFunctionTests
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("text/html"));
             Assert.That(content, Does.Contain("<form method=\"post\">"));
-            Assert.That(content, Does.Contain($"value=\"{TestEmail}\""));
+            Assert.That(content, Does.Contain($"value=\"{testEmail}\""));
             Assert.That(content, Does.Not.Contain("victim@example.com"));
         }
     }
@@ -68,7 +74,7 @@ public class DeployedFunctionTests
     {
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            ["email"] = "deployment-test@example.com",
+            ["email"] = testEmail,
             ["subscriptionId"] = "not-a-guid"
         });
 
@@ -123,19 +129,34 @@ public class DeployedFunctionTests
             return;
         }
 
+        var filter = Environment.GetEnvironmentVariable("AZURE_TEST_FILTER");
+        var relativeUrl =
+            $"api/GraderFunction?subscriptionId={Uri.EscapeDataString(subscriptionId)}";
+        if (!string.IsNullOrWhiteSpace(filter))
+        {
+            relativeUrl += $"&filter={Uri.EscapeDataString(filter)}";
+        }
+
         using var response = await SendAsync(
             HttpMethod.Get,
-            $"api/GraderFunction?subscriptionId={Uri.EscapeDataString(subscriptionId)}");
+            relativeUrl);
         var content = await response.Content.ReadAsStringAsync();
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), content);
 
         var result = XDocument.Parse(content).Root;
+        var expectedTestCount = Environment.GetEnvironmentVariable(
+            "AZURE_EXPECTED_TEST_COUNT") ?? "35";
         using (Assert.EnterMultipleScope())
         {
             Assert.That(result?.Attribute("result")?.Value, Is.EqualTo("Passed"));
-            Assert.That(result?.Attribute("testcasecount")?.Value, Is.EqualTo("35"));
-            Assert.That(result?.Attribute("passed")?.Value, Is.EqualTo("35"));
+            Assert.That(
+                result?.Attribute("total")?.Value,
+                Is.EqualTo(expectedTestCount),
+                $"Unexpected executed test count for {relativeUrl}");
+            Assert.That(
+                result?.Attribute("passed")?.Value,
+                Is.EqualTo(expectedTestCount));
             Assert.That(result?.Attribute("failed")?.Value, Is.EqualTo("0"));
         }
     }
@@ -204,7 +225,7 @@ public class DeployedFunctionTests
             method.Method.ToUpperInvariant(),
             absoluteUrl.PathAndQuery,
             timestamp,
-            TestEmail);
+            testEmail);
         var signature = Convert.ToHexString(
             HMACSHA256.HashData(
                 signingKey,
@@ -214,7 +235,7 @@ public class DeployedFunctionTests
         {
             Content = content
         };
-        request.Headers.Add("x-grader-email", TestEmail);
+        request.Headers.Add("x-grader-email", testEmail);
         request.Headers.Add("x-grader-timestamp", timestamp);
         request.Headers.Add("x-grader-signature", signature);
         return await client.SendAsync(request);

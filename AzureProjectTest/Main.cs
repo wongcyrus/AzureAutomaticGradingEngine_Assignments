@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.Text;
 using AzureProjectTestLib.Helper;
 using NUnit.Common;
 using NUnitLite;
@@ -52,6 +53,13 @@ internal class Run
                         break;
                     case "--where":
                         if (!string.IsNullOrEmpty(val)) where = val;
+                        break;
+                    case "--where-base64":
+                        if (!string.IsNullOrEmpty(val))
+                        {
+                            where = Encoding.UTF8.GetString(
+                                Convert.FromBase64String(val));
+                        }
                         break;
                 }
             }

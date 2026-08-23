@@ -150,7 +150,8 @@ cd ..
 scripts/test-deployed-function.sh \
   GradingEngineAssignmentResourceGroup \
   azureisekai2026 \
-  <subscription-id>
+  <subscription-id> \
+  [<registered-student-email>]
 ```
 
 The runner retrieves a host key with the current Azure CLI identity and passes
@@ -159,8 +160,9 @@ key and creates the same short-lived identity signatures as Static Web Apps.
 Keys are never written to source, command output, or test-result files. The
 subscription argument adds one full grading test to the seven non-destructive
 HTTP checks and writes its NUnit result through the normal grading storage
-path. Omit that argument when only endpoint and authentication checks are
-required.
+path. The optional fourth argument runs those checks with the registered
+student's signed identity. Omit the subscription when only endpoint and
+authentication checks are required.
 
 Function URL outputs and the proxy-signing-key output are marked sensitive in
 Terraform. The frontend deployment script is the only supported consumer of
@@ -181,8 +183,7 @@ npx cdktn output AzureAutomaticGradingEngineGrader
 - `grading_identity_principal_id`
 - `grading_identity_tenant_id`
 
-Each student runs the following while signed in as an Owner or User Access
-Administrator of the assignment subscription:
+Each student runs:
 
 ```bash
 scripts/onboard-managed-identity.sh \
@@ -193,10 +194,16 @@ scripts/onboard-managed-identity.sh \
   -i <instructor-user-object-id>
 ```
 
-The subscription must belong to the grading identity's Entra tenant, but it
-does not need to come from Azure Education Hub. Personal and other same-tenant
-subscriptions are supported. `projProd` must already exist. The script
-idempotently assigns:
+`projProd` must already exist. The script compares the subscription tenant with
+the grading identity tenant and idempotently selects:
+
+- Direct Azure RBAC for a same-tenant subscription.
+- Azure Lighthouse for a cross-tenant subscription.
+
+Same-tenant execution requires Owner or User Access Administrator rights.
+Cross-tenant execution requires Owner or a custom role with
+`Microsoft.Authorization/roleAssignments` read, write, and delete permissions.
+Both modes assign:
 
 - `Reader` on the subscription.
 - `Website Contributor` on `projProd`.
@@ -205,7 +212,12 @@ idempotently assigns:
 
 The optional `-i` argument grants the same limited roles to an instructor user
 for local test execution. Use an instructor-only principal; never use the
-student access group.
+student access group. Lighthouse uses one deterministic definition per scope:
+the subscription definition grants `Reader`, while the `projProd` definition
+combines `Reader` and `Website Contributor`. Combining both resource-group
+roles is required because a narrower Lighthouse assignment overrides the
+subscription assignment at that scope. Interrupted runs can be safely
+repeated.
 
 Students then register only the subscription ID in Azure Isekai. RBAC changes
 can take several minutes to propagate. No student service-principal password is
@@ -220,24 +232,48 @@ npm run students:import -- <student-email> <subscription-id>
 ```
 
 The command is idempotent and refuses conflicting registrations, ownership
-tags, or missing grader RBAC.
+tags, or missing grader access. It verifies direct `Reader` RBAC for a
+same-tenant subscription and the expected subscription/resource-group
+Lighthouse definitions and assignments for a cross-tenant subscription.
 
-To revoke grading access, delete both role assignments for the grading identity
-from the student subscription and remove the student's `Subscription` table
-registration. Removing the Static Web Apps group membership only revokes game
-sign-in; it does not revoke Azure RBAC.
+Revoke Azure access with the matching script:
 
-Cross-tenant subscriptions cannot directly assign this managed identity
-because it belongs to another tenant. Use Azure Lighthouse for explicit
-cross-tenant delegation before registering such a subscription.
+```bash
+scripts/offboard-managed-identity.sh \
+  -s <student-subscription-id> \
+  -p <grading-identity-principal-id> \
+  -t <grading-identity-tenant-id> \
+  -e <azure-isekai-sign-in-email> \
+  -i <instructor-user-object-id>
+```
+
+For same-tenant direct RBAC, pass the same optional instructor ID used during
+onboarding so its assignments are also removed. Lighthouse stores grader and
+instructor authorizations in the same offer, so removing that offer revokes
+both. The script first verifies the `GradingStudentEmail` ownership tag, then
+removes either direct role assignments or Lighthouse assignments and
+definitions before removing the tag. It is safe to rerun after partial
+offboarding. Remove the student's `Subscription` table registration separately
+if the subscription should no longer appear in the game. Removing Static Web
+Apps group membership only revokes game sign-in; it does not revoke Azure
+resource access.
 
 ### Resetting One Student
 
-The student's email is the partition key for game and result records. A full
-game reset must remove all rows in that student's `GameStates` partition,
-including `__active_task_lock__`, plus the intended `PassTests`, `FailTests`,
-and test-result blobs. Do not delete the `Subscription` registration unless the
-student must register a different subscription.
+Use the reset script from the repository root:
+
+```bash
+scripts/reset-student-game.sh student@example.com
+```
+
+It reports the matching rows and blobs before requesting confirmation. Use
+`--yes` for non-interactive operation, and `--resource-group` or
+`--storage-account` when resetting a non-default deployment. The script removes
+all rows in that student's `GameStates` partition, including
+`__active_task_lock__`, plus their `PassTests`, `FailTests`, and test-result
+blobs. It deliberately preserves the `Subscription` registration.
+Close the student's active game client before resetting; the script retries
+concurrent writes briefly and fails rather than reporting a false success.
 
 Deleting only an NPC state while leaving the lock row blocks future task
 assignment. Application code deletes a matching state and lock atomically, but

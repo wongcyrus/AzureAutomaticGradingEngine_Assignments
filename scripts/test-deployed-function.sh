@@ -5,6 +5,9 @@ set -euo pipefail
 resource_group="${1:-GradingEngineAssignmentResourceGroup}"
 function_app_name="${2:-azureisekai2026}"
 test_subscription_id="${3:-${AZURE_TEST_SUBSCRIPTION_ID:-}}"
+test_email="${4:-${GRADER_TEST_EMAIL:-}}"
+test_filter="${5:-${AZURE_TEST_FILTER:-}}"
+expected_test_count="${6:-${AZURE_EXPECTED_TEST_COUNT:-35}}"
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 function_key="${AZURE_FUNCTION_KEY:-}"
@@ -43,6 +46,9 @@ export FUNCTION_APP_BASE_URL="${FUNCTION_APP_BASE_URL:-https://${function_app_na
 export AZURE_FUNCTION_KEY="$function_key"
 export GRADER_PROXY_SIGNING_KEY="$proxy_signing_key"
 export AZURE_TEST_SUBSCRIPTION_ID="$test_subscription_id"
+export GRADER_TEST_EMAIL="$test_email"
+export AZURE_TEST_FILTER="$test_filter"
+export AZURE_EXPECTED_TEST_COUNT="$expected_test_count"
 
 dotnet test \
   "$repository_root/GraderFunctionApp.IntegrationTests/GraderFunctionApp.IntegrationTests.csproj" \

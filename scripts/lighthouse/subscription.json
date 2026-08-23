@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "registrationDefinitionId": {
+      "type": "string"
+    },
+    "registrationAssignmentId": {
+      "type": "string"
+    },
+    "offerName": {
+      "type": "string"
+    },
+    "managedByTenantId": {
+      "type": "string"
+    },
+    "authorizations": {
+      "type": "array"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedServices/registrationDefinitions",
+      "apiVersion": "2019-09-01",
+      "name": "[parameters('registrationDefinitionId')]",
+      "properties": {
+        "registrationDefinitionName": "[parameters('offerName')]",
+        "description": "Secretless Azure Isekai grading access.",
+        "managedByTenantId": "[parameters('managedByTenantId')]",
+        "authorizations": "[parameters('authorizations')]"
+      }
+    },
+    {
+      "type": "Microsoft.ManagedServices/registrationAssignments",
+      "apiVersion": "2019-09-01",
+      "name": "[parameters('registrationAssignmentId')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedServices/registrationDefinitions', parameters('registrationDefinitionId'))]"
+      ],
+      "properties": {
+        "registrationDefinitionId": "[resourceId('Microsoft.ManagedServices/registrationDefinitions', parameters('registrationDefinitionId'))]"
+      }
+    }
+  ]
+}

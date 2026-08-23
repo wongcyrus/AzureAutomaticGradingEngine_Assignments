@@ -147,7 +147,9 @@ namespace GraderFunctionApp.Services
             info.ArgumentList.Add($"--subscription={subscriptionId}");
             info.ArgumentList.Add($"--work={workDir}");
             info.ArgumentList.Add($"--trace={trace}");
-            info.ArgumentList.Add($"--where={filter}");
+            var encodedFilter = Convert.ToBase64String(
+                Encoding.UTF8.GetBytes(filter));
+            info.ArgumentList.Add($"--where-base64={encodedFilter}");
 
             process.StartInfo = info;
 

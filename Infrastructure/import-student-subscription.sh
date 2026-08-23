@@ -4,6 +4,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../scripts/grading-access-common.sh
+source "$SCRIPT_DIR/../scripts/grading-access-common.sh"
+
 if [[ $# -ne 2 ]]; then
   echo "Usage: $0 <student-email> <subscription-id>" >&2
   exit 2
@@ -41,8 +45,11 @@ npx cdktn output AzureAutomaticGradingEngineGrader \
 grading_principal_id="$(jq -r \
   '.AzureAutomaticGradingEngineGrader.grading_identity_principal_id // empty' \
   "$outputs_file")"
-if [[ -z "$grading_principal_id" ]]; then
-  echo "Error: grading identity output is unavailable." >&2
+grading_tenant_id="$(jq -r \
+  '.AzureAutomaticGradingEngineGrader.grading_identity_tenant_id // empty' \
+  "$outputs_file")"
+if [[ -z "$grading_principal_id" || -z "$grading_tenant_id" ]]; then
+  echo "Error: grading identity outputs are unavailable." >&2
   exit 1
 fi
 
@@ -56,15 +63,103 @@ if [[ "${registered_email,,}" != "$student_email" ]]; then
   exit 1
 fi
 
-assignment_count="$(az role assignment list \
+student_tenant_id="$(az account show \
   --subscription "$subscription_id" \
-  --assignee-object-id "$grading_principal_id" \
-  --scope "/subscriptions/$subscription_id" \
-  --query "[?roleDefinitionName=='Reader'] | length(@)" \
+  --query tenantId \
   --output tsv)"
-if [[ "$assignment_count" == "0" ]]; then
-  echo "Error: the grading identity does not have Reader on this subscription." >&2
-  exit 1
+
+verify_lighthouse_definition() {
+  local definition_id="$1"
+  shift
+  local definition_json
+  local role_id
+
+  if ! definition_json="$(az managedservices definition show \
+    --subscription "$subscription_id" \
+    --definition "$definition_id" \
+    --output json 2>/dev/null)"; then
+    return 1
+  fi
+
+  for role_id in "$@"; do
+    if ! jq -e \
+      --arg tenant "$grading_tenant_id" \
+      --arg principal "$grading_principal_id" \
+      --arg role "$role_id" \
+      '
+        (.properties.managedByTenantId | ascii_downcase) == ($tenant | ascii_downcase)
+        and any(
+          .properties.authorizations[];
+          (.principalId | ascii_downcase) == ($principal | ascii_downcase)
+          and ((.roleDefinitionId | ascii_downcase) | endswith($role | ascii_downcase))
+        )
+      ' <<<"$definition_json" >/dev/null; then
+      return 1
+    fi
+  done
+}
+
+verify_lighthouse_assignment() {
+  local assignment_id="$1"
+  local definition_id="$2"
+  local resource_group_name="$3"
+  local actual_definition
+  local expected_definition
+  local -a scope_args=()
+
+  if [[ -n "$resource_group_name" ]]; then
+    scope_args=(--resource-group "$resource_group_name")
+  fi
+  if ! actual_definition="$(az managedservices assignment show \
+    --subscription "$subscription_id" \
+    "${scope_args[@]}" \
+    --assignment "$assignment_id" \
+    --query properties.registrationDefinitionId \
+    --output tsv 2>/dev/null)"; then
+    return 1
+  fi
+
+  expected_definition="/subscriptions/$subscription_id/providers/Microsoft.ManagedServices/registrationDefinitions/$definition_id"
+  [[ "${actual_definition,,}" == "${expected_definition,,}" ]]
+}
+
+if [[ "${student_tenant_id,,}" == "${grading_tenant_id,,}" ]]; then
+  assignment_count="$(az role assignment list \
+    --subscription "$subscription_id" \
+    --assignee-object-id "$grading_principal_id" \
+    --scope "/subscriptions/$subscription_id" \
+    --query "[?roleDefinitionName=='Reader'] | length(@)" \
+    --output tsv)"
+  if [[ "$assignment_count" == "0" ]]; then
+    echo "Error: the grading identity does not have direct Reader access on this subscription." >&2
+    exit 1
+  fi
+else
+  subscription_definition_id="$(lighthouse_definition_id \
+    "$subscription_id" "$grading_tenant_id" "$grading_principal_id" \
+    "subscription" "reader")"
+  subscription_assignment_id="$(lighthouse_assignment_id \
+    "$subscription_id" "$grading_tenant_id" "$grading_principal_id" \
+    "subscription" "reader")"
+  resource_group_definition_id="$(lighthouse_definition_id \
+    "$subscription_id" "$grading_tenant_id" "$grading_principal_id" \
+    "resource-group" "$resource_group")"
+  resource_group_assignment_id="$(lighthouse_assignment_id \
+    "$subscription_id" "$grading_tenant_id" "$grading_principal_id" \
+    "resource-group" "$resource_group")"
+
+  if ! verify_lighthouse_definition \
+      "$subscription_definition_id" "$READER_ROLE_ID" ||
+    ! verify_lighthouse_assignment \
+      "$subscription_assignment_id" "$subscription_definition_id" "" ||
+    ! verify_lighthouse_definition \
+      "$resource_group_definition_id" \
+      "$READER_ROLE_ID" "$WEBSITE_CONTRIBUTOR_ROLE_ID" ||
+    ! verify_lighthouse_assignment \
+      "$resource_group_assignment_id" "$resource_group_definition_id" "$resource_group"; then
+    echo "Error: the expected Azure Lighthouse grader delegation is incomplete." >&2
+    exit 1
+  fi
 fi
 
 storage_account="$(az storage account list \

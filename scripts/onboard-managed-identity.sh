@@ -2,12 +2,17 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=grading-access-common.sh
+source "$SCRIPT_DIR/grading-access-common.sh"
+
 SUBSCRIPTION_ID=""
 GRADING_PRINCIPAL_ID=""
 GRADING_TENANT_ID=""
 STUDENT_EMAIL=""
 INSTRUCTOR_PRINCIPAL_ID=""
 RESOURCE_GROUP="projProd"
+ACCESS_MODE="auto"
 
 usage() {
   cat <<'EOF'
@@ -18,15 +23,20 @@ Usage:
     -t <grading-tenant-id> \
     -e <azure-isekai-sign-in-email> \
     [-i <instructor-user-object-id>] \
-    [-g <assignment-resource-group>]
+    [-g <assignment-resource-group>] \
+    [-m <auto|direct|lighthouse>]
 
 Grants:
-  - Reader on the student subscription
-  - Website Contributor on the assignment resource group
+  Same tenant: direct Azure RBAC.
+  Cross tenant: Azure Lighthouse delegation.
+
+  Both modes grant:
+    - Reader on the student subscription
+    - Website Contributor on the assignment resource group
 EOF
 }
 
-while getopts ":s:p:t:e:i:g:h" opt; do
+while getopts ":s:p:t:e:i:g:m:h" opt; do
   case "$opt" in
     s) SUBSCRIPTION_ID="$OPTARG" ;;
     p) GRADING_PRINCIPAL_ID="$OPTARG" ;;
@@ -34,6 +44,7 @@ while getopts ":s:p:t:e:i:g:h" opt; do
     e) STUDENT_EMAIL="${OPTARG,,}" ;;
     i) INSTRUCTOR_PRINCIPAL_ID="$OPTARG" ;;
     g) RESOURCE_GROUP="$OPTARG" ;;
+    m) ACCESS_MODE="${OPTARG,,}" ;;
     h) usage; exit 0 ;;
     :) echo "Missing argument for -$OPTARG" >&2; usage; exit 2 ;;
     \?) echo "Invalid option: -$OPTARG" >&2; usage; exit 2 ;;
@@ -50,6 +61,17 @@ if ! command -v az >/dev/null 2>&1; then
   exit 3
 fi
 
+require_guid "Student subscription ID" "$SUBSCRIPTION_ID"
+require_guid "Grading principal ID" "$GRADING_PRINCIPAL_ID"
+require_guid "Grading tenant ID" "$GRADING_TENANT_ID"
+if [[ -n "$INSTRUCTOR_PRINCIPAL_ID" ]]; then
+  require_guid "Instructor principal ID" "$INSTRUCTOR_PRINCIPAL_ID"
+fi
+if [[ "$STUDENT_EMAIL" =~ [[:space:]] ]] || [[ "$STUDENT_EMAIL" != *@* ]]; then
+  echo "Student email must be a non-empty email address without whitespace." >&2
+  exit 2
+fi
+
 az account show --subscription "$SUBSCRIPTION_ID" >/dev/null
 
 STUDENT_TENANT_ID=$(az account show \
@@ -57,11 +79,10 @@ STUDENT_TENANT_ID=$(az account show \
   --query tenantId \
   -o tsv)
 
-if [[ "${STUDENT_TENANT_ID,,}" != "${GRADING_TENANT_ID,,}" ]]; then
-  echo "This subscription is in tenant '$STUDENT_TENANT_ID', but the grader is in '$GRADING_TENANT_ID'." >&2
-  echo "Direct managed-identity RBAC requires both to use the same tenant." >&2
-  exit 4
-fi
+ACCESS_MODE=$(resolve_access_mode \
+  "$ACCESS_MODE" \
+  "$STUDENT_TENANT_ID" \
+  "$GRADING_TENANT_ID")
 
 if ! az group show \
   --subscription "$SUBSCRIPTION_ID" \
@@ -74,8 +95,6 @@ fi
 
 SUBSCRIPTION_SCOPE="/subscriptions/$SUBSCRIPTION_ID"
 RESOURCE_GROUP_SCOPE="$SUBSCRIPTION_SCOPE/resourceGroups/$RESOURCE_GROUP"
-READER_ROLE_ID="acdd72a7-3385-48ef-bd42-f606fba81ae7"
-WEBSITE_CONTRIBUTOR_ROLE_ID="de139f84-1756-47ae-9be6-808fbbe84772"
 
 ensure_role_assignment() {
   local principal_id="$1"
@@ -108,20 +127,95 @@ ensure_role_assignment() {
   echo "Assigned $label at $scope."
 }
 
-ensure_role_assignment \
-  "$GRADING_PRINCIPAL_ID" ServicePrincipal \
-  "$READER_ROLE_ID" "$SUBSCRIPTION_SCOPE" "Grader Reader"
-ensure_role_assignment \
-  "$GRADING_PRINCIPAL_ID" ServicePrincipal \
-  "$WEBSITE_CONTRIBUTOR_ROLE_ID" "$RESOURCE_GROUP_SCOPE" "Grader Website Contributor"
+build_lighthouse_authorizations() {
+  local include_website_contributor="$1"
+  local authorizations
 
-if [[ -n "$INSTRUCTOR_PRINCIPAL_ID" ]]; then
+  authorizations="[{\"principalId\":\"$GRADING_PRINCIPAL_ID\",\"principalIdDisplayName\":\"Azure Isekai grader\",\"roleDefinitionId\":\"$READER_ROLE_ID\"}"
+  if [[ "$include_website_contributor" == "true" ]]; then
+    authorizations+=",{\"principalId\":\"$GRADING_PRINCIPAL_ID\",\"principalIdDisplayName\":\"Azure Isekai grader\",\"roleDefinitionId\":\"$WEBSITE_CONTRIBUTOR_ROLE_ID\"}"
+  fi
+  if [[ -n "$INSTRUCTOR_PRINCIPAL_ID" ]]; then
+    authorizations+=",{\"principalId\":\"$INSTRUCTOR_PRINCIPAL_ID\",\"principalIdDisplayName\":\"Azure Isekai instructor\",\"roleDefinitionId\":\"$READER_ROLE_ID\"}"
+    if [[ "$include_website_contributor" == "true" ]]; then
+      authorizations+=",{\"principalId\":\"$INSTRUCTOR_PRINCIPAL_ID\",\"principalIdDisplayName\":\"Azure Isekai instructor\",\"roleDefinitionId\":\"$WEBSITE_CONTRIBUTOR_ROLE_ID\"}"
+    fi
+  fi
+  authorizations+="]"
+  echo "$authorizations"
+}
+
+deploy_lighthouse_access() {
+  local subscription_definition_id subscription_assignment_id
+  local resource_group_definition_id resource_group_assignment_id
+  local subscription_authorizations resource_group_authorizations
+  local deployment_location="${AZURE_LIGHTHOUSE_DEPLOYMENT_LOCATION:-eastus}"
+
+  subscription_definition_id=$(lighthouse_definition_id \
+    "$SUBSCRIPTION_ID" "$GRADING_TENANT_ID" "$GRADING_PRINCIPAL_ID" \
+    "subscription" "reader")
+  subscription_assignment_id=$(lighthouse_assignment_id \
+    "$SUBSCRIPTION_ID" "$GRADING_TENANT_ID" "$GRADING_PRINCIPAL_ID" \
+    "subscription" "reader")
+  resource_group_definition_id=$(lighthouse_definition_id \
+    "$SUBSCRIPTION_ID" "$GRADING_TENANT_ID" "$GRADING_PRINCIPAL_ID" \
+    "resource-group" "$RESOURCE_GROUP")
+  resource_group_assignment_id=$(lighthouse_assignment_id \
+    "$SUBSCRIPTION_ID" "$GRADING_TENANT_ID" "$GRADING_PRINCIPAL_ID" \
+    "resource-group" "$RESOURCE_GROUP")
+  subscription_authorizations=$(build_lighthouse_authorizations false)
+  resource_group_authorizations=$(build_lighthouse_authorizations true)
+
+  az deployment sub create \
+    --subscription "$SUBSCRIPTION_ID" \
+    --location "$deployment_location" \
+    --name "azure-isekai-reader-$subscription_assignment_id" \
+    --template-file "$SCRIPT_DIR/lighthouse/subscription.json" \
+    --parameters \
+      registrationDefinitionId="$subscription_definition_id" \
+      registrationAssignmentId="$subscription_assignment_id" \
+      offerName="Azure Isekai subscription Reader" \
+      managedByTenantId="$GRADING_TENANT_ID" \
+      authorizations="$subscription_authorizations" \
+    --only-show-errors \
+    --output none
+
+  az deployment sub create \
+    --subscription "$SUBSCRIPTION_ID" \
+    --location "$deployment_location" \
+    --name "azure-isekai-resources-$resource_group_assignment_id" \
+    --template-file "$SCRIPT_DIR/lighthouse/resource-group.json" \
+    --parameters \
+      registrationDefinitionId="$resource_group_definition_id" \
+      registrationAssignmentId="$resource_group_assignment_id" \
+      offerName="Azure Isekai assignment resources" \
+      managedByTenantId="$GRADING_TENANT_ID" \
+      authorizations="$resource_group_authorizations" \
+      resourceGroupName="$RESOURCE_GROUP" \
+    --only-show-errors \
+    --output none
+
+  echo "Created or verified Azure Lighthouse subscription and resource-group delegations."
+}
+
+if [[ "$ACCESS_MODE" == "direct" ]]; then
   ensure_role_assignment \
-    "$INSTRUCTOR_PRINCIPAL_ID" User \
-    "$READER_ROLE_ID" "$SUBSCRIPTION_SCOPE" "Instructor Reader"
+    "$GRADING_PRINCIPAL_ID" ServicePrincipal \
+    "$READER_ROLE_ID" "$SUBSCRIPTION_SCOPE" "Grader Reader"
   ensure_role_assignment \
-    "$INSTRUCTOR_PRINCIPAL_ID" User \
-    "$WEBSITE_CONTRIBUTOR_ROLE_ID" "$RESOURCE_GROUP_SCOPE" "Instructor Website Contributor"
+    "$GRADING_PRINCIPAL_ID" ServicePrincipal \
+    "$WEBSITE_CONTRIBUTOR_ROLE_ID" "$RESOURCE_GROUP_SCOPE" "Grader Website Contributor"
+
+  if [[ -n "$INSTRUCTOR_PRINCIPAL_ID" ]]; then
+    ensure_role_assignment \
+      "$INSTRUCTOR_PRINCIPAL_ID" User \
+      "$READER_ROLE_ID" "$SUBSCRIPTION_SCOPE" "Instructor Reader"
+    ensure_role_assignment \
+      "$INSTRUCTOR_PRINCIPAL_ID" User \
+      "$WEBSITE_CONTRIBUTOR_ROLE_ID" "$RESOURCE_GROUP_SCOPE" "Instructor Website Contributor"
+  fi
+else
+  deploy_lighthouse_access
 fi
 
 az group update \
@@ -135,8 +229,9 @@ echo "Tagged $RESOURCE_GROUP for $STUDENT_EMAIL."
 cat <<EOF
 
 Onboarding complete.
+Access mode: $ACCESS_MODE
 Register this subscription ID in Azure Isekai:
 $SUBSCRIPTION_ID
 
-RBAC changes can take several minutes to propagate.
+Azure authorization changes can take several minutes to propagate.
 EOF

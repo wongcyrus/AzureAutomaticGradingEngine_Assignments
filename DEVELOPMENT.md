@@ -167,7 +167,13 @@ public class TestRunner : ITestRunner
 
 The child process receives an explicit subscription ID. Authentication is
 provided by `DefaultAzureCredential`: the user-assigned identity in Azure and
-the current Azure CLI identity during local development.
+the current Azure CLI identity during local development. Azure Lighthouse
+projects cross-tenant subscriptions to the same managed identity, so the
+Function and test process do not branch on tenant or handle student secrets.
+
+Run `scripts/test-grading-access.sh` after changing onboarding behavior. It
+uses a fake Azure CLI to cover direct RBAC, Lighthouse creation, idempotent
+Lighthouse reruns, and both revocation paths without changing Azure resources.
 
 ## Adding New Features
 
