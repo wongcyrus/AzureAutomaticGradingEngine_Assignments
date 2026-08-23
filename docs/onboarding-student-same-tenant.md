@@ -8,7 +8,7 @@ to the same Microsoft Entra tenant.
 - The teacher has added your email to the Azure Isekai student group.
 - Open Azure Cloud Shell with the assignment subscription selected.
 - Be an Owner or User Access Administrator of that subscription.
-- Use the same email address that you use to sign in to Azure Isekai.
+- Sign in to Cloud Shell with the same email address used for Azure Isekai.
 
 Confirm the currently selected subscription:
 
@@ -18,11 +18,12 @@ az account show --query '{name:name,id:id,tenant:tenantId}' -o table
 
 ## Onboard
 
-No repository clone or subscription argument is required:
+No repository clone, subscription ID, or email argument is required. The
+launcher reads the active subscription and signed-in email from Azure CLI:
 
 ```bash
 curl -fsSL https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-onboard.sh \
-  | bash -s -- "<azure-isekai-sign-in-email>"
+  | bash
 ```
 
 The launcher reports `same-tenant direct RBAC`, creates `projProd` in
@@ -33,7 +34,7 @@ another Azure location, pass it as the second argument:
 
 ```bash
 curl -fsSL https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-onboard.sh \
-  | bash -s -- "<azure-isekai-sign-in-email>" "<location>"
+  | bash -s -- "<location>"
 ```
 
 After permissions propagate, sign in to Azure Isekai with the same email and
@@ -46,7 +47,7 @@ assignment subscription in Cloud Shell and run:
 
 ```bash
 curl -fsSL https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-offboard.sh \
-  | bash -s -- "<azure-isekai-sign-in-email>"
+  | bash
 ```
 
 This removes the grader's direct RBAC assignments, removes any temporary

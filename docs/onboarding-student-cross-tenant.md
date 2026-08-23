@@ -13,7 +13,7 @@ Microsoft Entra tenant from the Azure Isekai grader.
 - Be an Owner of that subscription, or have a custom role with
   `Microsoft.Authorization/roleAssignments` read, write, and delete
   permissions.
-- Use the same email address that you use to sign in to Azure Isekai.
+- Sign in to Cloud Shell with the same email address used for Azure Isekai.
 
 Confirm the currently selected subscription:
 
@@ -23,11 +23,12 @@ az account show --query '{name:name,id:id,tenant:tenantId}' -o table
 
 ## Onboard
 
-No repository clone or subscription argument is required:
+No repository clone, subscription ID, or email argument is required. The
+launcher reads the active subscription and signed-in email from Azure CLI:
 
 ```bash
 curl -fsSL https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-onboard.sh \
-  | bash -s -- "<azure-isekai-sign-in-email>"
+  | bash
 ```
 
 The launcher reports `cross-tenant Azure Lighthouse`, creates `projProd` in
@@ -38,7 +39,7 @@ another Azure location, pass it as the second argument:
 
 ```bash
 curl -fsSL https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-onboard.sh \
-  | bash -s -- "<azure-isekai-sign-in-email>" "<location>"
+  | bash -s -- "<location>"
 ```
 
 After Lighthouse permissions propagate, sign in to Azure Isekai with the same
@@ -51,7 +52,7 @@ assignment subscription in Cloud Shell and run:
 
 ```bash
 curl -fsSL https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-offboard.sh \
-  | bash -s -- "<azure-isekai-sign-in-email>"
+  | bash
 ```
 
 This removes the Azure Lighthouse subscription and resource-group delegations,

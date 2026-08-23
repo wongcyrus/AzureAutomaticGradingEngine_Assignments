@@ -46,11 +46,11 @@ Azure subscriptions.
 - [Student in a different tenant](onboarding-student-cross-tenant.md)
 
 Both students use Azure Cloud Shell without cloning this repository or entering
-a subscription ID. The launcher uses the subscription currently selected in
-Cloud Shell. By default it authorizes only the grading Function's managed
-identity. It does not grant the teacher account access to student subscriptions,
-so those subscriptions and resource groups do not clutter the teacher's Azure
-portal.
+a subscription ID or email address. The launcher uses the subscription and
+signed-in identity currently selected in Cloud Shell. By default it authorizes
+only the grading Function's managed identity. It does not grant the teacher
+account access to student subscriptions, so those subscriptions and resource
+groups do not clutter the teacher's Azure portal.
 
 ## 4. Register an Onboarded Subscription
 
@@ -88,7 +88,7 @@ student to run:
 
 ```bash
 curl -fsSL https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-debug-access.sh \
-  | bash -s -- grant "<azure-isekai-sign-in-email>"
+  | bash -s -- grant
 ```
 
 This adds the configured teacher principal as subscription `Reader` and
@@ -97,7 +97,7 @@ debugging while keeping grader access:
 
 ```bash
 curl -fsSL https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-debug-access.sh \
-  | bash -s -- revoke "<azure-isekai-sign-in-email>"
+  | bash -s -- revoke
 ```
 
 ## 7. Revoke Grader Access

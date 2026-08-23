@@ -2,13 +2,12 @@
 
 set -euo pipefail
 
-if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "Usage: bash -s -- <azure-isekai-email> [location]" >&2
+if [[ $# -gt 1 ]]; then
+  echo "Usage: bash -s -- [location]" >&2
   exit 2
 fi
 
-student_email="${1,,}"
-location="${2:-eastasia}"
+location="${1:-eastasia}"
 grading_principal_id="8feba365-a613-4d15-adfd-162e7feee3ec"
 grading_tenant_id="8ff7db19-435d-4c3c-83d3-ca0a46234f51"
 instructor_principal_id="${AZURE_ISEKAI_DEBUG_INSTRUCTOR_ID:-}"
@@ -25,6 +24,12 @@ done
 
 subscription_id="$(az account show --query id --output tsv)"
 subscription_name="$(az account show --query name --output tsv)"
+student_email="$(az account show --query user.name --output tsv)"
+student_email="${student_email,,}"
+if [[ "$student_email" =~ [[:space:]] ]] || [[ "$student_email" != *@* ]]; then
+  echo "Error: could not detect a student email from the active Azure CLI identity." >&2
+  exit 2
+fi
 student_tenant_id="$(
   az account show \
     --subscription "$subscription_id" \
@@ -32,6 +37,7 @@ student_tenant_id="$(
     --output tsv
 )"
 echo "Using current Cloud Shell subscription: $subscription_name ($subscription_id)"
+echo "Using current Cloud Shell identity: $student_email"
 if [[ "${student_tenant_id,,}" == "$grading_tenant_id" ]]; then
   echo "Access mode: same-tenant direct RBAC"
 else
