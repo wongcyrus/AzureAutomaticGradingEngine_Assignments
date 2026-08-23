@@ -14,8 +14,11 @@
 		</PackageReference>
 		<PackageReference Include="NUnitLite" Version="4.6.1" />
 	</ItemGroup>
-	<ItemGroup>
+	<ItemGroup Condition="'$(UsePrivateTests)' != 'true'">
 	  <ProjectReference Include="..\AzureProjectTestLib\AzureProjectTestLib.csproj" />
+	</ItemGroup>
+	<ItemGroup Condition="'$(UsePrivateTests)' == 'true'">
+	  <PackageReference Include="WongCyrus.AzureProjectTestLib.Private" Version="$(PrivateTestPackageVersion)" />
 	</ItemGroup>
 	<ItemGroup>
 	  <None Update="tasks.json">

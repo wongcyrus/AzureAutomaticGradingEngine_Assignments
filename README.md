@@ -13,7 +13,11 @@ This project provides automated assessment of student Azure infrastructure deplo
 - **azure-isekai**: RPG Maker game frontend for student interaction
 - **Infrastructure**: CDK Terrain deployment code
 - **packages/**: Git submodules containing shared provider bindings and Azure constructs
-- **AzureProjectTest**: Unit test library for Azure resource validation
+- **AzureProjectTestLib**: Public Git submodule containing the deployable grading suite
+- **AzureProjectTest**: Hosted NUnit runner for Azure resource validation
+
+Owner deployments can replace the public suite with a private GitHub package;
+see [Public and private grading tests](docs/private-tests.md).
 
 The grader uses one user-assigned managed identity to inspect explicitly
 registered student subscriptions. Student service principals and passwords are

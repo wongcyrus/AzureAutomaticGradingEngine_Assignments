@@ -8,3 +8,6 @@
 [submodule "packages/azure-common-construct"]
 	path = packages/azure-common-construct
 	url = https://github.com/wongcyrus/azure-common-construct
+[submodule "AzureProjectTestLib"]
+	path = AzureProjectTestLib
+	url = https://github.com/wongcyrus/AzureProjectTestLib

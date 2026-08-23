@@ -7,8 +7,13 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(UsePrivateTests)' != 'true'">
     <ProjectReference Include="..\AzureProjectTestLib\AzureProjectTestLib.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UsePrivateTests)' == 'true'">
+    <PackageReference Include="WongCyrus.AzureProjectTestLib.Private" Version="$(PrivateTestPackageVersion)" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\GraderFunctionApp\GraderFunctionApp.csproj" />
   </ItemGroup>
 

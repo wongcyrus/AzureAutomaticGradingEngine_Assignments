@@ -22,6 +22,10 @@ cd AzureAutomaticGradingEngine_Assignments
 cp Infrastructure/.env.template Infrastructure/.env
 ```
 
+The recursive clone includes the public grading-test source. It requires no
+package credentials. For an owner deployment using the private replacement
+suite, follow [Public and private grading tests](docs/private-tests.md).
+
 Edit `.env` with your Azure OpenAI credentials:
 ```bash
 AZURE_OPENAI_ENDPOINT=https://your-region.api.cognitive.microsoft.com/

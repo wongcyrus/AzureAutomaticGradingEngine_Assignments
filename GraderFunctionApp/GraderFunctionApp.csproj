@@ -26,8 +26,11 @@
 	<ItemGroup>
 		<Using Include="System.Threading.ExecutionContext" Alias="ExecutionContext" />
 	</ItemGroup>
-	<ItemGroup>
+	<ItemGroup Condition="'$(UsePrivateTests)' != 'true'">
 		<ProjectReference Include="..\AzureProjectTestLib\AzureProjectTestLib.csproj" />
+	</ItemGroup>
+	<ItemGroup Condition="'$(UsePrivateTests)' == 'true'">
+		<PackageReference Include="WongCyrus.AzureProjectTestLib.Private" Version="$(PrivateTestPackageVersion)" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Update="host.json">
