@@ -10,6 +10,7 @@
     "build": "tsc",
     "synth": "cdktn synth",
     "frontend:deploy": "./deploy-static-web-app.sh",
+    "storage:seed": "./seed-storage-data.sh",
     "students:invite": "./invite-students.sh",
     "students:import": "./import-student-subscription.sh",
     "compile": "tsc --pretty",

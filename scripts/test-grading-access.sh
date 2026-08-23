@@ -38,6 +38,15 @@ case "$*" in
   *"group show"*"--query tags.GradingStudentEmail"*)
     echo "${FAKE_REGISTERED_EMAIL:-student@example.com}"
     ;;
+  *"rest --method get"*)
+    if [[ "$*" == *"$FAKE_RESOURCE_GROUP_DEFINITION_ID"* &&
+          "$*" == *"/resourceGroups/projProd/"* ]]; then
+      echo "/subscriptions/$FAKE_SUBSCRIPTION_ID/resourceGroups/projProd/providers/Microsoft.ManagedServices/registrationAssignments/resource-group-assignment"
+    elif [[ "$*" == *"$FAKE_SUBSCRIPTION_DEFINITION_ID"* &&
+            "$*" != *"/resourceGroups/projProd/"* ]]; then
+      echo "/subscriptions/$FAKE_SUBSCRIPTION_ID/providers/Microsoft.ManagedServices/registrationAssignments/subscription-assignment"
+    fi
+    ;;
   *"managedservices definition show"*|*"managedservices assignment show"*)
     if [[ "${FAKE_RESOURCES_EXIST:-false}" != "true" ]]; then
       exit 3
@@ -68,9 +77,19 @@ run_onboard() {
 
 run_offboard() {
   local tenant_id="$1"
+  local subscription_definition_id resource_group_definition_id
+  subscription_definition_id=$(lighthouse_definition_id \
+    "$SUBSCRIPTION_ID" "$GRADING_TENANT_ID" "$GRADING_PRINCIPAL_ID" \
+    "subscription" "reader")
+  resource_group_definition_id=$(lighthouse_definition_id \
+    "$SUBSCRIPTION_ID" "$GRADING_TENANT_ID" "$GRADING_PRINCIPAL_ID" \
+    "resource-group" "projProd")
   : >"$LOG_FILE"
   PATH="$FAKE_BIN:$PATH" \
   FAKE_AZ_LOG="$LOG_FILE" \
+  FAKE_SUBSCRIPTION_ID="$SUBSCRIPTION_ID" \
+  FAKE_SUBSCRIPTION_DEFINITION_ID="$subscription_definition_id" \
+  FAKE_RESOURCE_GROUP_DEFINITION_ID="$resource_group_definition_id" \
   FAKE_STUDENT_TENANT="$tenant_id" \
   FAKE_RESOURCES_EXIST=true \
   FAKE_DIRECT_ASSIGNMENTS_EXIST=true \
@@ -129,7 +148,7 @@ assert_count 4 "role assignment delete"
 assert_count 0 "managedservices"
 
 run_offboard "55555555-5555-5555-5555-555555555555"
-assert_count 2 "managedservices assignment delete"
+assert_count 2 "rest --method delete"
 assert_count 2 "managedservices definition delete"
 assert_count 0 "role assignment delete"
 

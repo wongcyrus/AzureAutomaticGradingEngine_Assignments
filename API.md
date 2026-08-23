@@ -106,7 +106,8 @@ overwrite a newer task.
 
 ### GET /api/pass-task
 
-View completed tasks and scores.
+View authenticated player identity, subscription, progress, active task, and
+retained failure history.
 
 **Parameters:**
 - None. The authenticated student's email is supplied by the proxy.
@@ -114,16 +115,51 @@ View completed tasks and scores.
 **Response:**
 ```json
 {
-  "status": "OK",
+  "success": true,
   "data": {
-    "TotalMarks": 50,
-    "PassedTasks": [
-      {"Name": "ResourceGroupTest", "Mark": 10},
-      {"Name": "StorageAccountTest", "Mark": 15}
-    ]
+    "email": "student@example.com",
+    "subscriptionId": "00000000-0000-0000-0000-000000000000",
+    "totalMarks": 50,
+    "passedTasks": [
+      {"name": "ResourceGroupTest", "mark": 10}
+    ],
+    "failedAttemptCount": 2,
+    "failedAttempts": [
+      {
+        "testName": "StorageAccountTest",
+        "taskName": "Create storage",
+        "assignedByNpc": "Stella",
+        "failedAt": "2026-08-23T03:00:00Z"
+      }
+    ],
+    "activeTask": null,
+    "lastActivity": "2026-08-23T03:00:00Z"
   }
 }
 ```
+
+### POST /api/pass-task
+
+Reset the authenticated player's current game progress. The endpoint removes
+all NPC game states, the active-task lock, score, and passed tests. It
+preserves failed-attempt history, test-result blobs, subscription registration,
+and Azure RBAC or Lighthouse access.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "email": "student@example.com",
+    "removedGameStates": 3,
+    "removedPassedTests": 2,
+    "preservedFailedAttempts": 5
+  }
+}
+```
+
+The Static Web Apps proxy supplies the authenticated identity and signs the
+`POST`; callers cannot reset another player's data.
 
 ## Admin Endpoints
 
@@ -205,8 +241,8 @@ Retrieve test result XML with proper content-type.
 All endpoints return errors in this format:
 ```json
 {
-  "status": "ERROR",
-  "message": "Error description",
+  "success": false,
+  "error": "Error description",
   "details": "Additional error details (optional)"
 }
 ```

@@ -7,6 +7,7 @@ import { AzapiProvider } from "./.gen/providers/azapi/provider";
 import { ResourceGroup } from "cdktf-azure-providers/.gen/providers/azurerm/resource-group";
 import { StorageAccount } from "cdktf-azure-providers/.gen/providers/azurerm/storage-account";
 import { UserAssignedIdentity } from "cdktf-azure-providers/.gen/providers/azurerm/user-assigned-identity";
+import { LogAnalyticsWorkspace } from "cdktf-azure-providers/.gen/providers/azurerm/log-analytics-workspace";
 import { Bytes } from "cdktf-azure-providers/.gen/providers/random/bytes";
 import { Construct } from "constructs";
 import path = require("path");
@@ -24,6 +25,16 @@ dotenv.config({ path: __dirname + "/.env" });
 const PREFIX = "GradingEngineAssignment";
 const ENVIRONMENT = "dev";
 const LOCATION = "EastAsia";
+const RESOURCE_NAMES = {
+  resourceGroup: "GradingEngineAssignmentResourceGroup",
+  gradingIdentity: "azure-isekai-grader-identity",
+  functionStorage: "azureisekaigrading2026",
+  functionPlan: "azure-isekai-grading-plan",
+  functionInsights: "azure-isekai-grader-insights",
+  staticWebApp: "azure-isekai-grading-web",
+  staticWebAppInsights: "azure-isekai-web-insights",
+  logAnalyticsWorkspace: "azure-isekai-grading-workspace",
+};
 const FUNCTION_NAMES = [
   "GraderFunction",
   "GameTaskFunction",
@@ -39,6 +50,7 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     this.configureProviders();
 
     const resourceGroup = this.createResourceGroup();
+    const monitoringWorkspace = this.createMonitoringWorkspace(resourceGroup);
     const gradingIdentity = this.createGradingIdentity(resourceGroup);
     const proxySigningKey = new Bytes(this, "ProxySigningKey", {
       length: 32,
@@ -46,6 +58,7 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
     const azureFunctionConstruct = this.createAzureFunction(
       resourceGroup,
       gradingIdentity,
+      monitoringWorkspace,
       proxySigningKey
     );
     const storageConstruct = this.createStorageResources(azureFunctionConstruct.storageAccount);
@@ -61,8 +74,10 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       resourceGroup,
       azureFunctionConstruct.functionUrls!,
       FUNCTION_NAMES,
-      PREFIX,
-      proxySigningKey
+      proxySigningKey,
+      monitoringWorkspace.id,
+      RESOURCE_NAMES.staticWebAppInsights,
+      RESOURCE_NAMES.staticWebApp
     );
 
     const azureADConstruct = new AzureADApplicationConstruct(
@@ -100,13 +115,23 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
   private createResourceGroup() {
     return new ResourceGroup(this, "ResourceGroup", {
       location: LOCATION,
-      name: `${PREFIX}ResourceGroup`,
+      name: RESOURCE_NAMES.resourceGroup,
+    });
+  }
+
+  private createMonitoringWorkspace(resourceGroup: ResourceGroup) {
+    return new LogAnalyticsWorkspace(this, "MonitoringWorkspace", {
+      name: RESOURCE_NAMES.logAnalyticsWorkspace,
+      location: resourceGroup.location,
+      resourceGroupName: resourceGroup.name,
+      sku: "PerGB2018",
+      retentionInDays: 30,
     });
   }
 
   private createGradingIdentity(resourceGroup: ResourceGroup) {
     return new UserAssignedIdentity(this, "GradingIdentity", {
-      name: `${PREFIX}Identity`,
+      name: RESOURCE_NAMES.gradingIdentity,
       location: resourceGroup.location,
       resourceGroupName: resourceGroup.name,
     });
@@ -115,6 +140,7 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
   private createAzureFunction(
     resourceGroup: ResourceGroup,
     gradingIdentity: UserAssignedIdentity,
+    monitoringWorkspace: LogAnalyticsWorkspace,
     proxySigningKey: string
   ) {
     const appSettings = {
@@ -131,6 +157,10 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       "AzureFunctionConstruct",
       {
         functionAppName: process.env.FUNCTION_APP_NAME!,
+        storageAccountName: RESOURCE_NAMES.functionStorage,
+        servicePlanName: RESOURCE_NAMES.functionPlan,
+        applicationInsightsName: RESOURCE_NAMES.functionInsights,
+        applicationInsightsWorkspaceId: monitoringWorkspace.id,
         environment: ENVIRONMENT,
         prefix: PREFIX,
         resourceGroup,

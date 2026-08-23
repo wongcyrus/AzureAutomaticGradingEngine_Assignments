@@ -16,6 +16,7 @@ public class StorageServiceTests
     private TableServiceClient tableServiceClient = null!;
     private BlobServiceClient blobServiceClient = null!;
     private TableClient tableClient = null!;
+    private TableClient gameStateTableClient = null!;
     private StorageService service = null!;
 
     [SetUp]
@@ -24,6 +25,16 @@ public class StorageServiceTests
         tableServiceClient = Substitute.For<TableServiceClient>();
         blobServiceClient = Substitute.For<BlobServiceClient>();
         tableClient = Substitute.For<TableClient>();
+        gameStateTableClient = Substitute.For<TableClient>();
+        tableServiceClient.GetTableClient("GameStates")
+            .Returns(gameStateTableClient);
+        var missingResetMarker = AzureTestResponses.Missing<GameResetMarker>();
+        gameStateTableClient.GetEntityIfExistsAsync<GameResetMarker>(
+                Arg.Any<string>(),
+                GameResetMarker.ResetRowKey,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(missingResetMarker);
         service = new StorageService(
             blobServiceClient,
             tableServiceClient,
@@ -134,6 +145,39 @@ public class StorageServiceTests
     }
 
     [Test]
+    public void SavePassTestRecordAsync_DuringReset_DoesNotRecreateProgress()
+    {
+        tableServiceClient.GetTableClient("PassTests").Returns(tableClient);
+        tableClient.GetEntityAsync<PassTestEntity>(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns<Task<Response<PassTestEntity>>>(
+                _ => throw new RequestFailedException(404, "Not found"));
+        gameStateTableClient.GetEntityIfExistsAsync<GameResetMarker>(
+                "student@example.com",
+                GameResetMarker.ResetRowKey,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(Response.FromValue(
+                new GameResetMarker { PartitionKey = "student@example.com" },
+                Substitute.For<Response>()));
+
+        Func<Task> action = async () => await service.SavePassTestRecordAsync(
+            "student@example.com",
+            "Task A",
+            new Dictionary<string, int> { ["Namespace.Pass"] = 10 },
+            "Stella");
+
+        Assert.ThrowsAsync<InvalidOperationException>(action);
+        tableClient.DidNotReceiveWithAnyArgs().UpsertEntityAsync(
+            default(ITableEntity)!,
+            default,
+            default);
+    }
+
+    [Test]
     public async Task SaveFailTestRecordAsync_StoresOnlyFailedResults()
     {
         tableServiceClient.GetTableClient("FailTests").Returns(tableClient);
@@ -144,12 +188,58 @@ public class StorageServiceTests
             new Dictionary<string, int> { ["Namespace.Pass"] = 1, ["Namespace.Fail"] = 0 },
             "Stella");
 
-        await tableClient.Received(1).UpsertEntityAsync(
+        await tableClient.Received(1).AddEntityAsync(
             Arg.Is<ITableEntity>(entity =>
                 entity.GetType() == typeof(FailTestEntity) &&
                 ((FailTestEntity)entity).TestName == "Namespace.Fail" &&
-                ((FailTestEntity)entity).AssignedByNPC == "Stella"),
-            TableUpdateMode.Merge,
+                ((FailTestEntity)entity).AssignedByNPC == "Stella" &&
+                ((FailTestEntity)entity).RowKey.StartsWith("Fail_")),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetFailedTestsAsync_ReturnsFailureHistory()
+    {
+        tableServiceClient.GetTableClient("FailTests").Returns(tableClient);
+        var failure = new FailTestEntity
+        {
+            PartitionKey = "student@example.com",
+            RowKey = "failure",
+            TestName = "Test01"
+        };
+        tableClient.QueryAsync<FailTestEntity>(
+                Arg.Any<System.Linq.Expressions.Expression<Func<FailTestEntity, bool>>>(),
+                null,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(AzureTestResponses.AsyncPageable(failure));
+
+        var result = await service.GetFailedTestsAsync("student@example.com");
+
+        Assert.That(result, Is.EqualTo(new[] { failure }));
+    }
+
+    [Test]
+    public async Task DeletePassedTasksAsync_DeletesPartitionAndVerifiesItIsEmpty()
+    {
+        tableServiceClient.GetTableClient("PassTests").Returns(tableClient);
+        var entity = new TableEntity("student@example.com", "test");
+        tableClient.QueryAsync<TableEntity>(
+                Arg.Any<string>(),
+                null,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(
+                AzureTestResponses.AsyncPageable(entity),
+                AzureTestResponses.AsyncPageable<TableEntity>());
+
+        var result = await service.DeletePassedTasksAsync("student@example.com");
+
+        Assert.That(result, Is.EqualTo(1));
+        await tableClient.Received(1).SubmitTransactionAsync(
+            Arg.Is<IEnumerable<TableTransactionAction>>(actions =>
+                actions.Count() == 1 &&
+                actions.Single().ActionType == TableTransactionActionType.Delete),
             Arg.Any<CancellationToken>());
     }
 

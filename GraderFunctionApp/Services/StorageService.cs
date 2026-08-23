@@ -61,9 +61,9 @@ namespace GraderFunctionApp.Services
                 await containerClient.CreateIfNotExistsAsync();
 
                 // Create blob name: email_timestamp.xml
-                var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+                var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
                 var sanitizedEmail = SanitizeFileName(email);
-                var blobName = $"{sanitizedEmail}_{timestamp}.xml";
+                var blobName = $"{sanitizedEmail}_{timestamp}_{Guid.NewGuid():N}.xml";
 
                 if (sanitizedEmail == "noemail")
                 {
@@ -173,6 +173,33 @@ namespace GraderFunctionApp.Services
             }
         }
 
+        public async Task<List<FailTestEntity>> GetFailedTestsAsync(string email)
+        {
+            try
+            {
+                var tableClient = _tableServiceClient.GetTableClient(
+                    _options.FailTestTableName);
+                var partitionKey = SanitizeKey(email);
+                var failedTests = new List<FailTestEntity>();
+
+                await foreach (var entity in tableClient.QueryAsync<FailTestEntity>(
+                                   entity => entity.PartitionKey == partitionKey))
+                {
+                    failedTests.Add(entity);
+                }
+
+                return failedTests;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to fetch failed tests for email: {email}",
+                    email);
+                throw;
+            }
+        }
+
         public async Task<List<string>> GetCompletedTaskNamesAsync(string email)
         {
             try
@@ -204,6 +231,13 @@ namespace GraderFunctionApp.Services
             }
         }
 
+        public Task<int> DeletePassedTasksAsync(string email)
+        {
+            return DeletePartitionEntitiesAsync(
+                _options.PassTestTableName,
+                SanitizeKey(email));
+        }
+
         private async Task<TableClient> PrepareTableAsync(string tableName)
         {
             var tableClient = _tableServiceClient.GetTableClient(tableName);
@@ -222,9 +256,9 @@ namespace GraderFunctionApp.Services
         private async Task SaveTestEntityAsync(TableClient tableClient, string partitionKey, string email, string testName, DateTimeOffset timestamp, bool isPass, int mark = 0, string taskName = "", string assignedByNPC = "")
         {
             var cleanTestName = CleanTestName(testName);
-            var rowKey = isPass 
-                ? cleanTestName 
-                : $"{cleanTestName}_{timestamp:yyyyMMddHHmmss}";
+            var rowKey = isPass
+                ? cleanTestName
+                : $"{cleanTestName}_{timestamp:yyyyMMddHHmmssfffffff}_{Guid.NewGuid():N}";
             
             if (cleanTestName == "invalidtest")
             {
@@ -273,7 +307,70 @@ namespace GraderFunctionApp.Services
             };
 
             _logger.LogInformation($"{(isPass ? nameof(SavePassTestRecordAsync) : nameof(SaveFailTestRecordAsync))}: Saving test - PartitionKey: '{{partitionKey}}', RowKey: '{{rowKey}}', TestName: '{{testName}}', Mark: {{mark}}, NPC: '{{npc}}'", partitionKey, rowKey, testName, mark, assignedByNPC);
-            await tableClient.UpsertEntityAsync(entity);
+            if (isPass)
+            {
+                await EnsureResetNotInProgressAsync(email);
+                await tableClient.UpsertEntityAsync(entity);
+            }
+            else
+            {
+                await tableClient.AddEntityAsync(entity);
+            }
+        }
+
+        private async Task<int> DeletePartitionEntitiesAsync(
+            string tableName,
+            string partitionKey)
+        {
+            var tableClient = _tableServiceClient.GetTableClient(tableName);
+            var deletedCount = 0;
+            var filter = TableClient.CreateQueryFilter(
+                $"PartitionKey eq {partitionKey}");
+
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                var entities = new List<TableEntity>();
+                await foreach (var entity in tableClient.QueryAsync<TableEntity>(
+                                   filter: filter))
+                {
+                    entities.Add(entity);
+                }
+
+                if (entities.Count == 0)
+                {
+                    return deletedCount;
+                }
+
+                foreach (var batch in entities.Chunk(100))
+                {
+                    var actions = batch.Select(entity =>
+                    {
+                        entity.ETag = ETag.All;
+                        return new TableTransactionAction(
+                            TableTransactionActionType.Delete,
+                            entity);
+                    });
+                    await tableClient.SubmitTransactionAsync(actions);
+                }
+
+                deletedCount += entities.Count;
+            }
+
+            throw new InvalidOperationException(
+                $"Could not clear the {tableName} partition because records are still being created.");
+        }
+
+        private async Task EnsureResetNotInProgressAsync(string email)
+        {
+            var gameStates = _tableServiceClient.GetTableClient("GameStates");
+            var marker = await gameStates.GetEntityIfExistsAsync<GameResetMarker>(
+                email,
+                GameResetMarker.ResetRowKey);
+            if (marker.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "Game progress is currently being reset.");
+            }
         }
 
         public async Task<string?> GenerateTestResultSasUrlAsync(string blobName)

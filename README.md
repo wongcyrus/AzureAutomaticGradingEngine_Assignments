@@ -109,7 +109,8 @@ Students must create the following Azure infrastructure:
 ### Core Functions
 - `GET /api/game-task` - Get next task assignment
 - `GET /api/grader` - Submit work for grading
-- `GET /api/pass-task` - View completed tasks and scores
+- `GET /api/pass-task` - View player identity, progress, and failure history
+- `POST /api/pass-task` - Reset progress while preserving failure history
 
 ### Admin Functions
 - `GET /api/pregeneratedmessagestats` - View message cache statistics
@@ -159,8 +160,9 @@ dotnet test GraderFunctionApp.Tests/GraderFunctionApp.Tests.csproj \
     --settings GraderFunctionApp.Tests/coverlet.runsettings
 ```
 
-The current suite contains 237 tests and covers 91.1% of Function App lines
-and 81.0% of branches. Coverage excludes only generated Function SDK files
+The current suite contains 256 tests and covers 91.6% of Function App lines
+and 81.2% of branches. Coverage is scoped to the `GraderFunctionApp` assembly
+and excludes only generated Function SDK files
 under `obj`; production source files remain included.
 
 Sign in with Azure CLI and run tests against an explicit subscription:

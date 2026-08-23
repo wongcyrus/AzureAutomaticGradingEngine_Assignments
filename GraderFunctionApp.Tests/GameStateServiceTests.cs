@@ -22,6 +22,13 @@ public class GameStateServiceTests
         tableClient = Substitute.For<TableClient>();
         var tableServiceClient = Substitute.For<TableServiceClient>();
         tableServiceClient.GetTableClient("GameStates").Returns(tableClient);
+        var missingResetMarker = AzureTestResponses.Missing<GameResetMarker>();
+        tableClient.GetEntityIfExistsAsync<GameResetMarker>(
+                Arg.Any<string>(),
+                GameResetMarker.ResetRowKey,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(missingResetMarker);
         service = new GameStateService(
             tableServiceClient,
             NullLogger<GameStateService>.Instance);
@@ -145,6 +152,201 @@ public class GameStateServiceTests
         var result = await service.GetActiveTaskLockAsync(Email);
 
         Assert.That(result, Is.SameAs(taskLock));
+    }
+
+    [Test]
+    public async Task DeleteAllGameStatesAsync_DeletesStatesAndLock()
+    {
+        var state = new TableEntity(Email, $"{Game}-{Npc}");
+        var taskLock = new TableEntity(Email, GameTaskLock.LockRowKey);
+        tableClient.QueryAsync<TableEntity>(
+                Arg.Any<string>(),
+                null,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(
+                AzureTestResponses.AsyncPageable(state, taskLock),
+                AzureTestResponses.AsyncPageable<TableEntity>());
+
+        var result = await service.DeleteAllGameStatesAsync(Email);
+
+        Assert.That(result, Is.EqualTo(2));
+        await tableClient.Received(1).SubmitTransactionAsync(
+            Arg.Is<IEnumerable<TableTransactionAction>>(actions =>
+                actions.Count() == 2 &&
+                actions.All(action =>
+                    action.ActionType == TableTransactionActionType.Delete)),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task BeginAndEndGameResetAsync_ManageResetMarker()
+    {
+        await service.BeginGameResetAsync(Email);
+        await service.EndGameResetAsync(Email);
+
+        await tableClient.Received(1).AddEntityAsync(
+            Arg.Is<GameResetMarker>(marker =>
+                marker.PartitionKey == Email &&
+                marker.RowKey == GameResetMarker.ResetRowKey),
+            Arg.Any<CancellationToken>());
+        await tableClient.Received(1).DeleteEntityAsync(
+            Email,
+            GameResetMarker.ResetRowKey,
+            ETag.All,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task BeginGameResetAsync_StaleMarker_ReplacesMarker()
+    {
+        var attempts = 0;
+        tableClient.AddEntityAsync(
+                Arg.Any<GameResetMarker>(),
+                Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                if (attempts++ == 0)
+                {
+                    throw new RequestFailedException(409, "Conflict");
+                }
+
+                return Task.FromResult(Substitute.For<Response>());
+            });
+        var staleMarker = new GameResetMarker
+        {
+            PartitionKey = Email,
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-10),
+            ETag = new ETag("stale")
+        };
+        tableClient.GetEntityIfExistsAsync<GameResetMarker>(
+                Email,
+                GameResetMarker.ResetRowKey,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(Response.FromValue(
+                staleMarker,
+                Substitute.For<Response>()));
+
+        await service.BeginGameResetAsync(Email);
+
+        await tableClient.Received(1).DeleteEntityAsync(
+            Email,
+            GameResetMarker.ResetRowKey,
+            staleMarker.ETag,
+            Arg.Any<CancellationToken>());
+        await tableClient.Received(2).AddEntityAsync(
+            Arg.Any<GameResetMarker>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void BeginGameResetAsync_RecentMarker_Throws()
+    {
+        tableClient.AddEntityAsync(
+                Arg.Any<GameResetMarker>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<Response>>(
+                _ => throw new RequestFailedException(409, "Conflict"));
+        tableClient.GetEntityIfExistsAsync<GameResetMarker>(
+                Email,
+                GameResetMarker.ResetRowKey,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(Response.FromValue(
+                new GameResetMarker
+                {
+                    PartitionKey = Email,
+                    StartedAt = DateTimeOffset.UtcNow
+                },
+                Substitute.For<Response>()));
+
+        Func<Task> action = async () =>
+            await service.BeginGameResetAsync(Email);
+
+        Assert.ThrowsAsync<InvalidOperationException>(action);
+    }
+
+    [Test]
+    public void BeginGameResetAsync_ConcurrentStaleMarkerReplacement_Throws()
+    {
+        tableClient.AddEntityAsync(
+                Arg.Any<GameResetMarker>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<Response>>(
+                _ => throw new RequestFailedException(409, "Conflict"));
+        tableClient.GetEntityIfExistsAsync<GameResetMarker>(
+                Email,
+                GameResetMarker.ResetRowKey,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(Response.FromValue(
+                new GameResetMarker
+                {
+                    PartitionKey = Email,
+                    StartedAt = DateTimeOffset.UtcNow.AddMinutes(-10)
+                },
+                Substitute.For<Response>()));
+
+        Func<Task> action = async () =>
+            await service.BeginGameResetAsync(Email);
+
+        Assert.ThrowsAsync<InvalidOperationException>(action);
+    }
+
+    [Test]
+    public async Task EndGameResetAsync_MissingMarker_IsIdempotent()
+    {
+        tableClient.DeleteEntityAsync(
+                Email,
+                GameResetMarker.ResetRowKey,
+                ETag.All,
+                Arg.Any<CancellationToken>())
+            .Returns<Task<Response>>(
+                _ => throw new RequestFailedException(404, "Not found"));
+
+        await service.EndGameResetAsync(Email);
+    }
+
+    [Test]
+    public async Task DeleteAllGameStatesAsync_IgnoresResetMarker()
+    {
+        var marker = new TableEntity(Email, GameResetMarker.ResetRowKey);
+        tableClient.QueryAsync<TableEntity>(
+                Arg.Any<string>(),
+                null,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(AzureTestResponses.AsyncPageable(marker));
+
+        var result = await service.DeleteAllGameStatesAsync(Email);
+
+        Assert.That(result, Is.Zero);
+        await tableClient.DidNotReceiveWithAnyArgs().SubmitTransactionAsync(
+            default(IEnumerable<TableTransactionAction>)!,
+            default);
+    }
+
+    [Test]
+    public void CreateOrUpdateGameStateAsync_DuringReset_Throws()
+    {
+        tableClient.GetEntityIfExistsAsync<GameResetMarker>(
+                Email,
+                GameResetMarker.ResetRowKey,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(Response.FromValue(
+                new GameResetMarker { PartitionKey = Email },
+                Substitute.For<Response>()));
+
+        Func<Task> action = async () =>
+            await service.CreateOrUpdateGameStateAsync(CreateState());
+
+        Assert.ThrowsAsync<InvalidOperationException>(action);
+        tableClient.DidNotReceiveWithAnyArgs().UpsertEntityAsync(
+            default(GameState)!,
+            default,
+            default);
     }
 
     [Test]

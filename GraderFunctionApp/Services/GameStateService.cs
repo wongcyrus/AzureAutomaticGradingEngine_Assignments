@@ -41,6 +41,7 @@ namespace GraderFunctionApp.Services
         {
             try
             {
+                await EnsureResetNotInProgressAsync(gameState.PartitionKey);
                 gameState.LastUpdated = DateTime.UtcNow;
                 await _tableClient.UpsertEntityAsync(gameState);
                 return gameState;
@@ -55,6 +56,7 @@ namespace GraderFunctionApp.Services
 
         public async Task<GameState> InitializeGameStateAsync(string email, string game, string npc)
         {
+            await EnsureResetNotInProgressAsync(email);
             var gameState = new GameState
             {
                 PartitionKey = email,
@@ -111,6 +113,111 @@ namespace GraderFunctionApp.Services
             return response.HasValue ? response.Value : null;
         }
 
+        public async Task BeginGameResetAsync(string email)
+        {
+            var marker = new GameResetMarker
+            {
+                PartitionKey = email,
+                StartedAt = DateTimeOffset.UtcNow
+            };
+
+            try
+            {
+                await _tableClient.AddEntityAsync(marker);
+                return;
+            }
+            catch (RequestFailedException ex) when (ex.Status == 409)
+            {
+                var existing = await _tableClient.GetEntityIfExistsAsync<GameResetMarker>(
+                    email,
+                    GameResetMarker.ResetRowKey);
+                var existingMarker = existing.HasValue ? existing.Value : null;
+                if (existingMarker == null ||
+                    existingMarker.StartedAt >= DateTimeOffset.UtcNow.AddMinutes(-5))
+                {
+                    throw new InvalidOperationException(
+                        "A game reset is already in progress.",
+                        ex);
+                }
+
+                await _tableClient.DeleteEntityAsync(
+                    email,
+                    GameResetMarker.ResetRowKey,
+                    existingMarker.ETag);
+                try
+                {
+                    await _tableClient.AddEntityAsync(marker);
+                    return;
+                }
+                catch (RequestFailedException retryException)
+                    when (retryException.Status == 409)
+                {
+                    throw new InvalidOperationException(
+                        "A game reset started concurrently.",
+                        retryException);
+                }
+            }
+        }
+
+        public async Task<int> DeleteAllGameStatesAsync(string email)
+        {
+            var deletedCount = 0;
+            var filter = TableClient.CreateQueryFilter(
+                $"PartitionKey eq {email}");
+
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                var entities = new List<TableEntity>();
+                await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
+                                   filter: filter))
+                {
+                    if (entity.RowKey != GameResetMarker.ResetRowKey)
+                    {
+                        entities.Add(entity);
+                    }
+                }
+
+                if (entities.Count == 0)
+                {
+                    return deletedCount;
+                }
+
+                foreach (var batch in entities.Chunk(100))
+                {
+                    var actions = batch.Select(entity =>
+                    {
+                        entity.ETag = ETag.All;
+                        return new TableTransactionAction(
+                            TableTransactionActionType.Delete,
+                            entity);
+                    });
+                    await _tableClient.SubmitTransactionAsync(actions);
+                }
+
+                deletedCount += entities.Count;
+            }
+
+            throw new InvalidOperationException(
+                "Could not clear game state because records are still being created.");
+        }
+
+        public async Task EndGameResetAsync(string email)
+        {
+            try
+            {
+                await _tableClient.DeleteEntityAsync(
+                    email,
+                    GameResetMarker.ResetRowKey,
+                    ETag.All);
+            }
+            catch (RequestFailedException ex) when (ex.Status == 404)
+            {
+                _logger.LogWarning(
+                    "Reset marker was already absent for {email}",
+                    email);
+            }
+        }
+
         public async Task<GameState?> TryAssignTaskAsync(
             string email,
             string game,
@@ -144,6 +251,7 @@ namespace GraderFunctionApp.Services
 
             try
             {
+                await EnsureResetNotInProgressAsync(email);
                 await _tableClient.SubmitTransactionAsync(
                 [
                     new TableTransactionAction(TableTransactionActionType.Add, taskLock),
@@ -200,6 +308,7 @@ namespace GraderFunctionApp.Services
 
             gameState.LastUpdated = DateTime.UtcNow;
             var taskLock = await GetActiveTaskLockAsync(email);
+            await EnsureResetNotInProgressAsync(email);
             if (taskLock != null &&
                 taskLock.Game == game &&
                 taskLock.Npc == npc)
@@ -275,6 +384,7 @@ namespace GraderFunctionApp.Services
 
             try
             {
+                await EnsureResetNotInProgressAsync(email);
                 await _tableClient.UpdateEntityAsync(
                     gameState,
                     gameState.ETag,
@@ -302,7 +412,8 @@ namespace GraderFunctionApp.Services
                 var gameStates = new List<GameState>();
                 await foreach (var entity in _tableClient.QueryAsync<GameState>(filter: $"PartitionKey eq '{email}'"))
                 {
-                    if (entity.RowKey != GameTaskLock.LockRowKey)
+                    if (entity.RowKey != GameTaskLock.LockRowKey &&
+                        entity.RowKey != GameResetMarker.ResetRowKey)
                     {
                         gameStates.Add(entity);
                     }
@@ -320,6 +431,7 @@ namespace GraderFunctionApp.Services
         {
             try
             {
+                await EnsureResetNotInProgressAsync(email);
                 var partitionKey = email;
                 var rowKey = $"{game}-{npc}";
                 var gameState = await _tableClient.GetEntityAsync<GameState>(
@@ -353,6 +465,18 @@ namespace GraderFunctionApp.Services
             {
                 _logger.LogError(ex, "Error deleting game state for {email}, {game}, {npc}", email, game, npc);
                 throw;
+            }
+        }
+
+        private async Task EnsureResetNotInProgressAsync(string email)
+        {
+            var marker = await _tableClient.GetEntityIfExistsAsync<GameResetMarker>(
+                email,
+                GameResetMarker.ResetRowKey);
+            if (marker.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "Game progress is currently being reset.");
             }
         }
 

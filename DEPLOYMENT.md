@@ -45,6 +45,9 @@ cd Infrastructure/
 # Deploy infrastructure
 npx cdktn deploy
 
+# Seed idempotent NPC and Easter egg baseline data.
+npm run storage:seed
+
 # Install Static Web Apps API dependencies, refresh Entra/proxy settings, and
 # deploy the frontend and API.
 npm run frontend:deploy
@@ -54,6 +57,13 @@ npm run frontend:deploy
 cp students.example.txt students.txt
 npm run students:invite -- students.txt
 ```
+
+`npx cdktn deploy` creates the Azure tables but does not populate table
+entities. Run `npm run storage:seed` after every clean deployment to import the
+version-controlled NPC personalities and Easter egg links from
+`Infrastructure/data/`. The command merges by partition and row key, so it is
+safe to rerun. It does not create or restore student registrations, progress,
+passes, failures, or reports.
 
 This creates:
 - Azure Function App
@@ -76,6 +86,25 @@ creation, including:
 - `PassTaskFunctionUrl`
 - `StudentRegistrationFunctionUrl`
 - `GRADER_PROXY_SIGNING_KEY`
+
+All Azure resources owned by the stack use
+`GradingEngineAssignmentResourceGroup` and deterministic names:
+
+| Resource | Name |
+| --- | --- |
+| Function App | `azureisekai2026` |
+| Function storage | `azureisekaigrading2026` |
+| App Service plan | `azure-isekai-grading-plan` |
+| Grading identity | `azure-isekai-grader-identity` |
+| Static Web App | `azure-isekai-grading-web` |
+| Log Analytics workspace | `azure-isekai-grading-workspace` |
+| Function Application Insights | `azure-isekai-grader-insights` |
+| Web Application Insights | `azure-isekai-web-insights` |
+
+Both Application Insights resources use the shared explicit Log Analytics
+workspace. This prevents Azure from creating separate `ai_*_managed` resource
+groups. Microsoft Entra applications and groups remain tenant-scoped because
+they are not Azure Resource Manager resources.
 
 Terraform intentionally ignores subsequent drift in the complete Static Web
 Apps settings map so a later infrastructure deployment does not erase these
@@ -205,10 +234,15 @@ It reports the matching rows and blobs before requesting confirmation. Use
 `--yes` for non-interactive operation, and `--resource-group` or
 `--storage-account` when resetting a non-default deployment. The script removes
 all rows in that student's `GameStates` partition, including
-`__active_task_lock__`, plus their `PassTests`, `FailTests`, and test-result
-blobs. It deliberately preserves the `Subscription` registration.
+`__active_task_lock__`, plus their `PassTests`. It preserves `FailTests`,
+test-result blobs, and the `Subscription` registration by default. Use
+`--purge-failures` or `--purge-results` only when that retained history must
+also be removed.
 Close the student's active game client before resetting; the script retries
 concurrent writes briefly and fails rather than reporting a false success.
+
+Students can perform the same progress-only reset from `pass-task.html`. The
+authenticated reset cannot target another student's partition.
 
 Deleting only an NPC state while leaving the lock row blocks future task
 assignment. Application code deletes a matching state and lock atomically, but

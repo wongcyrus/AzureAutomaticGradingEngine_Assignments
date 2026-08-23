@@ -7,7 +7,7 @@ if [[ $# -ne 0 ]]; then
   exit 2
 fi
 
-grading_principal_id="8feba365-a613-4d15-adfd-162e7feee3ec"
+grading_principal_id="078c7abf-66ed-409c-9e40-e8fdb6a93221"
 grading_tenant_id="8ff7db19-435d-4c3c-83d3-ca0a46234f51"
 instructor_principal_id="76407111-df2d-4199-b496-fd6b68c4bb91"
 gist_base="https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw"
