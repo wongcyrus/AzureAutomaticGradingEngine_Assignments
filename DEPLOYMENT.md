@@ -173,90 +173,13 @@ not log backend URLs.
 
 ### Student Subscription Onboarding
 
-Read these deployment outputs and distribute the values to students:
+Onboarding is split into role-specific guides:
 
-```bash
-cd Infrastructure
-npx cdktn output AzureAutomaticGradingEngineGrader
-```
+- [Teacher](docs/onboarding-teacher.md)
+- [Student in the same tenant](docs/onboarding-student-same-tenant.md)
+- [Student in a different tenant](docs/onboarding-student-cross-tenant.md)
 
-- `grading_identity_principal_id`
-- `grading_identity_tenant_id`
-
-Each student runs:
-
-```bash
-scripts/onboard-managed-identity.sh \
-  -s <student-subscription-id> \
-  -p <grading-identity-principal-id> \
-  -t <grading-identity-tenant-id> \
-  -e <azure-isekai-sign-in-email> \
-  -i <instructor-user-object-id>
-```
-
-`projProd` must already exist. The script compares the subscription tenant with
-the grading identity tenant and idempotently selects:
-
-- Direct Azure RBAC for a same-tenant subscription.
-- Azure Lighthouse for a cross-tenant subscription.
-
-Same-tenant execution requires Owner or User Access Administrator rights.
-Cross-tenant execution requires Owner or a custom role with
-`Microsoft.Authorization/roleAssignments` read, write, and delete permissions.
-Both modes assign:
-
-- `Reader` on the subscription.
-- `Website Contributor` on `projProd`.
-- A `GradingStudentEmail` tag on `projProd`, binding registration to the
-  student's authenticated Azure Isekai email.
-
-The optional `-i` argument grants the same limited roles to an instructor user
-for local test execution. Use an instructor-only principal; never use the
-student access group. Lighthouse uses one deterministic definition per scope:
-the subscription definition grants `Reader`, while the `projProd` definition
-combines `Reader` and `Website Contributor`. Combining both resource-group
-roles is required because a narrower Lighthouse assignment overrides the
-subscription assignment at that scope. Interrupted runs can be safely
-repeated.
-
-Students then register only the subscription ID in Azure Isekai. RBAC changes
-can take several minutes to propagate. No student service-principal password is
-created or stored.
-
-Alternatively, an instructor can write the same registration record after
-onboarding:
-
-```bash
-cd Infrastructure
-npm run students:import -- <student-email> <subscription-id>
-```
-
-The command is idempotent and refuses conflicting registrations, ownership
-tags, or missing grader access. It verifies direct `Reader` RBAC for a
-same-tenant subscription and the expected subscription/resource-group
-Lighthouse definitions and assignments for a cross-tenant subscription.
-
-Revoke Azure access with the matching script:
-
-```bash
-scripts/offboard-managed-identity.sh \
-  -s <student-subscription-id> \
-  -p <grading-identity-principal-id> \
-  -t <grading-identity-tenant-id> \
-  -e <azure-isekai-sign-in-email> \
-  -i <instructor-user-object-id>
-```
-
-For same-tenant direct RBAC, pass the same optional instructor ID used during
-onboarding so its assignments are also removed. Lighthouse stores grader and
-instructor authorizations in the same offer, so removing that offer revokes
-both. The script first verifies the `GradingStudentEmail` ownership tag, then
-removes either direct role assignments or Lighthouse assignments and
-definitions before removing the tag. It is safe to rerun after partial
-offboarding. Remove the student's `Subscription` table registration separately
-if the subscription should no longer appear in the game. Removing Static Web
-Apps group membership only revokes game sign-in; it does not revoke Azure
-resource access.
+See the [documentation index](docs/index.md) for all project guides.
 
 ### Resetting One Student
 

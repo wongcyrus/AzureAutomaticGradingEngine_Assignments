@@ -129,64 +129,13 @@ DEPLOYMENT_OR_MODEL_NAME=gpt-35-turbo
 
 ### Student Subscription Onboarding
 
-The instructor gets the identity values after deployment:
+Use the role-specific guides:
 
-```bash
-cd Infrastructure
-npx cdktn output AzureAutomaticGradingEngineGrader
-```
+- [Teacher](docs/onboarding-teacher.md)
+- [Student in the same tenant](docs/onboarding-student-same-tenant.md)
+- [Student in a different tenant](docs/onboarding-student-cross-tenant.md)
 
-After creating the assignment resource group, each student runs:
-
-```bash
-scripts/onboard-managed-identity.sh \
-  -s <student-subscription-id> \
-  -p <grading_identity_principal_id> \
-  -t <grading_identity_tenant_id> \
-  -e <azure-isekai-sign-in-email> \
-  -i <instructor-user-object-id>
-```
-
-This grants `Reader` at subscription scope and `Website Contributor` only on
-the `projProd` resource group. It also tags that resource group with the
-student's sign-in email so another student cannot claim the subscription. The
-script detects the subscription tenant and idempotently uses:
-
-- Direct RBAC when the subscription and grader use the same tenant.
-- Azure Lighthouse when the subscription belongs to another tenant.
-
-Same-tenant onboarding requires Owner or User Access Administrator rights.
-Cross-tenant Lighthouse onboarding requires Owner or a custom role with
-`Microsoft.Authorization/roleAssignments` read, write, and delete permissions.
-After authorization propagates, the student signs in to Azure Isekai with the
-same email and registers only the subscription ID.
-The optional instructor object ID grants the same limited access for local
-Azure CLI test runs.
-
-Revoke all Azure access with the matching command. For same-tenant direct RBAC,
-include the same optional instructor ID so its assignments are also removed:
-
-```bash
-scripts/offboard-managed-identity.sh \
-  -s <student-subscription-id> \
-  -p <grading_identity_principal_id> \
-  -t <grading_identity_tenant_id> \
-  -e <azure-isekai-sign-in-email> \
-  -i <instructor-user-object-id>
-```
-
-An instructor can register an already-onboarded subscription without asking
-the student to use the registration page:
-
-```bash
-cd Infrastructure
-npm run students:import -- <student-email> <subscription-id>
-```
-
-The import refuses subscriptions whose `projProd` ownership tag or grader RBAC
-does not match. It verifies a direct `Reader` assignment for same-tenant
-subscriptions or both deterministic Lighthouse delegations for cross-tenant
-subscriptions before writing the registration row.
+See the [documentation index](docs/index.md) for all project guides.
 
 Validate both onboarding modes without changing Azure resources:
 
