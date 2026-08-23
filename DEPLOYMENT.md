@@ -181,6 +181,18 @@ Onboarding is split into role-specific guides:
 
 See the [documentation index](docs/index.md) for all project guides.
 
+After a clean destroy and redeploy, retrieve the new
+`grading_identity_principal_id` from the CDKTF outputs. Update the embedded
+principal ID in both `scripts/cloudshell-onboard.sh` and
+`scripts/cloudshell-offboard.sh`, then publish both updated files to the
+maintained onboarding Gist before students onboard again. Update the embedded
+tenant ID as well if the deployment tenant changed.
+
+Students must run the offboarding launcher before the old stack is destroyed
+and before the Gist is changed to the new principal ID. The same launcher
+automatically removes same-tenant direct RBAC or different-tenant Azure
+Lighthouse access while preserving `projProd`.
+
 ### Resetting One Student
 
 Use the reset script from the repository root:

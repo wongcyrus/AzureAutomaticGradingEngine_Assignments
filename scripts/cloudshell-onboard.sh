@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "Usage: bash -s -- <azure-isekai-email> [location]" >&2
+  exit 2
+fi
+
+student_email="${1,,}"
+location="${2:-eastasia}"
+grading_principal_id="8feba365-a613-4d15-adfd-162e7feee3ec"
+grading_tenant_id="8ff7db19-435d-4c3c-83d3-ca0a46234f51"
+instructor_principal_id="${AZURE_ISEKAI_DEBUG_INSTRUCTOR_ID:-}"
+gist_base="https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw"
+work_dir="$(mktemp -d)"
+trap 'rm -rf "$work_dir"' EXIT
+
+for command in az curl jq; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "Error: $command is required." >&2
+    exit 1
+  fi
+done
+
+subscription_id="$(az account show --query id --output tsv)"
+subscription_name="$(az account show --query name --output tsv)"
+student_tenant_id="$(
+  az account show \
+    --subscription "$subscription_id" \
+    --query tenantId \
+    --output tsv
+)"
+echo "Using current Cloud Shell subscription: $subscription_name ($subscription_id)"
+if [[ "${student_tenant_id,,}" == "$grading_tenant_id" ]]; then
+  echo "Access mode: same-tenant direct RBAC"
+else
+  echo "Access mode: cross-tenant Azure Lighthouse"
+fi
+
+mkdir -p "$work_dir/lighthouse"
+curl -fsSLo "$work_dir/onboard-managed-identity.sh" \
+  "$gist_base/onboard-managed-identity.sh"
+curl -fsSLo "$work_dir/grading-access-common.sh" \
+  "$gist_base/grading-access-common.sh"
+curl -fsSLo "$work_dir/lighthouse/subscription.json" \
+  "$gist_base/subscription.json"
+curl -fsSLo "$work_dir/lighthouse/resource-group.json" \
+  "$gist_base/resource-group.json"
+chmod +x "$work_dir/onboard-managed-identity.sh"
+
+az group create \
+  --subscription "$subscription_id" \
+  --name projProd \
+  --location "$location" \
+  --only-show-errors \
+  --output none
+
+onboarding_args=(
+  -s "$subscription_id"
+  -p "$grading_principal_id"
+  -t "$grading_tenant_id"
+  -e "$student_email"
+  -m auto
+)
+if [[ -n "$instructor_principal_id" ]]; then
+  onboarding_args+=(-i "$instructor_principal_id")
+  echo "Instructor debug access: enabled."
+else
+  echo "Instructor debug access: not granted."
+fi
+
+"$work_dir/onboard-managed-identity.sh" "${onboarding_args[@]}"
