@@ -33,9 +33,9 @@ public class GameTaskServiceTests
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(tasks, Has.Count.EqualTo(28));
-            Assert.That(tests, Has.Count.EqualTo(35));
-            Assert.That(uniqueTests, Has.Count.EqualTo(35));
+            Assert.That(tasks, Has.Count.EqualTo(33));
+            Assert.That(tests, Has.Count.EqualTo(40));
+            Assert.That(uniqueTests, Has.Count.EqualTo(40));
             Assert.That(tasks, Is.Ordered.By("GameClassOrder"));
             Assert.That(tasks, Has.All.Property(nameof(GameTaskData.Instruction)).Not.Empty);
             Assert.That(tasks, Has.All.Property(nameof(GameTaskData.Filter)).Not.Empty);

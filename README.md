@@ -210,7 +210,7 @@ dotnet run --project AzureProjectTest/AzureProjectTest.csproj --configuration De
 ```
 
 Run HTTP integration tests against the deployed Function App. Pass a grading
-subscription as the third argument to execute all 35 Azure resource assertions
+subscription as the third argument to execute all 40 Azure resource assertions
 through the deployed Function:
 
 ```bash
