@@ -13,9 +13,10 @@ Record `grading_identity_principal_id` and `grading_identity_tenant_id`. The
 maintained unlisted
 [Cloud Shell onboarding Gist](https://gist.github.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c)
 is configured for the current deployed identity. A clean destroy and redeploy
-creates a new grading principal ID. Update `grading_principal_id` in both
-`cloudshell-onboard.sh` and `cloudshell-offboard.sh` locally and in the Gist
-before asking students to onboard again. Also update `grading_tenant_id` if the
+creates a new grading principal ID. Update `grading_principal_id` in
+`cloudshell-onboard.sh`, `cloudshell-offboard.sh`, and
+`cloudshell-verify-access.sh` locally and in the Gist before asking students to
+onboard again. Also update `grading_tenant_id` in all three files if the
 deployment tenant changes.
 
 Before destroying the old stack, ask every student to run the shared
@@ -48,13 +49,36 @@ Azure subscriptions.
 - [Student in a different tenant](onboarding-student-cross-tenant.md)
 
 Both students use Azure Cloud Shell without cloning this repository or entering
-a subscription ID or email address. The launcher uses the subscription and
-signed-in identity currently selected in Cloud Shell. By default it authorizes
-only the grading Function's managed identity. It does not grant the teacher
+a subscription ID or email address. Same-tenant students use
+`cloudshell-onboard-direct.sh`; different-tenant students use
+`cloudshell-onboard-lighthouse.sh`. Each launcher rejects an incompatible
+tenant relationship before granting access. Both use the subscription and
+signed-in identity currently selected in Cloud Shell and authorize only the
+grading Function's managed identity by default. They do not grant the teacher
 account access to student subscriptions, so those subscriptions and resource
 groups do not clutter the teacher's Azure portal.
 
-## 4. Register an Onboarded Subscription
+Before registration, ask the student to run the read-only verifier:
+
+```bash
+curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-verify-access.sh?v=$(date +%s)" \
+  | bash
+```
+
+It must report the expected mode and finish with `Verification passed`.
+Same-tenant subscriptions require direct RBAC and reject grader Lighthouse
+delegation; cross-tenant subscriptions require both Lighthouse delegations and
+reject direct grader RBAC.
+See [Verify student grading access](verify-student-grading-access.md) for the
+required output, failure handling, and student-run end-to-end grading check.
+
+The onboarding script will not replace a non-empty `GradingStudentEmail` tag
+owned by another email. Teachers should investigate ownership disputes rather
+than deleting or changing that tag automatically. Subscription owners can
+still change Azure resources manually; the tag guard prevents accidental or
+script-based reassignment, not actions by a hostile subscription administrator.
+
+## 4. Register a Verified Subscription
 
 Students can register the subscription ID displayed by the launcher in Azure
 Isekai. A teacher can instead import it:
@@ -78,6 +102,8 @@ scripts/test-deployed-function.sh \
 ```
 
 Azure role and Lighthouse changes can take several minutes to propagate.
+If grading still fails, have the student rerun the verifier from the affected
+subscription before granting teacher debug access.
 
 Students can review their authenticated profile and reset current progress from
 `pass-task.html`. A self-service reset preserves failed attempts, grading

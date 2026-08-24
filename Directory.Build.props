@@ -1,6 +1,7 @@
 <Project>
   <PropertyGroup>
     <UsePrivateTests Condition="'$(UsePrivateTests)' == ''">false</UsePrivateTests>
+    <PrivateTestPackageId Condition="'$(PrivateTestPackageId)' == ''">WongCyrus.AzureProjectTestLib.Private</PrivateTestPackageId>
     <PrivateTestPackageVersion Condition="'$(PrivateTestPackageVersion)' == ''">1.0.1</PrivateTestPackageVersion>
   </PropertyGroup>
 </Project>

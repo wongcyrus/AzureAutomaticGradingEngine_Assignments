@@ -2,12 +2,13 @@
 
 set -euo pipefail
 
-if [[ $# -gt 1 ]]; then
-  echo "Usage: bash -s -- [location]" >&2
+if [[ $# -gt 2 ]]; then
+  echo "Usage: bash -s -- [location] [auto|direct|lighthouse]" >&2
   exit 2
 fi
 
 location="${1:-eastasia}"
+access_mode="${2:-auto}"
 grading_principal_id="078c7abf-66ed-409c-9e40-e8fdb6a93221"
 grading_tenant_id="8ff7db19-435d-4c3c-83d3-ca0a46234f51"
 instructor_principal_id="${AZURE_ISEKAI_DEBUG_INSTRUCTOR_ID:-}"
@@ -37,9 +38,38 @@ student_tenant_id="$(
     --query tenantId \
     --output tsv
 )"
+
+case "${access_mode,,}" in
+  auto)
+    if [[ "${student_tenant_id,,}" == "$grading_tenant_id" ]]; then
+      resolved_access_mode="direct"
+    else
+      resolved_access_mode="lighthouse"
+    fi
+    ;;
+  direct)
+    if [[ "${student_tenant_id,,}" != "$grading_tenant_id" ]]; then
+      echo "Error: direct onboarding requires the subscription and grader to be in the same tenant." >&2
+      exit 2
+    fi
+    resolved_access_mode="direct"
+    ;;
+  lighthouse)
+    if [[ "${student_tenant_id,,}" == "$grading_tenant_id" ]]; then
+      echo "Error: Lighthouse onboarding requires the subscription and grader to be in different tenants." >&2
+      exit 2
+    fi
+    resolved_access_mode="lighthouse"
+    ;;
+  *)
+    echo "Error: access mode must be auto, direct, or lighthouse." >&2
+    exit 2
+    ;;
+esac
+
 echo "Using current Cloud Shell subscription: $subscription_name ($subscription_id)"
 echo "Using current Cloud Shell identity: $student_email"
-if [[ "${student_tenant_id,,}" == "$grading_tenant_id" ]]; then
+if [[ "$resolved_access_mode" == "direct" ]]; then
   echo "Access mode: same-tenant direct RBAC"
 else
   echo "Access mode: cross-tenant Azure Lighthouse"
@@ -68,7 +98,7 @@ onboarding_args=(
   -p "$grading_principal_id"
   -t "$grading_tenant_id"
   -e "$student_email"
-  -m auto
+  -m "$resolved_access_mode"
 )
 if [[ -n "$instructor_principal_id" ]]; then
   onboarding_args+=(-i "$instructor_principal_id")

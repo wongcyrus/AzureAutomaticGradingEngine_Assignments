@@ -137,8 +137,10 @@ DEPLOYMENT_OR_MODEL_NAME=gpt-35-turbo
 Use the role-specific guides:
 
 - [Teacher](docs/onboarding-teacher.md)
-- [Student in the same tenant](docs/onboarding-student-same-tenant.md)
-- [Student in a different tenant](docs/onboarding-student-cross-tenant.md)
+- [Student in the same tenant](docs/onboarding-student-same-tenant.md), using
+  the direct-RBAC launcher
+- [Student in a different tenant](docs/onboarding-student-cross-tenant.md),
+  using the Lighthouse launcher
 
 See the [documentation index](docs/index.md) for all project guides.
 
@@ -147,6 +149,21 @@ Validate both onboarding modes without changing Azure resources:
 ```bash
 scripts/test-grading-access.sh
 ```
+
+After onboarding, students can verify their selected subscription from Cloud
+Shell without changing Azure resources:
+
+```bash
+curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-verify-access.sh?v=$(date +%s)" \
+  | bash
+```
+
+The verifier reports the detected tenant and expected access mode, checks the
+ownership tag and grader permissions, and exits nonzero for incomplete or
+mixed direct/Lighthouse configuration. Follow
+[Verify student grading access](docs/verify-student-grading-access.md) for
+required output, failure handling, and the student's final Azure Isekai grading
+check.
 
 ## Testing Locally
 

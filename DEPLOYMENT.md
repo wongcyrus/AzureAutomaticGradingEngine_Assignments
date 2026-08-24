@@ -71,6 +71,7 @@ token with `read:packages` and `repo` access, then wrap the CDKTF command:
 ```bash
 export GITHUB_PACKAGES_TOKEN="<token>"
 export GITHUB_PACKAGES_USER="wongcyrus"
+export GITHUB_PACKAGES_OWNER="wongcyrus"
 
 cd ..
 scripts/with-private-tests.sh \
@@ -83,6 +84,13 @@ exit. A normal `gh auth token` is insufficient unless it explicitly includes
 `read:packages`. See [Public and private grading tests](docs/private-tests.md)
 for package publication and version updates. Owner-only build logs identify the
 selected suite as `Public` or `Private`.
+
+Fork maintainers can use their own private package by setting
+`PrivateTestPackageId` and `PrivateTestPackageVersion` in
+`Directory.Build.props`, then setting `GITHUB_PACKAGES_OWNER` to the GitHub
+account or organization that owns that package. See
+[Public and private grading tests](docs/private-tests.md) for the complete
+setup.
 
 `npx cdktn deploy` creates the Azure tables but does not populate table
 entities. Run `npm run storage:seed` after every clean deployment to import the
@@ -238,10 +246,11 @@ See the [documentation index](docs/index.md) for all project guides.
 
 After a clean destroy and redeploy, retrieve the new
 `grading_identity_principal_id` from the CDKTF outputs. Update the embedded
-principal ID in both `scripts/cloudshell-onboard.sh` and
-`scripts/cloudshell-offboard.sh`, then publish both updated files to the
-maintained onboarding Gist before students onboard again. Update the embedded
-tenant ID as well if the deployment tenant changed.
+principal ID in `scripts/cloudshell-onboard.sh`,
+`scripts/cloudshell-offboard.sh`, and
+`scripts/cloudshell-verify-access.sh`, then publish all three updated files to
+the maintained onboarding Gist before students onboard again. Update the
+embedded tenant ID in all three files as well if the deployment tenant changed.
 
 Students must run the offboarding launcher before the old stack is destroyed
 and before the Gist is changed to the new principal ID. The same launcher
@@ -312,10 +321,19 @@ cannot be migrated reliably and may be removed before refreshing the cache.
 
 4. **Student can sign in but grading cannot access the subscription**
    - Confirm registration maps the same sign-in email to the subscription
-   - Confirm `projProd` has the matching `GradingStudentEmail` tag
-   - Confirm the grading identity has subscription `Reader` and scoped
-     `Website Contributor`
+   - Ask the student to run:
+     ```bash
+     curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-verify-access.sh?v=$(date +%s)" \
+       | bash
+     ```
+   - Confirm it reports the correct tenant mode, matching
+     `GradingStudentEmail` tag, and complete direct RBAC or Lighthouse access
+   - Treat Lighthouse on a same-tenant subscription, or direct grader RBAC on a
+     cross-tenant subscription, as stale or incorrect configuration
    - Allow several minutes for new RBAC assignments to propagate
+   - Follow [Verify student grading access](docs/verify-student-grading-access.md)
+     and do not consider onboarding complete until the student successfully
+     grades the initial `projProd` task through Azure Isekai
 
 ### Logs and Monitoring
 

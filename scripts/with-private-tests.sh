@@ -13,6 +13,7 @@ if [[ -z "${GITHUB_PACKAGES_TOKEN:-}" ]]; then
 fi
 
 github_user="${GITHUB_PACKAGES_USER:-wongcyrus}"
+github_owner="${GITHUB_PACKAGES_OWNER:-wongcyrus}"
 config_file="$(mktemp)"
 trap 'rm -f "$config_file"' EXIT
 chmod 600 "$config_file"
@@ -23,7 +24,7 @@ cat >"$config_file" <<EOF
   <packageSources>
     <clear />
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-    <add key="github-private" value="https://nuget.pkg.github.com/wongcyrus/index.json" />
+    <add key="github-private" value="https://nuget.pkg.github.com/$github_owner/index.json" />
   </packageSources>
   <packageSourceCredentials>
     <github-private>

@@ -178,4 +178,21 @@ if PATH="$FAKE_BIN:$PATH" \
   exit 1
 fi
 
+: >"$LOG_FILE"
+if PATH="$FAKE_BIN:$PATH" \
+  FAKE_AZ_LOG="$LOG_FILE" \
+  FAKE_STUDENT_TENANT="$GRADING_TENANT_ID" \
+  FAKE_REGISTERED_EMAIL="other@example.com" \
+    "$SCRIPT_DIR/onboard-managed-identity.sh" \
+      -s "$SUBSCRIPTION_ID" \
+      -p "$GRADING_PRINCIPAL_ID" \
+      -t "$GRADING_TENANT_ID" \
+      -e "$STUDENT_EMAIL" >/dev/null 2>&1; then
+  echo "Onboarding unexpectedly replaced a mismatched ownership tag." >&2
+  exit 1
+fi
+assert_count 0 "role assignment create"
+assert_count 0 "deployment sub create"
+assert_count 0 "group update"
+
 echo "Grading access script tests passed."

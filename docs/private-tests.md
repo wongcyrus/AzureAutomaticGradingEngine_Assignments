@@ -12,6 +12,12 @@ The private package is a drop-in replacement: its package ID is private, but it
 contains an assembly named `AzureProjectTestLib.dll` with the same namespaces
 and public API. Public and private suites are mutually exclusive in one build.
 
+`Directory.Build.props` controls private-mode selection:
+
+- `UsePrivateTests`: `false` by default; the wrapper sets it to `true`.
+- `PrivateTestPackageId`: the replacement package ID.
+- `PrivateTestPackageVersion`: the exact package version to restore.
+
 ## Public Deployment
 
 Clone all public source recursively:
@@ -49,15 +55,40 @@ configuration containing credentials, symbols, or package artifacts.
 After publishing a new version, update `PrivateTestPackageVersion` in
 `Directory.Build.props`.
 
-## Private Owner Build
+## Configure Your Own Private Suite
+
+Fork maintainers can create an equivalent private suite under their own GitHub
+account or organization:
+
+1. Create a private repository containing a compatible
+   `AzureProjectTestLib.csproj`.
+2. Keep `<AssemblyName>AzureProjectTestLib</AssemblyName>` so the package
+   remains a drop-in replacement.
+3. Assign a unique `<PackageId>` and package version.
+4. Add a GitHub Actions workflow that runs tests, packs the project, and
+   publishes to GitHub Packages using `GITHUB_TOKEN` with
+   `packages: write`.
+5. Set `PrivateTestPackageId` and `PrivateTestPackageVersion` in this
+   repository's `Directory.Build.props`.
+
+Do not reuse `WongCyrus.AzureProjectTestLib.Private` unless your GitHub account
+has permission to download it.
+
+## Private Maintainer Build
 
 Create a classic personal access token with `read:packages` and `repo` access,
 then keep it only in the environment:
 
 ```bash
 export GITHUB_PACKAGES_TOKEN="<token>"
-export GITHUB_PACKAGES_USER="wongcyrus"
+export GITHUB_PACKAGES_USER="<your-github-username>"
+export GITHUB_PACKAGES_OWNER="<package-owner-or-organization>"
 ```
+
+`GITHUB_PACKAGES_USER` is the account authenticating the restore.
+`GITHUB_PACKAGES_OWNER` identifies the account or organization hosting the
+package feed; these values can differ for organization-owned packages. The
+token must be authorized for the organization when SAML SSO is enforced.
 
 Use the wrapper to create a temporary authenticated NuGet configuration:
 

@@ -93,6 +93,17 @@ if ! az group show \
   exit 5
 fi
 
+REGISTERED_EMAIL=$(az group show \
+  --subscription "$SUBSCRIPTION_ID" \
+  --name "$RESOURCE_GROUP" \
+  --query "tags.GradingStudentEmail" \
+  -o tsv)
+if [[ -n "$REGISTERED_EMAIL" && "${REGISTERED_EMAIL,,}" != "$STUDENT_EMAIL" ]]; then
+  echo "The resource group is already registered to '$REGISTERED_EMAIL', not '$STUDENT_EMAIL'." >&2
+  echo "No grader access or ownership tag was changed." >&2
+  exit 6
+fi
+
 SUBSCRIPTION_SCOPE="/subscriptions/$SUBSCRIPTION_ID"
 RESOURCE_GROUP_SCOPE="$SUBSCRIPTION_SCOPE/resourceGroups/$RESOURCE_GROUP"
 

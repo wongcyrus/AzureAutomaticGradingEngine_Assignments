@@ -30,7 +30,7 @@
 		<ProjectReference Include="..\AzureProjectTestLib\AzureProjectTestLib.csproj" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(UsePrivateTests)' == 'true'">
-		<PackageReference Include="WongCyrus.AzureProjectTestLib.Private" Version="$(PrivateTestPackageVersion)" />
+		<PackageReference Include="$(PrivateTestPackageId)" Version="$(PrivateTestPackageVersion)" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Update="host.json">
