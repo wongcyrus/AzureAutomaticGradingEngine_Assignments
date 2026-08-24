@@ -95,23 +95,17 @@ Personal subscriptions are supported; Azure Education Hub is not required.
 
 Students must create the following Azure infrastructure:
 
-1. **Networking**: Two regional VNets with public/private subnets, route
-   tables, NSGs, bidirectional global peering, and one existing NAT Gateway
-   shared by the VNet 1 public and private subnets.
-2. **Storage**: Logic and static-website Storage accounts with HTTPS-only
-   traffic and minimum TLS 1.2, plus the required container, queue, table, and
-   website content.
-3. **Monitoring**: Workspace-based Application Insights with 30-day
-   retention.
-4. **Compute**: A Windows Consumption Function App on Functions v4 and Node.js
-   22 with a system-assigned identity, HTTPS-only traffic, minimum TLS 1.2,
-   and FTP/FTPS disabled.
-5. **Governance**: Resource group `projProd` tagged
-   `environment=Prod`.
+1. **Networking**: Two regional VNets with subnets, route tables, NSGs, NAT,
+   and peering.
+2. **Storage**: Logic and static-website Storage accounts with the required
+   container, queue, table, and website content.
+3. **Monitoring**: Application Insights and Log Analytics.
+4. **Compute**: A Windows Consumption Function App.
 
-The current rubric exposes 33 game tasks backed by 40 Azure assertions. The
-security additions are configuration-only, and the networking additions reuse
-the existing NAT Gateway rather than creating another billable service.
+The public suite provides a 28-task, 35-assertion baseline. Owner deployments
+may add private tasks and assertions without publishing their implementation.
+Students receive those task requirements through Azure Isekai at assignment
+time.
 
 ## Game Features
 

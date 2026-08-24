@@ -86,7 +86,7 @@ for package publication and version updates. Owner-only build logs identify the
 selected suite as `Public` or `Private`.
 
 The current owner deployment uses
-`WongCyrus.AzureProjectTestLib.Private` version `1.0.6`. It contains 33 game
+`WongCyrus.AzureProjectTestLib.Private` version `1.0.8`. It contains 33 game
 tasks and 40 Azure assertions. After changing task instructions, deploy the new
 package before refreshing pre-generated messages; otherwise the refresh uses
 the previous assembly's task strings.

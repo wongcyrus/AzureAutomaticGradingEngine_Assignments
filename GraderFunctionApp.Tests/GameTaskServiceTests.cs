@@ -1,3 +1,4 @@
+using AzureProjectTestLib.Helper;
 using GraderFunctionApp.Interfaces;
 using GraderFunctionApp.Models;
 using GraderFunctionApp.Services;
@@ -30,12 +31,14 @@ public class GameTaskServiceTests
         var tasks = service.GetTasks(rephrases: false);
         var tests = tasks.SelectMany(task => task.Tests).ToList();
         var uniqueTests = tests.Distinct().ToList();
+        var expectedTaskCount = TestSuiteIdentity.Name == "Private" ? 33 : 28;
+        var expectedTestCount = TestSuiteIdentity.Name == "Private" ? 40 : 35;
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(tasks, Has.Count.EqualTo(33));
-            Assert.That(tests, Has.Count.EqualTo(40));
-            Assert.That(uniqueTests, Has.Count.EqualTo(40));
+            Assert.That(tasks, Has.Count.EqualTo(expectedTaskCount));
+            Assert.That(tests, Has.Count.EqualTo(expectedTestCount));
+            Assert.That(uniqueTests, Has.Count.EqualTo(expectedTestCount));
             Assert.That(tasks, Is.Ordered.By("GameClassOrder"));
             Assert.That(tasks, Has.All.Property(nameof(GameTaskData.Instruction)).Not.Empty);
             Assert.That(tasks, Has.All.Property(nameof(GameTaskData.Filter)).Not.Empty);

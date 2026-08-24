@@ -18,10 +18,10 @@ and public API. Public and private suites are mutually exclusive in one build.
 - `PrivateTestPackageId`: the replacement package ID.
 - `PrivateTestPackageVersion`: the exact package version to restore.
 
-The current paired baseline is private package `1.0.6`: public and private
-suites expose the same 33 game tasks and 40 Azure assertions. Keep those task
-identifiers, instructions, and assertion counts synchronized unless a hidden
-private-only difference is intentional.
+The current public baseline exposes 28 game tasks and 35 assertions. Private
+package `1.0.8` extends it to 33 tasks and 40 assertions. Shared classes,
+helpers, and existing task identifiers remain compatible, while new private
+assertion implementations are not copied into the public repository.
 
 ## Public Deployment
 
