@@ -19,6 +19,7 @@ subscription_id="$(az account show --query id -o tsv)"
 student_tenant_id="$(az account show --query tenantId -o tsv)"
 student_email="$(az account show --query user.name -o tsv)"
 student_email="${student_email,,}"
+onboarding_safe=true
 
 echo "Subscription: $subscription_id"
 echo "Student tenant: $student_tenant_id"
@@ -27,11 +28,15 @@ echo "Student email: $student_email"
 
 if [[ "${student_tenant_id,,}" != "$grading_tenant_id" ]]; then
   echo "Stop: use the cross-tenant Lighthouse guide." >&2
-  exit 2
+  onboarding_safe=false
 fi
+
+echo "Safe to continue: $onboarding_safe"
 ```
 
-Do not continue unless the displayed subscription and email are correct.
+Do not continue unless the displayed subscription and email are correct and
+`Safe to continue` is `true`. This check deliberately does not call `exit`,
+which would close an interactive Cloud Shell session.
 
 ## 2. Create or Validate `projProd`
 
@@ -54,12 +59,15 @@ registered_email="$(
 if [[ -n "$registered_email" &&
       "${registered_email,,}" != "$student_email" ]]; then
   echo "Stop: projProd is already registered to $registered_email." >&2
-  exit 6
+  onboarding_safe=false
 fi
+
+echo "Safe to continue: $onboarding_safe"
 ```
 
 Never overwrite another email's ownership tag. Ask the teacher to investigate
-an ownership mismatch.
+an ownership mismatch. Do not run the role-assignment section unless
+`onboarding_safe` remains `true`.
 
 ## 3. Grant Direct Grader Roles
 
