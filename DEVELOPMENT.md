@@ -198,16 +198,19 @@ Lighthouse reruns, and both revocation paths without changing Azure resources.
    ```
 
 3. **Generate Messages**
-   ```bash
-   curl -X GET "https://function-app.azurewebsites.net/api/RefreshPreGeneratedMessages"
-   ```
+   The deployed `MessageRefreshTimerFunction` refreshes the cache daily at
+   02:00 UTC. After changing task instructions, publish and deploy the grading
+   assembly first, then invoke the timer or authenticated
+   `POST /api/messages/refresh` endpoint.
 
 ### Adding New Tests
 
-1. **Create Test Class**
+1. **Add an attributed test**
    ```csharp
-   public class NewResourceTest : BaseTest
+   [GameClass(6)]
+   public class NewResourceTest
    {
+       [GameTask("Create the required resource.", 5, 10)]
        [Test]
        public void Test01_ResourceExists()
        {
@@ -216,17 +219,12 @@ Lighthouse reruns, and both revocation paths without changing Azure resources.
    }
    ```
 
-2. **Update Task Configuration**
-   ```csharp
-   new GameTaskData
-   {
-       Name = "NewResourceTest.Test01_ResourceExists",
-       Instruction = "Create a new resource...",
-       Filter = "NewResourceTest.Test01_ResourceExists",
-       Reward = 10,
-       Tests = new[] { "Test01_ResourceExists" }
-   }
-   ```
+2. Mirror compatible public/private changes, increment the private package
+   version, and publish its matching `v<version>` tag.
+3. Update expected task/assertion counts in `GameTaskServiceTests`, deployed
+   integration defaults, and documentation.
+4. Validate public and private modes, deploy both grading artifacts, refresh
+   cached messages, and run the complete live subscription suite.
 
 ### Adding New API Endpoints
 

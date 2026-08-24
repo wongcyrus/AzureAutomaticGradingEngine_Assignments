@@ -95,10 +95,23 @@ Personal subscriptions are supported; Azure Education Hub is not required.
 
 Students must create the following Azure infrastructure:
 
-1. **Networking**: 2 Virtual Networks in different regions with subnets, route tables, NSGs, and VNet peering
-2. **Storage**: 2 Storage Accounts (Function App + Static Website) with containers, queues, tables
-3. **Monitoring**: Application Insights with Log Analytics Workspace
-4. **Compute**: Azure Function App with functions
+1. **Networking**: Two regional VNets with public/private subnets, route
+   tables, NSGs, bidirectional global peering, and one existing NAT Gateway
+   shared by the VNet 1 public and private subnets.
+2. **Storage**: Logic and static-website Storage accounts with HTTPS-only
+   traffic and minimum TLS 1.2, plus the required container, queue, table, and
+   website content.
+3. **Monitoring**: Workspace-based Application Insights with 30-day
+   retention.
+4. **Compute**: A Windows Consumption Function App on Functions v4 and Node.js
+   22 with a system-assigned identity, HTTPS-only traffic, minimum TLS 1.2,
+   and FTP/FTPS disabled.
+5. **Governance**: Resource group `projProd` tagged
+   `environment=Prod`.
+
+The current rubric exposes 33 game tasks backed by 40 Azure assertions. The
+security additions are configuration-only, and the networking additions reuse
+the existing NAT Gateway rather than creating another billable service.
 
 ## Game Features
 
@@ -119,7 +132,7 @@ Students must create the following Azure infrastructure:
 ### Admin Functions
 - `GET /api/pregeneratedmessagestats` - View message cache statistics
 - `POST /api/pregeneratedmessagestats/reset` - Reset cache hit counts
-- `GET /api/RefreshPreGeneratedMessages` - Refresh AI message cache
+- `POST /api/messages/refresh` - Refresh AI message cache
 
 ## Configuration
 
@@ -196,7 +209,7 @@ dotnet test GraderFunctionApp.Tests/GraderFunctionApp.Tests.csproj \
     --settings GraderFunctionApp.Tests/coverlet.runsettings
 ```
 
-The current suite contains 256 tests and covers 91.6% of Function App lines
+The current suite contains 257 tests and covers 91.6% of Function App lines
 and 81.2% of branches. Coverage is scoped to the `GraderFunctionApp` assembly
 and excludes only generated Function SDK files
 under `obj`; production source files remain included.
