@@ -66,6 +66,38 @@ public class GameTaskServiceTests
     }
 
     [Test]
+    public void GetTasks_UsesCurrentAssignmentRegions()
+    {
+        var tasks = service.GetTasks(false);
+        var expectedRegions = new Dictionary<string, string[]>
+        {
+            ["AzureProjectTestLib.ResourceGroupTest.Test01_ResourceGroupExist"] = ["Brazil South"],
+            ["AzureProjectTestLib.VnetTests.Test01_Have2VnetsIn2Regions"] = ["Italy North", "Brazil South"],
+            ["AzureProjectTestLib.AppServiceTest.Test01_AppServicePlanWithTag"] = ["Italy North"],
+            ["AzureProjectTestLib.AppServiceTest.Test04_FunctionAppSettings"] = ["Italy North"],
+            ["AzureProjectTestLib.StorageAccountTest.Test03_StorageAccountSettings"] = ["Italy North"],
+            ["AzureProjectTestLib.StorageAccountTest.Test04_WebStorageAccountSettings"] = ["Brazil South"],
+            ["AzureProjectTestLib.ApplicationInsightTest.Test01_AppServicePlanWithTag"] = ["Brazil South"]
+        };
+
+        using (Assert.EnterMultipleScope())
+        {
+            foreach (var (testName, regions) in expectedRegions)
+            {
+                var instruction = tasks.Single(task => task.Tests.Contains(testName)).Instruction;
+                foreach (var region in regions)
+                {
+                    Assert.That(instruction, Does.Contain($"Azure {region} region"), testName);
+                }
+            }
+
+            var allInstructions = string.Join('\n', tasks.Select(task => task.Instruction));
+            Assert.That(allInstructions, Does.Not.Contain("Azure East Asia region"));
+            Assert.That(allInstructions, Does.Not.Contain("Azure Southeast Asia region"));
+        }
+    }
+
+    [Test]
     public void GetTasksJson_UsesCamelCaseProperties()
     {
         var tasks = JArray.Parse(service.GetTasksJson(false));

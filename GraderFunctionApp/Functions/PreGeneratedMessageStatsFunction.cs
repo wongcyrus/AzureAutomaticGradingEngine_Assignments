@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using GraderFunctionApp.Interfaces;
+using AssignmentConstants = AzureProjectTestLib.Constants;
 
 namespace GraderFunctionApp.Functions
 {
@@ -131,7 +132,8 @@ namespace GraderFunctionApp.Functions
                 return unauthorized;
             }
 
-            var message = req.Query["message"].FirstOrDefault() ?? "Here's your next challenge: AzureProjectTestLib.ResourceGroupTest.Test01_ResourceGroupExist AzureProjectTestLib.ResourceGroupTest.Test02_ResourceGroupLocation. Create a resource group named 'projProd' in the Azure East Asia region.";
+            var message = req.Query["message"].FirstOrDefault() ??
+                $"Here's your next challenge: AzureProjectTestLib.ResourceGroupTest.Test01_ResourceGroupExist AzureProjectTestLib.ResourceGroupTest.Test02_ResourceGroupLocation. Create a resource group named 'projProd' in the Azure {AssignmentConstants.Location2DisplayName} region.";
             var age = int.TryParse(req.Query["age"].FirstOrDefault(), out var ageValue) ? ageValue : 27;
             var gender = req.Query["gender"].FirstOrDefault() ?? "Female";
             var background = req.Query["background"].FirstOrDefault() ?? "Stella is an astrologer who can interpret the signs of the stars. Her knowledge provides important guidance and warnings for player during adventures.";

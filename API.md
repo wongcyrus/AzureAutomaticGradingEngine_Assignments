@@ -41,7 +41,7 @@ The authenticated student's email is supplied by the Static Web Apps proxy.
   "score": 0,
   "completed_tasks": 0,
   "additional_data": {
-    "instruction": "Create a resource group named 'projProd' in the Azure East Asia region.",
+    "instruction": "Create a resource group named 'projProd' in the Azure Brazil South region.",
     "reward": 10,
     "tests": ["Test01_ResourceGroupExist", "Test02_ResourceGroupLocation"]
   }
