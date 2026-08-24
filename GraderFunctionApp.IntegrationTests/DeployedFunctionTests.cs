@@ -146,7 +146,7 @@ public class DeployedFunctionTests
 
         var result = XDocument.Parse(content).Root;
         var expectedTestCount = Environment.GetEnvironmentVariable(
-            "AZURE_EXPECTED_TEST_COUNT") ?? "35";
+            "AZURE_EXPECTED_TEST_COUNT") ?? "40";
         using (Assert.EnterMultipleScope())
         {
             Assert.That(result?.Attribute("result")?.Value, Is.EqualTo("Passed"));

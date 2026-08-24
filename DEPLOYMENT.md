@@ -205,7 +205,7 @@ exercise the student API because it has no Static Web Apps authentication
 cookie.
 
 Run the external Function integration suite after every deployment. Include
-the grading subscription so the check executes all 35 Azure resource tests
+the grading subscription so the check executes all 40 Azure resource tests
 inside the deployed Function:
 
 ```bash
