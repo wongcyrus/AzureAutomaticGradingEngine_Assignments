@@ -3,7 +3,6 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using GraderFunctionApp.Interfaces;
-using GraderFunctionApp.Helpers;
 using GraderFunctionApp.Constants;
 using GraderFunctionApp.Models;
 
@@ -18,6 +17,7 @@ namespace GraderFunctionApp.Functions
         private readonly ITestResultParser _testResultParser;
         private readonly IGameStateService _gameStateService;
         private readonly IUnifiedMessageService _unifiedMessageService;
+        private readonly IRequestAuthenticator _requestAuthenticator;
 
         public GraderFunction(
             ILogger<GraderFunction> logger,
@@ -26,7 +26,8 @@ namespace GraderFunctionApp.Functions
             ITestRunner testRunner,
             ITestResultParser testResultParser,
             IGameStateService gameStateService,
-            IUnifiedMessageService unifiedMessageService)
+            IUnifiedMessageService unifiedMessageService,
+            IRequestAuthenticator requestAuthenticator)
         {
             _logger = logger;
             _storageService = storageService;
@@ -35,6 +36,7 @@ namespace GraderFunctionApp.Functions
             _testResultParser = testResultParser;
             _gameStateService = gameStateService;
             _unifiedMessageService = unifiedMessageService;
+            _requestAuthenticator = requestAuthenticator;
         }
 
         [Function(nameof(GraderFunction))]
@@ -45,10 +47,17 @@ namespace GraderFunctionApp.Functions
 
             try
             {
+                var email = _requestAuthenticator.GetAuthenticatedEmail(req);
+                if (email == null)
+                {
+                    return new UnauthorizedObjectResult(
+                        ApiResponse.ErrorResult("Authentication required."));
+                }
+
                 return req.Method switch
                 {
-                    "GET" => await HandleGetRequestAsync(req),
-                    "POST" => await HandlePostRequestAsync(req),
+                    "GET" => await HandleGetRequestAsync(req, email),
+                    "POST" => await HandlePostRequestAsync(req, email),
                     _ => new BadRequestObjectResult(ApiResponse.ErrorResult("Unsupported HTTP method"))
                 };
             }
@@ -62,15 +71,17 @@ namespace GraderFunctionApp.Functions
             }
         }
 
-        private async Task<IActionResult> HandleGetRequestAsync(HttpRequest req)
+        private async Task<IActionResult> HandleGetRequestAsync(
+            HttpRequest req,
+            string email)
         {
             // Check if this is a game mode request
             if (req.Query.ContainsKey("gameMode") && req.Query["gameMode"] == "true")
             {
-                return await HandleGameModeRequestAsync(req);
+                return await HandleGameModeRequestAsync(req, email);
             }
 
-            if (!req.Query.ContainsKey("credentials"))
+            if (!req.Query.ContainsKey("subscriptionId"))
             {
                 return new ContentResult
                 {
@@ -80,10 +91,13 @@ namespace GraderFunctionApp.Functions
                 };
             }
 
-            string credentials = req.Query["credentials"]!;
+            string subscriptionId = req.Query["subscriptionId"]!;
             string filter = req.Query["filter"]!;
             string taskName = filter;
-            string email = "Anonymous";
+            if (!Guid.TryParse(subscriptionId, out _))
+            {
+                return new BadRequestObjectResult("A valid subscriptionId is required.");
+            }
 
             _logger.LogInformation("GET Request - filter: '{filter}', taskName: '{taskName}'", filter, taskName);
 
@@ -91,14 +105,13 @@ namespace GraderFunctionApp.Functions
             if (req.Query.ContainsKey("trace"))
             {
                 string trace = req.Query["trace"]!;
-                email = UtilityHelpers.ExtractEmail(trace);
                 _logger.LogInformation("start:" + trace);
-                xml = await _testRunner.RunUnitTestProcessAsync(_logger, credentials, email, filter);
+                xml = await _testRunner.RunUnitTestProcessAsync(_logger, subscriptionId, email, filter);
                 _logger.LogInformation("end:" + trace);
             }
             else
             {
-                xml = await _testRunner.RunUnitTestProcessAsync(_logger, credentials, email, filter);
+                xml = await _testRunner.RunUnitTestProcessAsync(_logger, subscriptionId, email, filter);
             }
 
             if (string.IsNullOrEmpty(xml))
@@ -115,28 +128,34 @@ namespace GraderFunctionApp.Functions
             return new ContentResult { Content = xml, ContentType = "application/xml", StatusCode = 200 };
         }
 
-        private async Task<IActionResult> HandlePostRequestAsync(HttpRequest req)
+        private async Task<IActionResult> HandlePostRequestAsync(
+            HttpRequest req,
+            string email)
         {
             _logger.LogInformation("POST Request");
             
             string needXml = req.Query["xml"]!;
-            string credentials = req.Form["credentials"]!;
+            string subscriptionId = req.Form["subscriptionId"]!;
             string filter = req.Form["filter"]!;
             string taskName = filter;
 
             _logger.LogInformation("POST Request - filter: '{filter}', taskName: '{taskName}'", filter, taskName);
 
-            if (string.IsNullOrWhiteSpace(credentials))
+            if (!Guid.TryParse(subscriptionId, out _))
             {
                 return new ContentResult
                 {
-                    Content = "<result><value>No credentials</value></result>",
+                    Content = "<result><value>A valid subscriptionId is required</value></result>",
                     ContentType = "application/xml",
                     StatusCode = 422
                 };
             }
 
-            var xml = await _testRunner.RunUnitTestProcessAsync(_logger, credentials, "Anonymous", filter);
+            var xml = await _testRunner.RunUnitTestProcessAsync(
+                _logger,
+                subscriptionId,
+                email,
+                filter);
             if (string.IsNullOrEmpty(xml))
             {
                 return new ContentResult 
@@ -147,7 +166,7 @@ namespace GraderFunctionApp.Functions
                 };
             }
 
-            await SaveTestResultsToStorageAsync("Anonymous", taskName, xml);
+            await SaveTestResultsToStorageAsync(email, taskName, xml);
 
             if (string.IsNullOrEmpty(needXml))
             {
@@ -158,18 +177,18 @@ namespace GraderFunctionApp.Functions
             return new ContentResult { Content = xml, ContentType = "application/xml", StatusCode = 200 };
         }
 
-        private async Task<IActionResult> HandleGameModeRequestAsync(HttpRequest req)
+        private async Task<IActionResult> HandleGameModeRequestAsync(
+            HttpRequest req,
+            string email)
         {
             try
             {
-                var email = req.Query["email"].FirstOrDefault() ?? "unknown";
                 var game = req.Query["game"].FirstOrDefault() ?? "unknown";
                 var npc = req.Query["npc"].FirstOrDefault() ?? "unknown";
 
                 _logger.LogInformation("Game mode request: {email}, {game}, {npc}", email, game, npc);
 
-                // Credentials will be retrieved from storage in HandleGameGradingAsync
-                var gameResponse = await HandleGameGradingAsync(email, game, npc, "", "");
+                var gameResponse = await HandleGameGradingAsync(email, game, npc);
                 return new JsonResult(gameResponse);
             }
             catch (Exception ex)
@@ -264,7 +283,7 @@ namespace GraderFunctionApp.Functions
             }
         }
 
-        public async Task<GameResponse> HandleGameGradingAsync(string email, string game, string npc, string phrase, string credentials)
+        public async Task<GameResponse> HandleGameGradingAsync(string email, string game, string npc)
         {
             try
             {
@@ -305,7 +324,7 @@ namespace GraderFunctionApp.Functions
                             "Wrong teacher! I can only grade assignments I gave out myself."
                         };
 
-                        var randomResponse = casualGradingResponses[new Random().Next(casualGradingResponses.Length)];
+                        var randomResponse = casualGradingResponses[Random.Shared.Next(casualGradingResponses.Length)];
                         return GameResponse.Success(randomResponse, "WRONG_NPC_FOR_GRADING");
                     }
 
@@ -313,7 +332,7 @@ namespace GraderFunctionApp.Functions
                 }
 
                 // Run the grading for the current task
-                return await RunTaskGradingAsync(email, game, npc, credentials, gameState);
+                return await RunTaskGradingAsync(email, game, npc, gameState);
             }
             catch (Exception ex)
             {
@@ -322,28 +341,29 @@ namespace GraderFunctionApp.Functions
             }
         }
 
-        private async Task<GameResponse> RunTaskGradingAsync(string email, string game, string npc, string credentials, GameState gameState)
+        private async Task<GameResponse> RunTaskGradingAsync(
+            string email,
+            string game,
+            string npc,
+            GameState gameState)
         {
             try
             {
                 _logger.LogInformation("Running grading for task: {taskName}", gameState.CurrentTaskName);
 
-                // Retrieve credentials from storage if not provided
-                string credentialsToUse = credentials;
-                if (string.IsNullOrEmpty(credentialsToUse))
+                var subscriptionId = await _storageService.GetSubscriptionIdAsync(email);
+                if (string.IsNullOrEmpty(subscriptionId))
                 {
-                    _logger.LogInformation("No credentials provided, retrieving from storage for email: {email}", email);
-                    credentialsToUse = await _storageService.GetCredentialJsonAsync(email) ?? "";
-                    
-                    if (string.IsNullOrEmpty(credentialsToUse))
-                    {
-                        var errorMessage = "No Azure credentials found. Please register your credentials first.";
-                        return GameResponse.Error(errorMessage);
-                    }
+                    return GameResponse.Error(
+                        "No Azure subscription is registered. Complete managed-identity onboarding first.");
                 }
 
                 // Run the unit tests
-                var xml = await _testRunner.RunUnitTestProcessAsync(_logger, credentialsToUse, email, gameState.CurrentTaskFilter);
+                var xml = await _testRunner.RunUnitTestProcessAsync(
+                    _logger,
+                    subscriptionId,
+                    email,
+                    gameState.CurrentTaskFilter);
                 
                 if (string.IsNullOrEmpty(xml))
                 {
@@ -402,8 +422,18 @@ namespace GraderFunctionApp.Functions
                         ? personalizedMessage 
                         : $"{personalizedMessage}\n\n{personalizedTaskInstruction}";
                     
-                    gameState.LastMessage = combinedMessage;
-                    await _gameStateService.CreateOrUpdateGameStateAsync(gameState);
+                    var updatedGameState = await _gameStateService.TryUpdateActiveTaskMessageAsync(
+                        email,
+                        game,
+                        npc,
+                        gameState.CurrentTaskName,
+                        combinedMessage);
+                    if (updatedGameState == null)
+                    {
+                        return GameResponse.Error(
+                            "The task changed while grading was running. Talk to the NPC again for the current task status.");
+                    }
+                    gameState = updatedGameState;
                     
                     var response = GameResponse.Success(gameState.LastMessage, "TASK_ASSIGNED");
                     response.Score = gameState.TotalScore;

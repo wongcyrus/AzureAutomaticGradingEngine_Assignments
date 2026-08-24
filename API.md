@@ -1,11 +1,23 @@
 # API Documentation
 
-## Authentication
+## Authentication and API Layers
 
-All endpoints require function-level authorization. Include the function key in requests:
-```
-?code=<function-key>
-```
+Students call the Azure Static Web Apps routes shown below. Static Web Apps
+requires Microsoft Entra authentication and injects the trusted student
+principal. The API proxy derives the email from that principal and signs the
+email, HTTP method, backend path/query, and a short-lived timestamp with a
+CDKTN-managed HMAC key. Callers cannot select another student's email.
+
+The underlying Function App endpoints use function-level authorization and are
+for service-to-service or instructor diagnostics only. They require both a
+Function key in the `x-functions-key` header and valid `x-grader-email`,
+`x-grader-timestamp`, and `x-grader-signature` headers. A Function key alone
+returns `401`.
+
+Do not expose Function or proxy-signing keys in the browser. Static Web Apps
+stores them only in server-side application settings. The proxy removes
+`?code=` from configured backend URLs before forwarding and never logs
+key-bearing URLs.
 
 ## Core Endpoints
 
@@ -14,9 +26,10 @@ All endpoints require function-level authorization. Include the function key in 
 Get next task assignment for a student.
 
 **Parameters:**
-- `email` (required): Student email
 - `npc` (required): NPC character name
 - `game` (required): Game identifier (default: "azure-learning")
+
+The authenticated student's email is supplied by the Static Web Apps proxy.
 
 **Response:**
 ```json
@@ -24,11 +37,11 @@ Get next task assignment for a student.
   "status": "OK",
   "message": "Here's your next challenge...",
   "next_game_phrase": "TASK_ASSIGNED",
-  "task_name": "AzureProjectTestLib.ResourceGroupTest.Test01_ResourceGroupExist",
+  "task_name": "AzureProjectTestLib.ResourceGroupTest.Test01_ResourceGroupExist AzureProjectTestLib.ResourceGroupTest.Test02_ResourceGroupLocation",
   "score": 0,
   "completed_tasks": 0,
   "additional_data": {
-    "instruction": "Create a resource group named 'projProd' in Hong Kong",
+    "instruction": "Create a resource group named 'projProd' in the Azure East Asia region.",
     "reward": 10,
     "tests": ["Test01_ResourceGroupExist", "Test02_ResourceGroupLocation"]
   }
@@ -41,14 +54,21 @@ Get next task assignment for a student.
 - `NPC_COOLDOWN`: NPC recently assigned task (1-hour cooldown)
 - `ALL_COMPLETED`: All tasks completed
 
+Task assignment is serialized per student. If two different NPC requests
+arrive together, only one can atomically create the active-task lock; the other
+returns `BUSY_WITH_OTHER_NPC`. Duplicate requests to the winning NPC return the
+same task.
+
 ### GET /api/grader
 
 Submit work for grading.
 
 **Parameters:**
-- `email` (required): Student email
 - `npc` (required): NPC character name
 - `game` (required): Game identifier
+
+The authenticated student's email is supplied by the proxy and must not be
+sent by the browser.
 
 **Response (Success):**
 ```json
@@ -62,6 +82,10 @@ Submit work for grading.
   "easter_egg_url": "https://..."
 }
 ```
+
+Completion atomically updates the NPC state and releases the student's active
+task lock. Duplicate or delayed grading responses use ETags and cannot
+overwrite a newer task.
 
 **Response (Failure):**
 ```json
@@ -82,26 +106,66 @@ Submit work for grading.
 
 ### GET /api/pass-task
 
-View completed tasks and scores.
+View authenticated player identity, subscription, progress, active task, and
+retained failure history.
 
 **Parameters:**
-- `email` (required): Student email
+- None. The authenticated student's email is supplied by the proxy.
 
 **Response:**
 ```json
 {
-  "status": "OK",
+  "success": true,
   "data": {
-    "TotalMarks": 50,
-    "PassedTasks": [
-      {"Name": "ResourceGroupTest", "Mark": 10},
-      {"Name": "StorageAccountTest", "Mark": 15}
-    ]
+    "email": "student@example.com",
+    "subscriptionId": "00000000-0000-0000-0000-000000000000",
+    "totalMarks": 50,
+    "passedTasks": [
+      {"name": "ResourceGroupTest", "mark": 10}
+    ],
+    "failedAttemptCount": 2,
+    "failedAttempts": [
+      {
+        "testName": "StorageAccountTest",
+        "taskName": "Create storage",
+        "assignedByNpc": "Stella",
+        "failedAt": "2026-08-23T03:00:00Z"
+      }
+    ],
+    "activeTask": null,
+    "lastActivity": "2026-08-23T03:00:00Z"
   }
 }
 ```
 
+### POST /api/pass-task
+
+Reset the authenticated player's current game progress. The endpoint removes
+all NPC game states, the active-task lock, score, and passed tests. It
+preserves failed-attempt history, test-result blobs, subscription registration,
+and Azure RBAC or Lighthouse access.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "email": "student@example.com",
+    "removedGameStates": 3,
+    "removedPassedTests": 2,
+    "preservedFailedAttempts": 5
+  }
+}
+```
+
+The Static Web Apps proxy supplies the authenticated identity and signs the
+`POST`; callers cannot reset another player's data.
+
 ## Admin Endpoints
+
+Admin endpoints are not routed by the student-facing Static Web Apps API. They
+require the same signed service-to-service headers and are exercised only by
+operator tooling.
 
 ### GET /api/pregeneratedmessagestats
 
@@ -177,8 +241,8 @@ Retrieve test result XML with proper content-type.
 All endpoints return errors in this format:
 ```json
 {
-  "status": "ERROR",
-  "message": "Error description",
+  "success": false,
+  "error": "Error description",
   "details": "Additional error details (optional)"
 }
 ```
@@ -186,6 +250,7 @@ All endpoints return errors in this format:
 **Common HTTP Status Codes:**
 - `200`: Success
 - `400`: Bad Request (missing parameters)
+- `401`: Missing, expired, or invalid signed identity
 - `404`: Not Found (resource doesn't exist)
 - `500`: Internal Server Error
 
@@ -194,6 +259,32 @@ All endpoints return errors in this format:
 - NPC interactions: 1 hour cooldown between task assignments
 - Grading: No limit (students can retry failed tasks)
 - Admin endpoints: No limit
+
+Signed assertions expire after five minutes and bind the identity to the exact
+HTTP method and backend path/query. Replaying a signature for another student,
+endpoint, or query fails authentication.
+
+## Student Registration
+
+### POST /api/registration
+
+Registers the authenticated student's subscription after managed-identity
+onboarding.
+
+**Form field:**
+
+- `subscriptionId`: Azure subscription GUID
+
+The backend validates that:
+
+- the grading identity can read the subscription;
+- the assignment resource group exists;
+- `projProd` has `GradingStudentEmail` equal to the authenticated email; and
+- the email has no conflicting fixed-row registration.
+
+Registration stores no Azure credential. It writes one entity with the student
+email as `PartitionKey`, `registration` as `RowKey`, and the explicit
+subscription ID.
 
 ## Data Models
 
@@ -211,6 +302,9 @@ interface GameResponse {
   additional_data?: Record<string, any>;
 }
 ```
+
+The Static Web Apps proxies return the snake_case shape above. Direct Function
+App responses use the equivalent camelCase .NET property names.
 
 ### NPCCharacter
 ```typescript

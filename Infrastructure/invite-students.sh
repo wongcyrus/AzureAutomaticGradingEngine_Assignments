@@ -71,18 +71,38 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     echo "Found existing user $email."
   fi
 
-  is_member="$(az ad group member check \
-    --group "$group_object_id" \
-    --member-id "$user_object_id" \
-    --query value \
-    --output tsv)"
-  if [[ "$is_member" != "true" ]]; then
-    az ad group member add \
+  membership_complete=false
+  for attempt in {1..12}; do
+    is_member="$(az ad group member check \
       --group "$group_object_id" \
-      --member-id "$user_object_id"
-    echo "Added $email to the student group."
-  else
-    echo "$email is already in the student group."
+      --member-id "$user_object_id" \
+      --query value \
+      --output tsv \
+      2>/dev/null || true)"
+    if [[ "$is_member" == "true" ]]; then
+      echo "$email is already in the student group."
+      membership_complete=true
+      break
+    fi
+
+    if az ad group member add \
+      --group "$group_object_id" \
+      --member-id "$user_object_id" \
+      2>/dev/null; then
+      echo "Added $email to the student group."
+      membership_complete=true
+      break
+    fi
+
+    if [[ "$attempt" -lt 12 ]]; then
+      echo "Waiting for Microsoft Graph to make $email available..."
+      sleep 5
+    fi
+  done
+
+  if [[ "$membership_complete" != "true" ]]; then
+    echo "Error: Microsoft Graph did not make $email available for group membership." >&2
+    exit 1
   fi
 
   processed=$((processed + 1))

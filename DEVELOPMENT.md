@@ -8,6 +8,7 @@
 │   ├── Services/               # Business logic services
 │   ├── Models/                 # Data models
 │   └── Interfaces/             # Service interfaces
+├── GraderFunctionApp.Tests/    # NUnit tests and Coverlet settings
 ├── azure-isekai/              # RPG Maker game frontend
 │   ├── js/plugins/             # Game plugins
 │   ├── data/                   # Game data files
@@ -26,8 +27,8 @@
 ### Prerequisites
 
 - Visual Studio Code or Visual Studio 2022
-- .NET 8.0 SDK
-- Node.js 22.19+
+- .NET 10.0 and 8.0 SDKs
+- Node.js 24.19+
 - Azure Functions Core Tools
 - Azure CLI
 
@@ -67,12 +68,23 @@
 
 ### Dependency Injection
 
-Services are registered in `Program.cs`:
+`Program.cs` owns host configuration. Application services are registered by
+`GraderServiceCollectionExtensions.AddGraderServices`, which keeps composition
+testable:
 ```csharp
-builder.Services.AddScoped<IGameTaskService, GameTaskService>();
-builder.Services.AddScoped<IStorageService, StorageService>();
-builder.Services.AddScoped<IAIService, AIService>();
+services.AddGraderServices(hostContext.Configuration);
 ```
+
+Storage and AI services use explicit singleton factories because they require
+configuration-backed Azure clients and must avoid circular dependencies.
+Factories must resolve `IOptions<StorageOptions>` rather than constructing
+default options, otherwise deployment-specific table/container names are lost.
+
+`SignedRequestAuthenticator` is the backend identity boundary. Never read a
+student identity from query strings, forms, or diagnostic trace values. The
+SWA server proxy signs the normalized Entra email, HTTP method, exact backend
+path/query, and timestamp with `GRADER_PROXY_SIGNING_KEY`; backend assertions
+expire after five minutes.
 
 ### Service Layer Pattern
 
@@ -86,6 +98,11 @@ builder.Services.AddScoped<IAIService, AIService>();
 1. **Pre-generation**: AI messages generated in batches
 2. **Hit Tracking**: Monitor cache effectiveness
 3. **Fallback**: Live generation when cache misses
+4. **Stable keys**: SHA-256-based row keys are deterministic across Function
+   restarts and scale-out instances; never use `string.GetHashCode()` for
+   persisted identifiers
+5. **Explicit outcomes**: Generation helpers return success/failure so retry
+   exhaustion is not counted as a successful batch item
 
 ## Key Components
 
@@ -94,11 +111,36 @@ builder.Services.AddScoped<IAIService, AIService>();
 ```csharp
 public class GameStateService : IGameStateService
 {
-    public async Task<GameState> GetGameStateAsync(string email, string game, string npc);
-    public async Task<GameState> AssignTaskAsync(string email, string game, string npc, string taskName);
-    public async Task<GameState> CompleteTaskAsync(string email, string game, string npc, string taskName, int reward);
+    public Task<GameState?> GetGameStateAsync(string email, string game, string npc);
+    public Task<GameState?> TryAssignTaskAsync(
+        string email, string game, string npc, string taskName,
+        string taskFilter, int reward, string personalizedMessage);
+    public Task<GameState> CompleteTaskAsync(
+        string email, string game, string npc, string taskName, int reward);
 }
 ```
+
+`GameStates` uses the normalized student email as the partition key. NPC states
+use `<game>-<npc>` row keys and the single active-task lock uses
+`__active_task_lock__`. Keep assignment and lock mutation in one Azure Table
+transaction; all transaction actions must remain in the same partition.
+Normalize authenticated emails with `Trim().ToLowerInvariant()` at every
+Function boundary; Azure Table partition keys are case-sensitive.
+
+Concurrency invariants:
+
+1. Initialize state with `Add`, never an unconditional upsert.
+2. Acquire the lock with `Add` in the same transaction as assignment.
+3. Update completion and delete the lock in one ETag-conditional transaction.
+4. Treat duplicate completion as idempotent only when the completed-task list
+   proves that exact task already completed.
+5. Never write a game-state snapshot captured before asynchronous test
+   execution. Reread and use an ETag-conditional update.
+
+Concurrent grading may legitimately produce one completion response and a
+later request reporting that no task is active. The invariant is data
+integrity: only one reward is added, the completed state is not reverted, and
+no stale lock remains.
 
 ### NPC Character System
 
@@ -118,9 +160,20 @@ public class NPCCharacter : ITableEntity
 ```csharp
 public class TestRunner : ITestRunner
 {
-    public async Task<string> RunUnitTestProcessAsync(ILogger logger, string credentials, string email, string filter);
+    public Task<string?> RunUnitTestProcessAsync(
+        ILogger logger, string subscriptionId, string email, string filter);
 }
 ```
+
+The child process receives an explicit subscription ID. Authentication is
+provided by `DefaultAzureCredential`: the user-assigned identity in Azure and
+the current Azure CLI identity during local development. Azure Lighthouse
+projects cross-tenant subscriptions to the same managed identity, so the
+Function and test process do not branch on tenant or handle student secrets.
+
+Run `scripts/test-grading-access.sh` after changing onboarding behavior. It
+uses a fake Azure CLI to cover direct RBAC, Lighthouse creation, idempotent
+Lighthouse reruns, and both revocation paths without changing Azure resources.
 
 ## Adding New Features
 
@@ -153,10 +206,9 @@ public class TestRunner : ITestRunner
 
 1. **Create Test Class**
    ```csharp
-   [TestClass]
    public class NewResourceTest : BaseTest
    {
-       [TestMethod]
+       [Test]
        public void Test01_ResourceExists()
        {
            // Test implementation
@@ -205,38 +257,18 @@ public class TestRunner : ITestRunner
 
 ### Unit Tests
 
-```csharp
-[TestClass]
-public class GameTaskServiceTests
-{
-    [TestMethod]
-    public async Task GetNextTaskAsync_ReturnsCorrectTask()
-    {
-        // Arrange
-        var service = new GameTaskService();
-        
-        // Act
-        var result = await service.GetNextTaskAsync("test@example.com", "Stella", "azure-learning");
-        
-        // Assert
-        Assert.IsNotNull(result);
-    }
-}
+```bash
+dotnet test AzureProjectGrader.sln --configuration Release
+
+dotnet test GraderFunctionApp.Tests/GraderFunctionApp.Tests.csproj \
+  --configuration Release \
+  --collect:"XPlat Code Coverage" \
+  --settings GraderFunctionApp.Tests/coverlet.runsettings
 ```
 
-### Integration Tests
-
-```csharp
-[TestClass]
-public class FunctionIntegrationTests
-{
-    [TestMethod]
-    public async Task GameTaskFunction_ReturnsValidResponse()
-    {
-        // Test with real Azure resources
-    }
-}
-```
+Tests use NUnit and NSubstitute. Keep Azure SDK adapters behind injectable
+clients/factories, assert observable behavior rather than private methods, and
+exclude only generated `obj` code from coverage.
 
 ### Load Testing
 
@@ -256,7 +288,7 @@ scenarios:
 ### Caching Strategy
 
 1. **Message Caching**: Pre-generate AI responses
-2. **State Caching**: Cache game states in memory
+2. **Stable cache keys**: Reuse persisted AI responses across instances
 3. **CDN**: Use Azure CDN for static assets
 
 ### Database Optimization
@@ -275,8 +307,9 @@ scenarios:
 
 ### Authentication
 
-- Function-level keys for API access
-- Service principal for Azure resource access
+- Microsoft Entra authentication and group-restricted Static Web Apps access
+- Function-level keys between the Static Web Apps API and Function App
+- User-assigned managed identity for Azure resource access
 - Input validation on all endpoints
 
 ### Data Protection
@@ -287,7 +320,9 @@ scenarios:
 
 ### Access Control
 
-- Minimal permissions for service principals
+- Subscription `Reader` plus assignment-resource-group `Website Contributor`
+  for the grading identity
+- No stored student service-principal credentials
 - Role-based access for admin functions
 - Audit logging for all operations
 
@@ -319,29 +354,24 @@ builder.Services.AddHealthChecks()
     .AddCheck<AIServiceHealthCheck>("ai-service");
 ```
 
-## Deployment Pipeline
+## Deployment
 
-### CI/CD with GitHub Actions
+CDKTN is the deployment source of truth. It synthesizes Terraform, provisions
+Azure resources, publishes the Function App, and uploads the Windows NUnit
+runner:
 
-```yaml
-name: Deploy Function App
-on:
-  push:
-    branches: [main]
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '8.0.x'
-      - name: Build and Deploy
-        run: |
-          dotnet publish -c Release
-          func azure functionapp publish ${{ secrets.FUNCTION_APP_NAME }}
+```bash
+npm run build
+npm test
+npm run synth
+terraform -chdir=Infrastructure/cdktf.out/stacks/AzureAutomaticGradingEngineGrader validate
+cd Infrastructure
+PATH="$HOME/.dotnet:$PATH" npx cdktn deploy
 ```
+
+Do not replace this with a direct `func publish` pipeline: that bypasses
+infrastructure outputs, Function keys, runner publishing, and shared CDKTN
+construct behavior.
 
 ## Troubleshooting
 

@@ -1,11 +1,22 @@
 {
-  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
   "features": {
     "ghcr.io/devcontainers/features/azure-cli:1": {},
-    "ghcr.io/devcontainers/features/terraform:1": {},
-    "ghcr.io/devcontainers/features/dotnet:2": {},
-    "ghcr.io/devcontainers/features/powershell:1": {}
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24.19.0"
+    },
+    "ghcr.io/devcontainers/features/terraform:1": {
+      "version": "1.15.9"
+    },
+    "ghcr.io/devcontainers/features/dotnet:2": {
+      "version": "10.0.400",
+      "additionalVersions": "8.0.424"
+    },
+    "ghcr.io/devcontainers/features/powershell:1": {
+      "version": "7.6.5"
+    }
   },
+  "postCreateCommand": "git submodule update --init --recursive && npm ci && npm run providers:get && npm run build",
   "hostRequirements": {
     "memory": "8gb"
   },
@@ -14,29 +25,23 @@
       "repositories": {
         "wongcyrus/azure-isekai": {
           "permissions": {
-            "contents": "write",
-            "issues": "write"
+            "contents": "write"
+          }
+        },
+        "wongcyrus/azure-common-construct": {
+          "permissions": {
+            "contents": "write"
+          }
+        },
+        "wongcyrus/cdktf-azure-providers": {
+          "permissions": {
+            "contents": "write"
           }
         }
       }
     },
     "vscode": {
-      "settings": {
-        "python.defaultInterpreterPath": "~/.python/current/bin/python3",
-        "pylint.enabled": true,
-        "pylint.path": ["/usr/local/py-utils/bin/pylint"],
-        "flake8.enabled": true,
-        "flake8.path": ["/usr/local/py-utils/bin/flake8"],
-        "python.testing.pytestArgs": [],
-        "python.testing.unittestEnabled": false,
-        "python.testing.pytestEnabled": true,
-        "python.analysis.extraPaths": ["./tests/unit_test_helper"],
-        "pylint.args": ["--disable=C0111"]
-      },
       "extensions": [
-        "ms-python.python",
-        "ms-python.autopep8",
-        "ms-python.pylint",
         "emeraldwalk.runonsave",
         "github.copilot",
         "github.copilot-chat",

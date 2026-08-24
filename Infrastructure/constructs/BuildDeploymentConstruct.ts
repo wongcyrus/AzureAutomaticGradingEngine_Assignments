@@ -49,9 +49,9 @@ export class BuildDeploymentConstruct extends Construct {
         functionFolder: "Tests",
         localFolder: testOutputFolder,
         storageAccount: azureFunctionConstruct.storageAccount,
+        alwaysUpload: true,
+        dependencies: [this.buildResource],
       }
     );
-    
-    this.publisher.node.addDependency(this.buildResource);
   }
 }

@@ -8,11 +8,12 @@
   "scripts": {
     "providers:get": "npm run get --workspace cdktf-azure-providers && npm run get --workspace @grading-engine/infrastructure",
     "build": "npm run build --workspace cdktf-azure-providers && npm run build --workspace azure-common-construct && npm run build --workspace @grading-engine/infrastructure",
-    "test": "npm run test --workspace cdktf-azure-providers && npm run test --workspace azure-common-construct && npm run test --workspace @grading-engine/infrastructure",
+    "test": "npm run test --workspace cdktf-azure-providers && npm run test --workspace azure-common-construct && npm run test --workspace @grading-engine/infrastructure && npm run test:onboarding",
+    "test:onboarding": "scripts/test-grading-access.sh",
     "bootstrap": "npm install && npm run providers:get && npm run build",
     "synth": "npm run synth --workspace @grading-engine/infrastructure"
   },
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=24.19.0"
   }
 }

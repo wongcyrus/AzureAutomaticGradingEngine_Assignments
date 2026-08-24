@@ -1,12 +1,11 @@
 using Azure;
 using Azure.Data.Tables;
+using GraderFunctionApp.Helpers;
 using GraderFunctionApp.Interfaces;
 using GraderFunctionApp.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using GraderFunctionApp.Configuration;
-using System.Security.Cryptography;
-using System.Text;
 using Newtonsoft.Json;
 
 namespace GraderFunctionApp.Services
@@ -26,11 +25,29 @@ namespace GraderFunctionApp.Services
             IOptions<StorageOptions> storageOptions,
             IAIService aiService,
             IGameTaskService gameTaskService)
+            : this(
+                logger,
+                tableServiceClient,
+                tableServiceClient.GetTableClient(
+                    storageOptions.Value.PreGeneratedMessageTableName),
+                storageOptions,
+                aiService,
+                gameTaskService)
+        {
+        }
+
+        public PreGeneratedMessageService(
+            ILogger<PreGeneratedMessageService> logger,
+            TableServiceClient tableServiceClient,
+            TableClient tableClient,
+            IOptions<StorageOptions> storageOptions,
+            IAIService aiService,
+            IGameTaskService gameTaskService)
         {
             _logger = logger;
             _tableServiceClient = tableServiceClient;
             _storageOptions = storageOptions.Value;
-            _tableClient = tableServiceClient.GetTableClient(_storageOptions.PreGeneratedMessageTableName);
+            _tableClient = tableClient;
             _aiService = aiService;
             _gameTaskService = gameTaskService;
         }
@@ -42,7 +59,7 @@ namespace GraderFunctionApp.Services
 
             try
             {
-                var messageHash = ComputeHash(originalInstruction);
+                var messageHash = MessageCacheKeyHelper.ComputeHash(originalInstruction);
                 var response = await _tableClient.GetEntityIfExistsAsync<PreGeneratedMessage>("instruction", messageHash);
 
                 if (response.HasValue && response.Value != null)
@@ -74,12 +91,16 @@ namespace GraderFunctionApp.Services
             try
             {
                 // Use EXACT same key format as AIService
-                var messageHash = ComputeHash(originalMessage);
-                var npcKey = $"{age}_{gender.GetHashCode()}_{background.GetHashCode()}";
-                var cacheKey = $"npc_{npcKey}_{messageHash}";
+                var cacheKey = MessageCacheKeyHelper.CreateNpcKey(
+                    originalMessage,
+                    age,
+                    gender,
+                    background);
                 
-                _logger.LogInformation("GetPreGeneratedNPCMessageAsync - Looking for message. OriginalMessage: {originalMessage}, MessageHash: {messageHash}, NPCKey: {npcKey}, CacheKey: {cacheKey}", 
-                    originalMessage, messageHash, npcKey, cacheKey);
+                _logger.LogInformation(
+                    "Looking for pre-generated NPC message. OriginalMessage: {originalMessage}, CacheKey: {cacheKey}",
+                    originalMessage,
+                    cacheKey);
 
                 // Use cacheKey directly as RowKey (not hashed again)
                 var response = await _tableClient.GetEntityIfExistsAsync<PreGeneratedMessage>("npc", cacheKey);
@@ -159,19 +180,8 @@ namespace GraderFunctionApp.Services
                         batchIndex + 1, totalBatches, batch.Count);
 
                     // Process batch in parallel
-                    var batchTasks = batch.Select(async task =>
-                    {
-                        try
-                        {
-                            await GenerateAndStoreInstructionAsync(task.Instruction);
-                            return true;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Failed to generate instruction for task: {taskName}", task.Name);
-                            return false;
-                        }
-                    });
+                    var batchTasks = batch.Select(task =>
+                        GenerateAndStoreInstructionAsync(task.Instruction));
 
                     var results = await Task.WhenAll(batchTasks);
                     var successCount = results.Count(r => r);
@@ -196,7 +206,11 @@ namespace GraderFunctionApp.Services
             }
         }
 
-        private async Task GenerateAndStoreNPCMessageAsync(string originalMessage, int age, string gender, string background)
+        internal async Task<bool> GenerateAndStoreNPCMessageAsync(
+            string originalMessage,
+            int age,
+            string gender,
+            string background)
         {
             const int maxRetries = 3;
             var baseDelay = TimeSpan.FromMilliseconds(500);
@@ -206,19 +220,24 @@ namespace GraderFunctionApp.Services
                 try
                 {
                     // Use EXACT same key format as AIService
-                    var messageHash = ComputeHash(originalMessage);
-                    var npcKey = $"{age}_{gender.GetHashCode()}_{background.GetHashCode()}";
-                    var cacheKey = $"npc_{npcKey}_{messageHash}";
+                    var cacheKey = MessageCacheKeyHelper.CreateNpcKey(
+                        originalMessage,
+                        age,
+                        gender,
+                        background);
 
-                    _logger.LogInformation("GenerateAndStoreNPCMessageAsync - Attempt {attempt}. OriginalMessage: {originalMessage}, MessageHash: {messageHash}, NPCKey: {npcKey}, CacheKey: {cacheKey}", 
-                        attempt, originalMessage, messageHash, npcKey, cacheKey);
+                    _logger.LogInformation(
+                        "Generating pre-generated NPC message. Attempt: {attempt}, OriginalMessage: {originalMessage}, CacheKey: {cacheKey}",
+                        attempt,
+                        originalMessage,
+                        cacheKey);
 
                     // Check if already exists using cacheKey directly
                     var existingResponse = await _tableClient.GetEntityIfExistsAsync<PreGeneratedMessage>("npc", cacheKey);
                     if (existingResponse.HasValue && existingResponse.Value != null)
                     {
                         _logger.LogInformation("GenerateAndStoreNPCMessageAsync - NPC message already exists for cacheKey: {cacheKey}, skipping generation", cacheKey);
-                        return;
+                        return true;
                     }
 
                     _logger.LogInformation("GenerateAndStoreNPCMessageAsync - Calling AI service to generate message for: {originalMessage}", originalMessage);
@@ -256,7 +275,7 @@ namespace GraderFunctionApp.Services
                         _logger.LogWarning("GenerateAndStoreNPCMessageAsync - AI service returned empty or fallback message: {generatedMessage}", generatedMessage);
                     }
                     
-                    return; // Success - exit retry loop
+                    return true;
                 }
                 catch (Exception ex) when (attempt < maxRetries)
                 {
@@ -268,13 +287,15 @@ namespace GraderFunctionApp.Services
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "All {maxRetries} attempts failed for NPC message: {message}", maxRetries, originalMessage);
-                    // Don't rethrow - let the batch continue processing
-                    return;
+                    return false;
                 }
             }
+
+            return false;
         }
 
-        private async Task GenerateAndStoreInstructionAsync(string originalInstruction)
+        internal async Task<bool> GenerateAndStoreInstructionAsync(
+            string originalInstruction)
         {
             const int maxRetries = 3;
             var baseDelay = TimeSpan.FromMilliseconds(300);
@@ -283,14 +304,14 @@ namespace GraderFunctionApp.Services
             {
                 try
                 {
-                    var messageHash = ComputeHash(originalInstruction);
+                    var messageHash = MessageCacheKeyHelper.ComputeHash(originalInstruction);
                     
                     // Check if already exists
                     var existingResponse = await _tableClient.GetEntityIfExistsAsync<PreGeneratedMessage>("instruction", messageHash);
                     if (existingResponse.HasValue && existingResponse.Value != null)
                     {
                         _logger.LogDebug("Instruction message already exists for hash: {hash}", messageHash);
-                        return;
+                        return true;
                     }
 
                     // Generate new message using AI service
@@ -316,7 +337,7 @@ namespace GraderFunctionApp.Services
                         _logger.LogDebug("Skipping instruction - AI returned empty or unchanged response for: {instruction}", originalInstruction);
                     }
                     
-                    return; // Success - exit retry loop
+                    return true;
                 }
                 catch (Exception ex) when (attempt < maxRetries)
                 {
@@ -328,10 +349,11 @@ namespace GraderFunctionApp.Services
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "All {maxRetries} attempts failed for instruction: {instruction}", maxRetries, originalInstruction);
-                    // Don't rethrow - let the batch continue processing
-                    return;
+                    return false;
                 }
             }
+
+            return false;
         }
 
         public async Task<PreGeneratedMessageStats> GetHitCountStatsAsync()
@@ -634,19 +656,12 @@ namespace GraderFunctionApp.Services
                         batchIndex + 1, totalBatches, batch.Count);
 
                     // Process batch in parallel with limited concurrency
-                    var batchTasks = batch.Select(async item =>
-                    {
-                        try
-                        {
-                            await GenerateAndStoreNPCMessageAsync(item.message, item.npc.Age, item.npc.Gender, item.npc.Background);
-                            return true;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Failed to generate message for NPC: {npcName}, Message: {message}", item.npc.Name, item.message);
-                            return false;
-                        }
-                    });
+                    var batchTasks = batch.Select(item =>
+                        GenerateAndStoreNPCMessageAsync(
+                            item.message,
+                            item.npc.Age,
+                            item.npc.Gender,
+                            item.npc.Background));
 
                     var results = await Task.WhenAll(batchTasks);
                     var successCount = results.Count(r => r);
@@ -672,11 +687,5 @@ namespace GraderFunctionApp.Services
             }
         }
 
-        private static string ComputeHash(string input)
-        {
-            using var sha256 = SHA256.Create();
-            var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
-            return Convert.ToBase64String(hashedBytes).Replace("/", "_").Replace("+", "-").Replace("=", "");
-        }
     }
 }

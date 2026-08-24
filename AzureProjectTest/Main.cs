@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.Text;
 using AzureProjectTestLib.Helper;
 using NUnit.Common;
 using NUnitLite;
@@ -12,7 +13,7 @@ internal class Run
 
         // var trace = "trace";
         // var tempDir = @"/workspaces/AzureAutomaticGradingEngine_Assignments/testing";
-        // var tempCredentialsFilePath = @"/workspaces/AzureAutomaticGradingEngine_Assignments/testing/sp.json";
+        // var subscriptionId = "00000000-0000-0000-0000-000000000000";
         // var where = "";
         // var where = "test==\"AzureProjectTestLib.VnetTests.Test01_Have2VnetsIn2Regions\"||test==\"AzureProjectTestLib.VnetTests.Test02_VnetAddressSpace\"";
         // var where = "test==\"AzureProjectTestLib.AppServiceTest.Test04_FunctionAppSettings\"";
@@ -20,9 +21,8 @@ internal class Run
         // Defaults relative to the repo root
         var repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
         var defaultWorkDir = Path.Combine(repoRoot, "testing");
-        var defaultCredsPath = Path.Combine(defaultWorkDir, "sp.json");
 
-        string tempCredentialsFilePath = defaultCredsPath;
+        string subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID") ?? string.Empty;
         string tempDir = defaultWorkDir;
         string trace = "trace";
         string where = string.Empty;
@@ -39,10 +39,9 @@ internal class Run
                 var val = parts.Length > 1 ? parts[1] : string.Empty;
                 switch (key.ToLowerInvariant())
                 {
-                    case "--creds":
-                    case "--cred":
-                    case "--credentials":
-                        if (!string.IsNullOrWhiteSpace(val)) tempCredentialsFilePath = val;
+                    case "--subscription":
+                    case "--subscription-id":
+                        if (!string.IsNullOrWhiteSpace(val)) subscriptionId = val;
                         break;
                     case "--work":
                     case "--out":
@@ -55,13 +54,20 @@ internal class Run
                     case "--where":
                         if (!string.IsNullOrEmpty(val)) where = val;
                         break;
+                    case "--where-base64":
+                        if (!string.IsNullOrEmpty(val))
+                        {
+                            where = Encoding.UTF8.GetString(
+                                Convert.FromBase64String(val));
+                        }
+                        break;
                 }
             }
             else
             {
                 switch (pos)
                 {
-                    case 0: tempCredentialsFilePath = arg; break;
+                    case 0: subscriptionId = arg; break;
                     case 1: tempDir = arg; break;
                     case 2: trace = arg; break;
                     case 3: where = arg; break;
@@ -69,7 +75,13 @@ internal class Run
                 pos++;
             }
         }
-        Console.WriteLine($"AzureProjectTest starting with:\n  creds: {tempCredentialsFilePath}\n  work:  {tempDir}\n  trace: {trace}\n  where: {where}");
+        if (!Guid.TryParse(subscriptionId, out _))
+        {
+            Console.Error.WriteLine("A valid Azure subscription ID is required.");
+            return 2;
+        }
+
+        Console.WriteLine($"AzureProjectTest starting with:\n  suite: {TestSuiteIdentity.Name}\n  subscription: {subscriptionId}\n  work:  {tempDir}\n  trace: {trace}\n  where: {where}");
 
 
         var strWriter = new StringWriter();
@@ -82,7 +94,7 @@ internal class Run
             "--output=" + tempDir,
             "--err=" + tempDir,
             "--result=" + Path.Combine(tempDir, "TestResult.xml") + ";format=nunit3",
-            "--params:AzureCredentialsPath=" + tempCredentialsFilePath + ";trace=" + trace
+            "--params:SubscriptionId=" + subscriptionId + ";trace=" + trace
         };
         if (!string.IsNullOrWhiteSpace(where))
         {

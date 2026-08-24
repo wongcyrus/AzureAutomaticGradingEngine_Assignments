@@ -24,13 +24,8 @@ namespace GraderFunctionApp.Services
             _options = options.Value;
         }
 
-        public async Task<string?> RunUnitTestProcessAsync(ILogger log, string credentials, string trace, string filter)
+        public async Task<string?> RunUnitTestProcessAsync(ILogger log, string subscriptionId, string trace, string filter)
         {
-            var tempDir = UtilityHelpers.GetTemporaryDirectory(trace);
-            var tempCredentialsFilePath = Path.Combine(tempDir, "azureauth.json");
-
-            await File.WriteAllTextAsync(tempCredentialsFilePath, credentials);
-
             var workingDirectoryInfo = GetTestsWorkingDirectory();
             var exeLocation = Path.Combine(workingDirectoryInfo, "AzureProjectTest.exe");
             var dllLocation = Path.Combine(workingDirectoryInfo, "AzureProjectTest.dll");
@@ -43,14 +38,20 @@ namespace GraderFunctionApp.Services
                 return null;
             }
 
-            log.LogInformation($@"{tempCredentialsFilePath} {tempDir} {trace} {filter}");
+            var tempDir = UtilityHelpers.GetTemporaryDirectory(trace);
+
+            log.LogInformation(
+                "Running tests for subscription {subscriptionId}, trace {trace}, filter {filter}",
+                subscriptionId,
+                trace,
+                filter);
             
             try
             {
                 // Prefer EXE if available (self-contained), otherwise try dotnet + DLL
                 if (File.Exists(exeLocation))
                 {
-                    var (ok, xml) = await RunTestExecutableAsync(exeLocation, Array.Empty<string>(), tempCredentialsFilePath, tempDir, trace, filter, log);
+                    var (ok, xml) = await RunTestExecutableAsync(exeLocation, Array.Empty<string>(), subscriptionId, tempDir, trace, filter, log);
                     if (ok && !string.IsNullOrWhiteSpace(xml))
                     {
                         return xml;
@@ -63,7 +64,7 @@ namespace GraderFunctionApp.Services
                     var dotnetPath = UtilityHelpers.ResolveDotnetExecutable(log);
                     if (!string.IsNullOrWhiteSpace(dotnetPath))
                     {
-                        var (ok, xml) = await RunTestExecutableAsync(dotnetPath!, new[] { dllLocation }, tempCredentialsFilePath, tempDir, trace, filter, log);
+                        var (ok, xml) = await RunTestExecutableAsync(dotnetPath!, new[] { dllLocation }, subscriptionId, tempDir, trace, filter, log);
                         if (ok && !string.IsNullOrWhiteSpace(xml))
                         {
                             return xml;
@@ -121,7 +122,7 @@ namespace GraderFunctionApp.Services
         private async Task<(bool ok, string? xml)> RunTestExecutableAsync(
             string fileName, 
             IEnumerable<string> initialArgs, 
-            string credentialsPath, 
+            string subscriptionId,
             string workDir, 
             string trace, 
             string filter, 
@@ -143,10 +144,12 @@ namespace GraderFunctionApp.Services
             }
             
             // Common named flags
-            info.ArgumentList.Add($"--credentials={credentialsPath}");
+            info.ArgumentList.Add($"--subscription={subscriptionId}");
             info.ArgumentList.Add($"--work={workDir}");
             info.ArgumentList.Add($"--trace={trace}");
-            info.ArgumentList.Add($"--where={filter}");
+            var encodedFilter = Convert.ToBase64String(
+                Encoding.UTF8.GetBytes(filter));
+            info.ArgumentList.Add($"--where-base64={encodedFilter}");
 
             process.StartInfo = info;
 

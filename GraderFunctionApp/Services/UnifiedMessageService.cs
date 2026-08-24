@@ -114,7 +114,7 @@ namespace GraderFunctionApp.Services
             }
 
             // Get random template
-            var template = templates[new Random().Next(templates.Length)];
+            var template = templates[Random.Shared.Next(templates.Length)];
 
             // Replace parameters if provided
             if (parameters != null)

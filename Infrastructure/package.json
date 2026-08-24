@@ -10,7 +10,9 @@
     "build": "tsc",
     "synth": "cdktn synth",
     "frontend:deploy": "./deploy-static-web-app.sh",
+    "storage:seed": "./seed-storage-data.sh",
     "students:invite": "./invite-students.sh",
+    "students:import": "./import-student-subscription.sh",
     "compile": "tsc --pretty",
     "watch": "tsc -w",
     "test": "jest",
@@ -18,22 +20,22 @@
     "upgrade": "npm install cdktn@latest cdktn-cli@latest"
   },
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=24.19.0"
   },
   "dependencies": {
     "azure-common-construct": "^0.1.0",
-    "cdktn": "^0.24.0",
     "cdktf-azure-providers": "^0.1.0",
-    "constructs": "^10.6.0",
-    "dotenv": "^17.2.1"
+    "cdktn": "^0.24.0",
+    "constructs": "10.7.2",
+    "dotenv": "^17.4.2"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
-    "@types/node": "^24.2.1",
+    "@types/node": "^24.13.3",
     "cdktn-cli": "^0.24.0",
-    "jest": "^30.0.5",
-    "ts-jest": "^29.4.1",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.3"
   }
 }

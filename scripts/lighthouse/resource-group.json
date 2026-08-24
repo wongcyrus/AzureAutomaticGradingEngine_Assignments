@@ -1,0 +1,63 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "registrationDefinitionId": {
+      "type": "string"
+    },
+    "registrationAssignmentId": {
+      "type": "string"
+    },
+    "offerName": {
+      "type": "string"
+    },
+    "managedByTenantId": {
+      "type": "string"
+    },
+    "authorizations": {
+      "type": "array"
+    },
+    "resourceGroupName": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedServices/registrationDefinitions",
+      "apiVersion": "2019-09-01",
+      "name": "[parameters('registrationDefinitionId')]",
+      "properties": {
+        "registrationDefinitionName": "[parameters('offerName')]",
+        "description": "Secretless Azure Isekai grading access.",
+        "managedByTenantId": "[parameters('managedByTenantId')]",
+        "authorizations": "[parameters('authorizations')]"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[concat('azure-isekai-assignment-', parameters('registrationAssignmentId'))]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedServices/registrationDefinitions', parameters('registrationDefinitionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": [
+            {
+              "type": "Microsoft.ManagedServices/registrationAssignments",
+              "apiVersion": "2019-09-01",
+              "name": "[parameters('registrationAssignmentId')]",
+              "properties": {
+                "registrationDefinitionId": "[subscriptionResourceId('Microsoft.ManagedServices/registrationDefinitions', parameters('registrationDefinitionId'))]"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

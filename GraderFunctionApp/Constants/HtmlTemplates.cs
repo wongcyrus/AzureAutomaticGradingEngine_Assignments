@@ -11,8 +11,8 @@ namespace GraderFunctionApp.Constants
 </head>
 <body>
     <form id='contact-form' method='post'>
-        Azure Credentials<br/>
-        <textarea name='credentials' required  rows='15' cols='100'></textarea>
+        Azure Subscription ID<br/>
+        <input type='text' name='subscriptionId' required size='50'/><br/>
         <br/>
         NUnit Test Name<br/>
         <input type='text' id='filter' name='filter' size='50'/><br/>

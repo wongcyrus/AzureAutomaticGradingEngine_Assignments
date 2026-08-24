@@ -13,15 +13,19 @@ export class StaticWebAppConstruct extends Construct {
     resourceGroup: ResourceGroup,
     functionUrls: Record<string, string>,
     functionNames: string[],
-    prefix: string
+    proxySigningKey: string,
+    workspaceId: string,
+    appInsightsName: string,
+    staticWebAppName: string
   ) {
     super(scope, id);
 
     this.appInsights = new ApplicationInsights(this, "AppInsights", {
-      name: `${prefix.toLowerCase()}-appinsights-staticwebapp`,
+      name: appInsightsName,
       location: resourceGroup.location,
       resourceGroupName: resourceGroup.name,
       applicationType: "web",
+      workspaceId,
     });
 
     const appSettings = {
@@ -31,15 +35,19 @@ export class StaticWebAppConstruct extends Construct {
       }, {} as Record<string, string>),
       APPLICATIONINSIGHTS_CONNECTION_STRING: this.appInsights.connectionString,
       APPINSIGHTS_INSTRUMENTATIONKEY: this.appInsights.instrumentationKey,
+      GRADER_PROXY_SIGNING_KEY: proxySigningKey,
     };
 
     this.staticWebApp = new StaticWebApp(this, "StaticWebApp", {
-      name: `${prefix}StaticWebApp`,
+      name: staticWebAppName,
       resourceGroupName: resourceGroup.name,
       location: resourceGroup.location,
       skuTier: "Standard",
       skuSize: "Standard",
       appSettings,
+      lifecycle: {
+        ignoreChanges: ["app_settings"],
+      },
     });
   }
 }

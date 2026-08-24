@@ -12,15 +12,18 @@ namespace GraderFunctionApp.Functions
         private readonly ILogger<MessageGeneratorFunction> _logger;
         private readonly IPreGeneratedMessageService _preGeneratedMessageService;
         private readonly IUnifiedMessageService _unifiedMessageService;
+        private readonly IRequestAuthenticator _requestAuthenticator;
 
         public MessageGeneratorFunction(
             ILogger<MessageGeneratorFunction> logger,
             IPreGeneratedMessageService preGeneratedMessageService,
-            IUnifiedMessageService unifiedMessageService)
+            IUnifiedMessageService unifiedMessageService,
+            IRequestAuthenticator requestAuthenticator)
         {
             _logger = logger;
             _preGeneratedMessageService = preGeneratedMessageService;
             _unifiedMessageService = unifiedMessageService;
+            _requestAuthenticator = requestAuthenticator;
         }
 
         /// <summary>
@@ -30,6 +33,12 @@ namespace GraderFunctionApp.Functions
         public async Task<IActionResult> RefreshAllMessagesAsync(
             [HttpTrigger(AuthorizationLevel.Function, "post", Route = "messages/refresh")] HttpRequest req)
         {
+            var unauthorized = Authenticate(req);
+            if (unauthorized != null)
+            {
+                return unauthorized;
+            }
+
             _logger.LogInformation("Starting refresh of all pre-generated messages with optimized batching");
 
             try
@@ -89,6 +98,12 @@ namespace GraderFunctionApp.Functions
         public async Task<IActionResult> GeneratePersonalizedMessageAsync(
             [HttpTrigger(AuthorizationLevel.Function, "post", Route = "messages/personalize")] HttpRequest req)
         {
+            var unauthorized = Authenticate(req);
+            if (unauthorized != null)
+            {
+                return unauthorized;
+            }
+
             _logger.LogInformation("Generating personalized message");
 
             try
@@ -177,6 +192,12 @@ namespace GraderFunctionApp.Functions
         public async Task<IActionResult> TestMessageGenerationAsync(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = "messages/test")] HttpRequest req)
         {
+            var unauthorized = Authenticate(req);
+            if (unauthorized != null)
+            {
+                return unauthorized;
+            }
+
             _logger.LogInformation("Testing message generation for all status types");
 
             try
@@ -256,6 +277,13 @@ namespace GraderFunctionApp.Functions
             };
             
             return !nonCachedStatuses.Contains(status);
+        }
+
+        private IActionResult? Authenticate(HttpRequest request)
+        {
+            return _requestAuthenticator.GetAuthenticatedEmail(request) == null
+                ? new UnauthorizedObjectResult("Authentication required.")
+                : null;
         }
     }
 

@@ -16,30 +16,36 @@ namespace GraderFunctionApp.Functions
         private readonly IGameTaskService _gameTaskService;
         private readonly IGameStateService _gameStateService;
         private readonly IStorageService _storageService;
-        private readonly IAIService _aiService;
         private readonly IUnifiedMessageService _unifiedMessageService;
+        private readonly IRequestAuthenticator _requestAuthenticator;
 
         public GameTaskFunction(
             ILogger<GameTaskFunction> logger, 
             IGameTaskService gameTaskService,
             IGameStateService gameStateService,
             IStorageService storageService,
-            IAIService aiService,
-            IUnifiedMessageService unifiedMessageService)
+            IUnifiedMessageService unifiedMessageService,
+            IRequestAuthenticator requestAuthenticator)
         {
             _logger = logger;
             _gameTaskService = gameTaskService;
             _gameStateService = gameStateService;
             _storageService = storageService;
-            _aiService = aiService;
             _unifiedMessageService = unifiedMessageService;
+            _requestAuthenticator = requestAuthenticator;
         }
 
         [Function(nameof(GameTaskFunction))]
         public async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", "post")] HttpRequest req)
         {
-            var email = req.Query["email"].FirstOrDefault() ?? "unknown";
+            var email = _requestAuthenticator.GetAuthenticatedEmail(req);
+            if (email == null)
+            {
+                return new UnauthorizedObjectResult(
+                    GameResponse.Error("Authentication required."));
+            }
+
             var npc = req.Query["npc"].FirstOrDefault() ?? "unknown";
             var game = req.Query["game"].FirstOrDefault() ?? "unknown";
 
@@ -61,6 +67,17 @@ namespace GraderFunctionApp.Functions
                 var mainCharacter = await _storageService.GetNPCCharacterAsync("main_character");
                 
                 // Check if user has an active task with a DIFFERENT NPC
+                var activeTaskLock = await _gameStateService.GetActiveTaskLockAsync(email);
+                if (activeTaskLock != null &&
+                    (activeTaskLock.Game != game || activeTaskLock.Npc != npc))
+                {
+                    return await CreateBusyResponseAsync(
+                        gameState,
+                        npc,
+                        activeTaskLock.Npc,
+                        activeTaskLock.TaskName);
+                }
+
                 var allUserStates = await _gameStateService.GetAllGameStatesForUserAsync(email);
                 var activeTaskWithOtherNPC = allUserStates.FirstOrDefault(s => 
                     s.HasActiveTask && 
@@ -71,17 +88,11 @@ namespace GraderFunctionApp.Functions
                 {
                     // Extract the other NPC name from RowKey (format: "game-npc")
                     var otherNpcName = activeTaskWithOtherNPC.RowKey.Split('-').LastOrDefault() ?? "another NPC";
-                    
-                    // Use GameMessageService for consistent messaging
-                    var personalizedResponse = await _unifiedMessageService.GetBusyWithOtherNPCMessageAsync(npc, otherNpcName);
-                    
-                    var response = GameResponse.Success(personalizedResponse, "BUSY_WITH_OTHER_NPC");
-                    response.Score = gameState.TotalScore;
-                    response.CompletedTasks = gameState.CompletedTasks;
-                    response.AdditionalData["activeTaskNPC"] = otherNpcName;
-                    response.AdditionalData["activeTaskName"] = activeTaskWithOtherNPC.CurrentTaskName;
-                    
-                    return new JsonResult(response);
+                    return await CreateBusyResponseAsync(
+                        gameState,
+                        npc,
+                        otherNpcName,
+                        activeTaskWithOtherNPC.CurrentTaskName);
                 }
 
                 // Check if user has an active task with THIS NPC
@@ -163,7 +174,45 @@ namespace GraderFunctionApp.Functions
                 // Assign new task with personalized message
                 var personalizedTaskMessage = await _unifiedMessageService.GetTaskAssignedMessageAsync(npc, nextTask.Name, nextTask.Instruction);
                     
-                gameState = await _gameStateService.AssignTaskAsync(email, game, npc, nextTask.Name, nextTask.Filter, nextTask.Reward, personalizedTaskMessage);
+                gameState = await _gameStateService.TryAssignTaskAsync(
+                    email,
+                    game,
+                    npc,
+                    nextTask.Name,
+                    nextTask.Filter,
+                    nextTask.Reward,
+                    personalizedTaskMessage);
+
+                if (gameState == null)
+                {
+                    activeTaskLock = await _gameStateService.GetActiveTaskLockAsync(email);
+                    if (activeTaskLock == null)
+                    {
+                        throw new InvalidOperationException(
+                            "Task assignment lock was lost during concurrent assignment.");
+                    }
+
+                    var currentState = await _gameStateService.GetGameStateAsync(
+                        email,
+                        activeTaskLock.Game,
+                        activeTaskLock.Npc) ?? new GameState();
+                    if (activeTaskLock.Game == game && activeTaskLock.Npc == npc)
+                    {
+                        var activeResponse = GameResponse.Success(
+                            currentState.LastMessage,
+                            "TASK_ASSIGNED");
+                        activeResponse.TaskName = activeTaskLock.TaskName;
+                        activeResponse.Score = currentState.TotalScore;
+                        activeResponse.CompletedTasks = currentState.CompletedTasks;
+                        return new JsonResult(activeResponse);
+                    }
+
+                    return await CreateBusyResponseAsync(
+                        currentState,
+                        npc,
+                        activeTaskLock.Npc,
+                        activeTaskLock.TaskName);
+                }
 
                 var taskResponse = GameResponse.Success(personalizedTaskMessage, "TASK_ASSIGNED");
                 taskResponse.TaskName = nextTask.Name;
@@ -188,18 +237,24 @@ namespace GraderFunctionApp.Functions
             }
         }
 
-        private async Task<string> PersonalizeMessageAsync(string originalMessage, NPCCharacter npcCharacter)
+        private async Task<IActionResult> CreateBusyResponseAsync(
+            GameState gameState,
+            string requestedNpc,
+            string activeNpc,
+            string activeTaskName)
         {
-            try
-            {
-                var result = await _aiService.PersonalizeNPCMessageAsync(originalMessage, npcCharacter.Age, npcCharacter.Gender, npcCharacter.Background);
-                return !string.IsNullOrEmpty(result) ? result : $"Tek, {originalMessage}";
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error personalizing message with AI, using fallback");
-                return $"Tek, {originalMessage}";
-            }
+            var personalizedResponse =
+                await _unifiedMessageService.GetBusyWithOtherNPCMessageAsync(
+                    requestedNpc,
+                    activeNpc);
+            var response = GameResponse.Success(
+                personalizedResponse,
+                "BUSY_WITH_OTHER_NPC");
+            response.Score = gameState.TotalScore;
+            response.CompletedTasks = gameState.CompletedTasks;
+            response.AdditionalData["activeTaskNPC"] = activeNpc;
+            response.AdditionalData["activeTaskName"] = activeTaskName;
+            return new JsonResult(response);
         }
 
         // Keep these methods for backward compatibility with existing code

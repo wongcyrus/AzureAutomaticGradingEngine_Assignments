@@ -10,19 +10,28 @@ namespace GraderFunctionApp.Functions
     {
         private readonly ILogger<PreGeneratedMessageStatsFunction> _logger;
         private readonly IPreGeneratedMessageService _preGeneratedMessageService;
+        private readonly IRequestAuthenticator _requestAuthenticator;
 
         public PreGeneratedMessageStatsFunction(
             ILogger<PreGeneratedMessageStatsFunction> logger,
-            IPreGeneratedMessageService preGeneratedMessageService)
+            IPreGeneratedMessageService preGeneratedMessageService,
+            IRequestAuthenticator requestAuthenticator)
         {
             _logger = logger;
             _preGeneratedMessageService = preGeneratedMessageService;
+            _requestAuthenticator = requestAuthenticator;
         }
 
         [Function("PreGeneratedMessageStats")]
         public async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = "pregeneratedmessagestats")] HttpRequest req)
         {
+            var unauthorized = Authenticate(req);
+            if (unauthorized != null)
+            {
+                return unauthorized;
+            }
+
             _logger.LogInformation("Getting pre-generated message statistics");
 
             try
@@ -87,6 +96,12 @@ namespace GraderFunctionApp.Functions
         public async Task<IActionResult> ResetHitCounts(
             [HttpTrigger(AuthorizationLevel.Function, "post", Route = "pregeneratedmessagestats/reset")] HttpRequest req)
         {
+            var unauthorized = Authenticate(req);
+            if (unauthorized != null)
+            {
+                return unauthorized;
+            }
+
             _logger.LogInformation("Resetting pre-generated message hit counts");
 
             try
@@ -110,7 +125,13 @@ namespace GraderFunctionApp.Functions
         public async Task<IActionResult> TestCacheLookup(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = "pregeneratedmessagestats/test")] HttpRequest req)
         {
-            var message = req.Query["message"].FirstOrDefault() ?? "Here's your next challenge: AzureProjectTestLib.ResourceGroupTest.Test01_ResourceGroupExist AzureProjectTestLib.ResourceGroupTest.Test02_ResourceGroupLocation. Can you create a resource group named 'projProd' in Hong Kong?";
+            var unauthorized = Authenticate(req);
+            if (unauthorized != null)
+            {
+                return unauthorized;
+            }
+
+            var message = req.Query["message"].FirstOrDefault() ?? "Here's your next challenge: AzureProjectTestLib.ResourceGroupTest.Test01_ResourceGroupExist AzureProjectTestLib.ResourceGroupTest.Test02_ResourceGroupLocation. Create a resource group named 'projProd' in the Azure East Asia region.";
             var age = int.TryParse(req.Query["age"].FirstOrDefault(), out var ageValue) ? ageValue : 27;
             var gender = req.Query["gender"].FirstOrDefault() ?? "Female";
             var background = req.Query["background"].FirstOrDefault() ?? "Stella is an astrologer who can interpret the signs of the stars. Her knowledge provides important guidance and warnings for player during adventures.";
@@ -141,6 +162,12 @@ namespace GraderFunctionApp.Functions
         public async Task<IActionResult> ClearAllMessages(
             [HttpTrigger(AuthorizationLevel.Function, "delete", Route = "pregeneratedmessagestats/clear")] HttpRequest req)
         {
+            var unauthorized = Authenticate(req);
+            if (unauthorized != null)
+            {
+                return unauthorized;
+            }
+
             _logger.LogInformation("Clearing all pre-generated messages for testing");
 
             try
@@ -159,6 +186,13 @@ namespace GraderFunctionApp.Functions
                 _logger.LogError(ex, "Error clearing all pre-generated messages");
                 return new StatusCodeResult(StatusCodes.Status500InternalServerError);
             }
+        }
+
+        private IActionResult? Authenticate(HttpRequest request)
+        {
+            return _requestAuthenticator.GetAuthenticatedEmail(request) == null
+                ? new UnauthorizedObjectResult("Authentication required.")
+                : null;
         }
     }
 }
