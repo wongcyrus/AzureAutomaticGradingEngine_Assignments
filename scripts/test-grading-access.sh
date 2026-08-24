@@ -134,17 +134,17 @@ assert_count 2 "deployment sub create"
 assert_count 1 "lighthouse/subscription.json"
 assert_count 1 "lighthouse/resource-group.json"
 assert_occurrences 4 "$READER_ROLE_ID"
-assert_occurrences 2 "$WEBSITE_CONTRIBUTOR_ROLE_ID"
+assert_occurrences 2 "$CONTRIBUTOR_ROLE_ID"
 assert_count 0 "role assignment create"
 
 # The same offer IDs update authorizations when optional instructor access changes.
 run_onboard "55555555-5555-5555-5555-555555555555" false
 assert_count 2 "deployment sub create"
 assert_occurrences 2 "$READER_ROLE_ID"
-assert_occurrences 1 "$WEBSITE_CONTRIBUTOR_ROLE_ID"
+assert_occurrences 1 "$CONTRIBUTOR_ROLE_ID"
 
 run_offboard "$GRADING_TENANT_ID"
-assert_count 4 "role assignment delete"
+assert_count 6 "role assignment delete"
 assert_count 0 "managedservices"
 
 run_offboard "55555555-5555-5555-5555-555555555555"

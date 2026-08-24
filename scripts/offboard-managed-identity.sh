@@ -214,15 +214,21 @@ fi
 
 if [[ "$ACCESS_MODE" == "direct" ]]; then
   remove_direct_assignment \
-    "$GRADING_PRINCIPAL_ID" "$WEBSITE_CONTRIBUTOR_ROLE_ID" \
-    "$RESOURCE_GROUP_SCOPE" "Grader Website Contributor"
+    "$GRADING_PRINCIPAL_ID" "$CONTRIBUTOR_ROLE_ID" \
+    "$RESOURCE_GROUP_SCOPE" "Grader Contributor"
+  remove_direct_assignment \
+    "$GRADING_PRINCIPAL_ID" "$LEGACY_WEBSITE_CONTRIBUTOR_ROLE_ID" \
+    "$RESOURCE_GROUP_SCOPE" "legacy Grader Website Contributor"
   remove_direct_assignment \
     "$GRADING_PRINCIPAL_ID" "$READER_ROLE_ID" \
     "$SUBSCRIPTION_SCOPE" "Grader Reader"
   if [[ -n "$INSTRUCTOR_PRINCIPAL_ID" ]]; then
     remove_direct_assignment \
-      "$INSTRUCTOR_PRINCIPAL_ID" "$WEBSITE_CONTRIBUTOR_ROLE_ID" \
-      "$RESOURCE_GROUP_SCOPE" "Instructor Website Contributor"
+      "$INSTRUCTOR_PRINCIPAL_ID" "$CONTRIBUTOR_ROLE_ID" \
+      "$RESOURCE_GROUP_SCOPE" "Instructor Contributor"
+    remove_direct_assignment \
+      "$INSTRUCTOR_PRINCIPAL_ID" "$LEGACY_WEBSITE_CONTRIBUTOR_ROLE_ID" \
+      "$RESOURCE_GROUP_SCOPE" "legacy Instructor Website Contributor"
     remove_direct_assignment \
       "$INSTRUCTOR_PRINCIPAL_ID" "$READER_ROLE_ID" \
       "$SUBSCRIPTION_SCOPE" "Instructor Reader"

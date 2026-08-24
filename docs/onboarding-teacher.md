@@ -120,7 +120,7 @@ curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba9
 ```
 
 This adds the configured teacher principal as subscription `Reader` and
-`projProd` `Website Contributor`. Remove that access immediately after
+`projProd` `Contributor`. Remove that access immediately after
 debugging while keeping grader access:
 
 ```bash

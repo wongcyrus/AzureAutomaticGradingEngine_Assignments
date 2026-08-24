@@ -124,14 +124,21 @@ verify_lighthouse_assignment() {
 }
 
 if [[ "${student_tenant_id,,}" == "${grading_tenant_id,,}" ]]; then
-  assignment_count="$(az role assignment list \
+  subscription_assignment_count="$(az role assignment list \
     --subscription "$subscription_id" \
     --assignee-object-id "$grading_principal_id" \
     --scope "/subscriptions/$subscription_id" \
     --query "[?roleDefinitionName=='Reader'] | length(@)" \
     --output tsv)"
-  if [[ "$assignment_count" == "0" ]]; then
-    echo "Error: the grading identity does not have direct Reader access on this subscription." >&2
+  resource_group_assignment_count="$(az role assignment list \
+    --subscription "$subscription_id" \
+    --assignee-object-id "$grading_principal_id" \
+    --scope "/subscriptions/$subscription_id/resourceGroups/$resource_group" \
+    --query "[?roleDefinitionName=='Contributor'] | length(@)" \
+    --output tsv)"
+  if [[ "$subscription_assignment_count" == "0" ||
+        "$resource_group_assignment_count" == "0" ]]; then
+    echo "Error: the expected direct grader access is incomplete." >&2
     exit 1
   fi
 else
@@ -154,7 +161,7 @@ else
       "$subscription_assignment_id" "$subscription_definition_id" "" ||
     ! verify_lighthouse_definition \
       "$resource_group_definition_id" \
-      "$READER_ROLE_ID" "$WEBSITE_CONTRIBUTOR_ROLE_ID" ||
+      "$READER_ROLE_ID" "$CONTRIBUTOR_ROLE_ID" ||
     ! verify_lighthouse_assignment \
       "$resource_group_assignment_id" "$resource_group_definition_id" "$resource_group"; then
     echo "Error: the expected Azure Lighthouse grader delegation is incomplete." >&2

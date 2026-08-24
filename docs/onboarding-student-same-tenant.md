@@ -29,7 +29,7 @@ curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba9
 This launcher requires the selected subscription and grader to be in the same
 tenant; it exits before granting access when they differ. It reports
 `same-tenant direct RBAC`, creates `projProd` in `brazilsouth` if needed, grants
-the grader `Reader` on the subscription and `Website Contributor` on
+the grader `Reader` on the subscription and `Contributor` on
 `projProd`, and tags the resource group with your email. It does not grant your
 teacher access to the subscription. Brazil South is fixed by the grading suite
 and cannot be overridden.
@@ -57,7 +57,7 @@ curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba9
 
 It prints the detected tenant IDs, expected mode, ownership tag, direct role
 counts, and Lighthouse authorization counts. Same-tenant verification succeeds
-only when direct `Reader` and `Website Contributor` assignments exist and no
+only when direct `Reader` and `Contributor` assignments exist and no
 grader Lighthouse delegation exists.
 
 ## Remove Azure Isekai Access

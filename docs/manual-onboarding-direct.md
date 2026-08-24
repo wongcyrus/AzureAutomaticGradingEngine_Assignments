@@ -13,7 +13,7 @@ Administrator on the selected subscription.
 grading_principal_id="078c7abf-66ed-409c-9e40-e8fdb6a93221"
 grading_tenant_id="8ff7db19-435d-4c3c-83d3-ca0a46234f51"
 reader_role_id="acdd72a7-3385-48ef-bd42-f606fba81ae7"
-website_contributor_role_id="de139f84-1756-47ae-9be6-808fbbe84772"
+contributor_role_id="b24988ac-6180-42a0-ab88-20f7382dd24c"
 
 subscription_id="$(az account show --query id -o tsv)"
 student_tenant_id="$(az account show --query tenantId -o tsv)"
@@ -110,14 +110,14 @@ if [[ "$(
     --subscription "$subscription_id" \
     --assignee-object-id "$grading_principal_id" \
     --scope "$resource_group_scope" \
-    --query "[?ends_with(roleDefinitionId, '/$website_contributor_role_id') && scope == '$resource_group_scope'] | length(@)" \
+    --query "[?ends_with(roleDefinitionId, '/$contributor_role_id') && scope == '$resource_group_scope'] | length(@)" \
     -o tsv
 )" == "0" ]]; then
   az role assignment create \
     --subscription "$subscription_id" \
     --assignee-object-id "$grading_principal_id" \
     --assignee-principal-type ServicePrincipal \
-    --role "$website_contributor_role_id" \
+    --role "$contributor_role_id" \
     --scope "$resource_group_scope" \
     --only-show-errors \
     --output none
