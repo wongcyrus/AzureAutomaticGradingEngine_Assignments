@@ -85,6 +85,12 @@ exit. A normal `gh auth token` is insufficient unless it explicitly includes
 for package publication and version updates. Owner-only build logs identify the
 selected suite as `Public` or `Private`.
 
+The current owner deployment uses
+`WongCyrus.AzureProjectTestLib.Private` version `1.0.6`. It contains 33 game
+tasks and 40 Azure assertions. After changing task instructions, deploy the new
+package before refreshing pre-generated messages; otherwise the refresh uses
+the previous assembly's task strings.
+
 Fork maintainers can use their own private package by setting
 `PrivateTestPackageId` and `PrivateTestPackageVersion` in
 `Directory.Build.props`, then setting `GITHUB_PACKAGES_OWNER` to the GitHub
@@ -285,15 +291,33 @@ manual Storage Explorer or CLI cleanup must include the lock explicitly.
 
 ### Pre-generate AI Messages
 
-Populate message cache:
+`MessageRefreshTimerFunction` refreshes the cache daily at 02:00 UTC. After a
+grading-task deployment, an owner can invoke that timer immediately without
+printing the host master key:
+
 ```bash
-curl -X GET "https://<function-app>.azurewebsites.net/api/RefreshPreGeneratedMessages"
+master_key="$(
+  az functionapp keys list \
+    --resource-group GradingEngineAssignmentResourceGroup \
+    --name azureisekai2026 \
+    --query masterKey \
+    --output tsv
+)"
+curl -fsS \
+  --request POST \
+  "https://azureisekai2026.azurewebsites.net/admin/functions/MessageRefreshTimerFunction" \
+  --header "x-functions-key: $master_key" \
+  --header "Content-Type: application/json" \
+  --data '{"input":null}'
+unset master_key
 ```
 
 NPC message rows use deterministic SHA-256 key components. Cached messages
 therefore remain readable after Function restarts and across scaled-out
 instances. Existing rows created with process-randomized `GetHashCode()` keys
 cannot be migrated reliably and may be removed before refreshing the cache.
+Task text is part of each deterministic key: deploy changed attributes first,
+then refresh so new messages are generated from the active assembly.
 
 ## Troubleshooting
 

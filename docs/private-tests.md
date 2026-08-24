@@ -18,6 +18,11 @@ and public API. Public and private suites are mutually exclusive in one build.
 - `PrivateTestPackageId`: the replacement package ID.
 - `PrivateTestPackageVersion`: the exact package version to restore.
 
+The current paired baseline is private package `1.0.6`: public and private
+suites expose the same 33 game tasks and 40 Azure assertions. Keep those task
+identifiers, instructions, and assertion counts synchronized unless a hidden
+private-only difference is intentional.
+
 ## Public Deployment
 
 Clone all public source recursively:
@@ -53,7 +58,9 @@ repository-scoped `GITHUB_TOKEN`. Do not commit package tokens, NuGet
 configuration containing credentials, symbols, or package artifacts.
 
 After publishing a new version, update `PrivateTestPackageVersion` in
-`Directory.Build.props`.
+`Directory.Build.props`, deploy both the Function package and hosted runner,
+verify the active Function `.deps.json` references the new version, and
+regenerate pre-generated task messages.
 
 ## Configure Your Own Private Suite
 

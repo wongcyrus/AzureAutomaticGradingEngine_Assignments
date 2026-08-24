@@ -208,20 +208,23 @@ Reset cache hit counts.
 }
 ```
 
-### GET /api/RefreshPreGeneratedMessages
+### POST /api/messages/refresh
 
-Refresh AI message cache.
+Refresh the AI message cache. This admin operation requires the normal
+Function key and signed operator identity headers. The timer-triggered refresh
+also runs automatically each day at 02:00 UTC.
 
 **Response:**
 ```json
 {
-  "message": "Pre-generated messages refreshed successfully",
-  "timestamp": "2025-01-08T00:00:00Z",
+  "success": true,
+  "message": "Pre-generated messages have been successfully refreshed using optimized batching",
   "statistics": {
-    "instructionMessages": 30,
-    "npcMessages": 120,
-    "totalGenerated": 150
-  }
+    "totalMessages": 451,
+    "instructionMessages": 33,
+    "npcMessages": 418
+  },
+  "timestamp": "2026-08-24T12:00:00Z"
 }
 ```
 
