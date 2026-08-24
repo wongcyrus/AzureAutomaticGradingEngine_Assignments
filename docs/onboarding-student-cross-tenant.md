@@ -33,16 +33,11 @@ curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba9
 
 This launcher requires the selected subscription and grader to be in different
 tenants; it exits before creating a delegation when they match. It reports
-`cross-tenant Azure Lighthouse`, creates `projProd` in `eastasia` if needed,
+`cross-tenant Azure Lighthouse`, creates `projProd` in `brazilsouth` if needed,
 delegates subscription `Reader`, and delegates `Reader` plus `Website
 Contributor` on `projProd` to the grading Function identity only. It does not
-project the subscription into the teacher's Azure portal. To use another Azure
-location, pass it as the second argument:
-
-```bash
-curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-onboard-lighthouse.sh?v=$(date +%s)" \
-  | bash -s -- "<location>"
-```
+project the subscription into the teacher's Azure portal. Brazil South is
+fixed by the grading suite and cannot be overridden.
 
 The first successful onboarding claims `projProd` with the
 `GradingStudentEmail` tag. Repeated runs by the same Cloud Shell email are

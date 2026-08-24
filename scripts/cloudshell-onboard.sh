@@ -7,8 +7,13 @@ if [[ $# -gt 2 ]]; then
   exit 2
 fi
 
-location="${1:-eastasia}"
+location="${1:-brazilsouth}"
 access_mode="${2:-auto}"
+required_location="brazilsouth"
+if [[ "${location,,}" != "$required_location" ]]; then
+  echo "Error: this assignment requires projProd in '$required_location'." >&2
+  exit 2
+fi
 grading_principal_id="078c7abf-66ed-409c-9e40-e8fdb6a93221"
 grading_tenant_id="8ff7db19-435d-4c3c-83d3-ca0a46234f51"
 instructor_principal_id="${AZURE_ISEKAI_DEBUG_INSTRUCTOR_ID:-}"
@@ -92,6 +97,19 @@ az group create \
   --location "$location" \
   --only-show-errors \
   --output none
+
+resource_group_location="$(
+  az group show \
+    --subscription "$subscription_id" \
+    --name projProd \
+    --query location \
+    --output tsv
+)"
+if [[ "${resource_group_location,,}" != "${location,,}" ]]; then
+  echo "Error: projProd is in '$resource_group_location', but this assignment requires '$location'." >&2
+  echo "Delete and recreate projProd in '$location', then rerun onboarding." >&2
+  exit 5
+fi
 
 onboarding_args=(
   -s "$subscription_id"

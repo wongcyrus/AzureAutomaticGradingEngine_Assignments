@@ -28,16 +28,11 @@ curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba9
 
 This launcher requires the selected subscription and grader to be in the same
 tenant; it exits before granting access when they differ. It reports
-`same-tenant direct RBAC`, creates `projProd` in `eastasia` if needed, grants
+`same-tenant direct RBAC`, creates `projProd` in `brazilsouth` if needed, grants
 the grader `Reader` on the subscription and `Website Contributor` on
 `projProd`, and tags the resource group with your email. It does not grant your
-teacher access to the subscription. To use another Azure location, pass it as
-the second argument:
-
-```bash
-curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-onboard-direct.sh?v=$(date +%s)" \
-  | bash -s -- "<location>"
-```
+teacher access to the subscription. Brazil South is fixed by the grading suite
+and cannot be overridden.
 
 The first successful onboarding claims `projProd` with the
 `GradingStudentEmail` tag. Repeated runs by the same Cloud Shell email are
