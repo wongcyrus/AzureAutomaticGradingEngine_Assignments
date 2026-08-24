@@ -10,7 +10,7 @@ read -r -p "Azure Isekai sign-in email: " STUDENT_EMAIL
 az group create \
   --subscription "$SUBSCRIPTION_ID" \
   --name projProd \
-  --location eastasia \
+  --location brazilsouth \
   --only-show-errors \
   >/dev/null
 echo "Resource group 'projProd' is ready."

@@ -84,7 +84,7 @@ complete the end-to-end check:
 3. Submit the first `projProd` resource-group task for grading.
 4. Confirm Azure Isekai returns an executed test result rather than an access,
    registration, or runner error. Because onboarding creates `projProd` in
-   `eastasia`, its existence and location checks should pass.
+   `brazilsouth`, its existence and location checks should pass.
 
 The student performs both stages. Do not consider onboarding complete until the
 Cloud Shell verifier passes and Azure Isekai successfully grades the student's

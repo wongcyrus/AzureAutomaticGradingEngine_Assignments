@@ -45,7 +45,7 @@ which would close an interactive Cloud Shell session.
 az group create \
   --subscription "$subscription_id" \
   --name projProd \
-  --location eastasia \
+  --location brazilsouth \
   --only-show-errors \
   --output none
 
@@ -56,6 +56,18 @@ registered_email="$(
     --query "tags.GradingStudentEmail" \
     -o tsv
 )"
+resource_group_location="$(
+  az group show \
+    --subscription "$subscription_id" \
+    --name projProd \
+    --query location \
+    -o tsv
+)"
+
+if [[ "${resource_group_location,,}" != "brazilsouth" ]]; then
+  echo "Stop: projProd is in $resource_group_location; Brazil South is required." >&2
+  onboarding_safe=false
+fi
 
 if [[ -n "$registered_email" &&
       "${registered_email,,}" != "$student_email" ]]; then

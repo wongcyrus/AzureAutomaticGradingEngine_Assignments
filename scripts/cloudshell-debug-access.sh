@@ -8,7 +8,7 @@ if [[ $# -lt 1 || $# -gt 2 ]]; then
 fi
 
 action="${1,,}"
-location="${2:-eastasia}"
+location="${2:-brazilsouth}"
 instructor_principal_id="76407111-df2d-4199-b496-fd6b68c4bb91"
 grading_tenant_id="8ff7db19-435d-4c3c-83d3-ca0a46234f51"
 gist_base="https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw"

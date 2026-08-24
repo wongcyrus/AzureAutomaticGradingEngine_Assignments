@@ -59,7 +59,7 @@ public class GameTaskServiceTests
                 "test==\"AzureProjectTestLib.ResourceGroupTest.Test01_ResourceGroupExist\"||" +
                 "test==\"AzureProjectTestLib.ResourceGroupTest.Test02_ResourceGroupLocation\""));
             Assert.That(task.Instruction, Does.Contain("'projProd'"));
-            Assert.That(task.Instruction, Does.Contain("Azure East Asia"));
+            Assert.That(task.Instruction, Does.Contain("Azure Brazil South"));
             Assert.That(task.Reward, Is.EqualTo(10));
             Assert.That(task.TimeLimit, Is.EqualTo(2));
         }

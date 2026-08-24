@@ -144,6 +144,21 @@ Use the role-specific guides:
 
 See the [documentation index](docs/index.md) for all project guides.
 
+### Assignment Regions
+
+The grading suites define two assignment regions in
+`AzureProjectTestLib/Constants.cs`:
+
+- `Location1 = italynorth`: VNet 1, logic storage, App Service plan, and
+  Function App.
+- `Location2 = brazilsouth`: `projProd`, VNet 2, static-web storage, and
+  Application Insights.
+
+The private package carries the same constants. Existing `projProd` resource
+groups created in East Asia must be deleted and recreated in Brazil South,
+then onboarded again so the ownership tag and scoped grader permission are
+restored.
+
 Validate both onboarding modes without changing Azure resources:
 
 ```bash
