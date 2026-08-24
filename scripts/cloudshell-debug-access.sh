@@ -40,9 +40,26 @@ case "$action" in
       az role assignment delete \
         --subscription "$subscription_id" \
         --assignee-object-id "$instructor_principal_id" \
-        --role "Website Contributor" \
+        --role "Contributor" \
         --scope "$resource_group_scope" \
         --only-show-errors
+      legacy_count="$(
+        az role assignment list \
+          --subscription "$subscription_id" \
+          --assignee-object-id "$instructor_principal_id" \
+          --scope "$resource_group_scope" \
+          --role "Website Contributor" \
+          --query 'length(@)' \
+          --output tsv
+      )"
+      if [[ "$legacy_count" != "0" ]]; then
+        az role assignment delete \
+          --subscription "$subscription_id" \
+          --assignee-object-id "$instructor_principal_id" \
+          --role "Website Contributor" \
+          --scope "$resource_group_scope" \
+          --only-show-errors
+      fi
       echo "Instructor debug access revoked; grader access remains."
     else
       unset AZURE_ISEKAI_DEBUG_INSTRUCTOR_ID

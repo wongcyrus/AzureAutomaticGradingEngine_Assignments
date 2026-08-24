@@ -32,7 +32,7 @@ Grants:
 
   Both modes grant:
     - Reader on the student subscription
-    - Website Contributor on the assignment resource group
+    - Contributor on the assignment resource group
 EOF
 }
 
@@ -139,17 +139,17 @@ ensure_role_assignment() {
 }
 
 build_lighthouse_authorizations() {
-  local include_website_contributor="$1"
+  local include_contributor="$1"
   local authorizations
 
   authorizations="[{\"principalId\":\"$GRADING_PRINCIPAL_ID\",\"principalIdDisplayName\":\"Azure Isekai grader\",\"roleDefinitionId\":\"$READER_ROLE_ID\"}"
-  if [[ "$include_website_contributor" == "true" ]]; then
-    authorizations+=",{\"principalId\":\"$GRADING_PRINCIPAL_ID\",\"principalIdDisplayName\":\"Azure Isekai grader\",\"roleDefinitionId\":\"$WEBSITE_CONTRIBUTOR_ROLE_ID\"}"
+  if [[ "$include_contributor" == "true" ]]; then
+    authorizations+=",{\"principalId\":\"$GRADING_PRINCIPAL_ID\",\"principalIdDisplayName\":\"Azure Isekai grader\",\"roleDefinitionId\":\"$CONTRIBUTOR_ROLE_ID\"}"
   fi
   if [[ -n "$INSTRUCTOR_PRINCIPAL_ID" ]]; then
     authorizations+=",{\"principalId\":\"$INSTRUCTOR_PRINCIPAL_ID\",\"principalIdDisplayName\":\"Azure Isekai instructor\",\"roleDefinitionId\":\"$READER_ROLE_ID\"}"
-    if [[ "$include_website_contributor" == "true" ]]; then
-      authorizations+=",{\"principalId\":\"$INSTRUCTOR_PRINCIPAL_ID\",\"principalIdDisplayName\":\"Azure Isekai instructor\",\"roleDefinitionId\":\"$WEBSITE_CONTRIBUTOR_ROLE_ID\"}"
+    if [[ "$include_contributor" == "true" ]]; then
+      authorizations+=",{\"principalId\":\"$INSTRUCTOR_PRINCIPAL_ID\",\"principalIdDisplayName\":\"Azure Isekai instructor\",\"roleDefinitionId\":\"$CONTRIBUTOR_ROLE_ID\"}"
     fi
   fi
   authorizations+="]"
@@ -215,7 +215,7 @@ if [[ "$ACCESS_MODE" == "direct" ]]; then
     "$READER_ROLE_ID" "$SUBSCRIPTION_SCOPE" "Grader Reader"
   ensure_role_assignment \
     "$GRADING_PRINCIPAL_ID" ServicePrincipal \
-    "$WEBSITE_CONTRIBUTOR_ROLE_ID" "$RESOURCE_GROUP_SCOPE" "Grader Website Contributor"
+    "$CONTRIBUTOR_ROLE_ID" "$RESOURCE_GROUP_SCOPE" "Grader Contributor"
 
   if [[ -n "$INSTRUCTOR_PRINCIPAL_ID" ]]; then
     ensure_role_assignment \
@@ -223,7 +223,7 @@ if [[ "$ACCESS_MODE" == "direct" ]]; then
       "$READER_ROLE_ID" "$SUBSCRIPTION_SCOPE" "Instructor Reader"
     ensure_role_assignment \
       "$INSTRUCTOR_PRINCIPAL_ID" User \
-      "$WEBSITE_CONTRIBUTOR_ROLE_ID" "$RESOURCE_GROUP_SCOPE" "Instructor Website Contributor"
+      "$CONTRIBUTOR_ROLE_ID" "$RESOURCE_GROUP_SCOPE" "Instructor Contributor"
   fi
 else
   deploy_lighthouse_access

@@ -34,8 +34,8 @@ curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba9
 This launcher requires the selected subscription and grader to be in different
 tenants; it exits before creating a delegation when they match. It reports
 `cross-tenant Azure Lighthouse`, creates `projProd` in `brazilsouth` if needed,
-delegates subscription `Reader`, and delegates `Reader` plus `Website
-Contributor` on `projProd` to the grading Function identity only. It does not
+delegates subscription `Reader`, and delegates `Reader` plus `Contributor` on
+`projProd` to the grading Function identity only. It does not
 project the subscription into the teacher's Azure portal. Brazil South is
 fixed by the grading suite and cannot be overridden.
 

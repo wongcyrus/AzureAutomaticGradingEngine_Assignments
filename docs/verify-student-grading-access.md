@@ -38,10 +38,10 @@ For a same-tenant subscription, it must also show:
 ```text
 Expected access mode: direct
 Direct Grader Reader assignments: 1
-Direct Grader Website Contributor assignments: 1
+Direct Grader Contributor assignments: 1
 Lighthouse subscription Reader authorizations: 0
 Lighthouse resource-group Reader authorizations: 0
-Lighthouse resource-group Website Contributor authorizations: 0
+Lighthouse resource-group Contributor authorizations: 0
 ```
 
 Counts above `1` still indicate access exists, but the teacher should inspect
@@ -52,10 +52,10 @@ For a cross-tenant subscription, it must instead show:
 ```text
 Expected access mode: lighthouse
 Direct Grader Reader assignments: 0
-Direct Grader Website Contributor assignments: 0
+Direct Grader Contributor assignments: 0
 Lighthouse subscription Reader authorizations: 1
 Lighthouse resource-group Reader authorizations: 1
-Lighthouse resource-group Website Contributor authorizations: 1
+Lighthouse resource-group Contributor authorizations: 1
 ```
 
 ## 4. Resolve Failures

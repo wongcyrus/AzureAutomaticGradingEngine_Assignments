@@ -5,7 +5,7 @@ set -uo pipefail
 grading_principal_id="078c7abf-66ed-409c-9e40-e8fdb6a93221"
 grading_tenant_id="8ff7db19-435d-4c3c-83d3-ca0a46234f51"
 reader_role_id="acdd72a7-3385-48ef-bd42-f606fba81ae7"
-website_contributor_role_id="de139f84-1756-47ae-9be6-808fbbe84772"
+contributor_role_id="b24988ac-6180-42a0-ab88-20f7382dd24c"
 resource_group="projProd"
 api_version="2022-10-01"
 management_url="https://management.azure.com"
@@ -84,11 +84,11 @@ subscription_direct_count="$(
   direct_assignment_count "$subscription_scope" "$reader_role_id"
 )"
 resource_group_direct_count="$(
-  direct_assignment_count "$resource_group_scope" "$website_contributor_role_id"
+  direct_assignment_count "$resource_group_scope" "$contributor_role_id"
 )"
 
 echo "Direct Grader Reader assignments: $subscription_direct_count"
-echo "Direct Grader Website Contributor assignments: $resource_group_direct_count"
+echo "Direct Grader Contributor assignments: $resource_group_direct_count"
 
 list_lighthouse_assignments() {
   local scope="$1"
@@ -149,13 +149,13 @@ subscription_lighthouse_reader_count="$(
 resource_group_lighthouse_reader_count="$(
   lighthouse_authorization_count "$resource_group_lighthouse_json" "$reader_role_id"
 )"
-resource_group_lighthouse_website_count="$(
-  lighthouse_authorization_count "$resource_group_lighthouse_json" "$website_contributor_role_id"
+resource_group_lighthouse_contributor_count="$(
+  lighthouse_authorization_count "$resource_group_lighthouse_json" "$contributor_role_id"
 )"
 
 echo "Lighthouse subscription Reader authorizations: $subscription_lighthouse_reader_count"
 echo "Lighthouse resource-group Reader authorizations: $resource_group_lighthouse_reader_count"
-echo "Lighthouse resource-group Website Contributor authorizations: $resource_group_lighthouse_website_count"
+echo "Lighthouse resource-group Contributor authorizations: $resource_group_lighthouse_contributor_count"
 
 if [[ "$expected_mode" == "direct" ]]; then
   if [[ "$subscription_direct_count" -gt 0 && "$resource_group_direct_count" -gt 0 ]]; then
@@ -167,7 +167,7 @@ if [[ "$expected_mode" == "direct" ]]; then
 
   if [[ "$subscription_lighthouse_reader_count" -gt 0 ||
         "$resource_group_lighthouse_reader_count" -gt 0 ||
-        "$resource_group_lighthouse_website_count" -gt 0 ]]; then
+        "$resource_group_lighthouse_contributor_count" -gt 0 ]]; then
     echo "FAIL: same-tenant subscription has unexpected Azure Lighthouse access."
     errors=$((errors + 1))
   else
@@ -176,7 +176,7 @@ if [[ "$expected_mode" == "direct" ]]; then
 else
   if [[ "$subscription_lighthouse_reader_count" -gt 0 &&
         "$resource_group_lighthouse_reader_count" -gt 0 &&
-        "$resource_group_lighthouse_website_count" -gt 0 ]]; then
+        "$resource_group_lighthouse_contributor_count" -gt 0 ]]; then
     echo "PASS: required cross-tenant Azure Lighthouse access exists."
   else
     echo "FAIL: cross-tenant Azure Lighthouse access is incomplete."

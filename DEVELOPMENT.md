@@ -320,7 +320,7 @@ scenarios:
 
 ### Access Control
 
-- Subscription `Reader` plus assignment-resource-group `Website Contributor`
+- Subscription `Reader` plus assignment-resource-group `Contributor`
   for the grading identity
 - No stored student service-principal credentials
 - Role-based access for admin functions
