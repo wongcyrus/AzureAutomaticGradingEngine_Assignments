@@ -44,8 +44,8 @@ Lighthouse resource-group Reader authorizations: 0
 Lighthouse resource-group Contributor authorizations: 0
 ```
 
-Counts above `1` still indicate access exists, but the teacher should inspect
-and remove duplicate assignments.
+Direct grader counts above `1` indicate duplicate assignments that the teacher
+should inspect and remove.
 
 For a cross-tenant subscription, it must instead show:
 
@@ -57,6 +57,11 @@ Lighthouse subscription Reader authorizations: 1
 Lighthouse resource-group Reader authorizations: 1
 Lighthouse resource-group Contributor authorizations: 1
 ```
+
+While optional teacher debug access is active, each Lighthouse authorization
+count can be `2` because both the grader and configured instructor hold the
+role. This is expected until the student runs the debug-access revoke command;
+counts above `1` without active debug access indicate stale authorizations.
 
 ## 4. Resolve Failures
 

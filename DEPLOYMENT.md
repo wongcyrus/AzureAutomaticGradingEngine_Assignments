@@ -66,7 +66,8 @@ The command above uses the public `AzureProjectTestLib` submodule. Public
 deployments require no package credentials.
 
 For an owner deployment using the private grading package, set a classic GitHub
-token with `read:packages` and `repo` access, then wrap the CDKTF command:
+token with `read:packages` and `repo` access, then wrap the CDK Terrain
+deployment command:
 
 ```bash
 export GITHUB_PACKAGES_TOKEN="<token>"
@@ -251,12 +252,15 @@ Onboarding is split into role-specific guides:
 See the [documentation index](docs/index.md) for all project guides.
 
 After a clean destroy and redeploy, retrieve the new
-`grading_identity_principal_id` from the CDKTF outputs. Update the embedded
+`grading_identity_principal_id` from the CDK Terrain outputs. Update the embedded
 principal ID in `scripts/cloudshell-onboard.sh`,
 `scripts/cloudshell-offboard.sh`, and
 `scripts/cloudshell-verify-access.sh`, then publish all three updated files to
-the maintained onboarding Gist before students onboard again. Update the
-embedded tenant ID in all three files as well if the deployment tenant changed.
+the maintained onboarding Gist before students onboard again. If the deployment
+tenant changes, also update `grading_tenant_id` in those files and
+`scripts/cloudshell-debug-access.sh`. If the configured instructor changes,
+update `instructor_principal_id` in `scripts/cloudshell-debug-access.sh` and
+`scripts/cloudshell-offboard.sh`. Publish every changed script to the Gist.
 
 Students must run the offboarding launcher before the old stack is destroyed
 and before the Gist is changed to the new principal ID. The same launcher
