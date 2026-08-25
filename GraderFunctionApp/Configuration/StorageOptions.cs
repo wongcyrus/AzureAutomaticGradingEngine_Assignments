@@ -9,7 +9,7 @@ namespace GraderFunctionApp.Configuration
         public string TestResultsContainerName { get; set; } = "test-results";
         public string PassTestTableName { get; set; } = "PassTests";
         public string FailTestTableName { get; set; } = "FailTests";
-        public string SubscriptionTableName { get; set; } = "Subscription";
+        public string SubscriptionRegistrationsTableName { get; set; } = "SubscriptionRegistrations";
         public string NPCCharacterTableName { get; set; } = "NPCCharacter";
         public string PreGeneratedMessageTableName { get; set; } = "PreGeneratedMessages";
     }

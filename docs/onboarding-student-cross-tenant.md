@@ -48,7 +48,9 @@ If the launcher cannot be used, follow the
 [manual cross-tenant setup and verification guide](manual-onboarding-lighthouse.md).
 
 After Lighthouse permissions propagate, sign in to Azure Isekai with the same
-email and register the subscription ID printed by the launcher.
+email and register the subscription ID printed by the launcher. Registration
+reserves both your email and subscription ID; changing the Azure tag later does
+not transfer that registration.
 
 ## Verify Access
 

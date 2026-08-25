@@ -14,7 +14,7 @@ usage() {
 Usage: scripts/reset-student-game.sh [options] <student-email>
 
 Deletes the student's GameStates and PassTests. Failed attempts, test-result
-blobs, and the Subscription registration are preserved by default.
+blobs, and the SubscriptionRegistrations indexes are preserved by default.
 
 Options:
   --resource-group <name>    Grading resource group
@@ -142,7 +142,7 @@ blobs="$(
 )"
 blob_count="$(jq 'length' <<<"$blobs")"
 printf '%-12s %s blob(s)\n' "TestResults" "$blob_count"
-echo "Subscription registration will be preserved."
+echo "SubscriptionRegistrations indexes will be preserved."
 if [[ "$purge_failures" != true ]]; then
   echo "Failed-attempt history will be preserved."
 fi

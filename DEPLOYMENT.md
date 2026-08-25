@@ -245,7 +245,7 @@ It reports the matching rows and blobs before requesting confirmation. Use
 `--storage-account` when resetting a non-default deployment. The script removes
 all rows in that student's `GameStates` partition, including
 `__active_task_lock__`, plus their `PassTests`. It preserves `FailTests`,
-test-result blobs, and the `Subscription` registration by default. Use
+test-result blobs, and the `SubscriptionRegistrations` indexes by default. Use
 `--purge-failures` or `--purge-results` only when that retained history must
 also be removed.
 Close the student's active game client before resetting; the script retries
@@ -257,6 +257,19 @@ authenticated reset cannot target another student's partition.
 Deleting only an NPC state while leaving the lock row blocks future task
 assignment. Application code deletes a matching state and lock atomically, but
 manual Storage Explorer or CLI cleanup must include the lock explicitly.
+
+To release only a student's subscription registration, use:
+
+```bash
+scripts/release-student-subscription.sh student@example.com
+```
+
+This administrator-only command verifies both exact indexes, reports the
+student email and subscription ID, requests confirmation, and deletes the pair
+atomically. Use `--yes` for non-interactive operation. The same
+`--resource-group` and `--storage-account` options supported by the reset
+script are available. The command refuses missing or inconsistent indexes and
+does not alter Azure access, tags, game progress, reports, or test results.
 
 ### Pre-generate AI Messages
 
