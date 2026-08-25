@@ -501,23 +501,34 @@ namespace GraderFunctionApp.Services
         {
             _logger.LogInformation("Getting registered subscription for email: '{email}'", email);
 
-            var tableClient = _tableServiceClient.GetTableClient(_options.SubscriptionTableName);
+            var normalizedEmail = SubscriptionRegistration.NormalizeEmail(email);
+            var tableClient = _tableServiceClient.GetTableClient(
+                _options.SubscriptionRegistrationsTableName);
             await tableClient.CreateIfNotExistsAsync();
 
-            var response = await tableClient.GetEntityIfExistsAsync<Subscription>(
-                email,
-                Subscription.RegistrationRowKey);
+            var response =
+                await tableClient.GetEntityIfExistsAsync<SubscriptionRegistration>(
+                    SubscriptionRegistration.Partition,
+                    SubscriptionRegistration.EmailRowKey(normalizedEmail));
             if (response.HasValue && response.Value is { } registration)
             {
-                return registration.SubscriptionId;
-            }
+                if (registration.PartitionKey != SubscriptionRegistration.Partition ||
+                    registration.RowKey !=
+                        SubscriptionRegistration.EmailRowKey(normalizedEmail) ||
+                    registration.IndexKind !=
+                        SubscriptionRegistration.EmailIndexKind ||
+                    registration.Email != normalizedEmail ||
+                    !Guid.TryParse(registration.SubscriptionId, out var subscriptionId) ||
+                    registration.SubscriptionId !=
+                        SubscriptionRegistration.NormalizeSubscriptionId(subscriptionId))
+                {
+                    _logger.LogError(
+                        "Subscription registration email index is inconsistent for {emailHash}",
+                        SubscriptionRegistration.EmailRowKey(normalizedEmail));
+                    return null;
+                }
 
-            // Compatibility for registrations created before the fixed-row schema.
-            await foreach (var subscription in tableClient.QueryAsync<Subscription>(
-                               entity => entity.PartitionKey == email,
-                               maxPerPage: 1))
-            {
-                return subscription.SubscriptionId ?? subscription.RowKey;
+                return registration.SubscriptionId;
             }
 
             _logger.LogWarning("No subscription registered for email: '{email}'", email);

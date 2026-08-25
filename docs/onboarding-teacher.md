@@ -82,16 +82,22 @@ script-based reassignment, not actions by a hostile subscription administrator.
 
 ## 4. Register a Verified Subscription
 
-Students can register the subscription ID displayed by the launcher in Azure
-Isekai. A teacher can instead import it:
+Students register the subscription ID displayed by the launcher in Azure
+Isekai after signing in. This web flow is the only supported registration
+path. It verifies grader access to `projProd` and requires its
+`GradingStudentEmail` tag to match the authenticated student exactly.
+Registration atomically reserves both the student email and subscription ID.
+Afterward the database is authoritative: changing the Azure tag does not
+transfer the registration or allow another student to claim the subscription.
+
+If a verified registration must be released for reassignment, an administrator
+can run the repository command below. It removes only the consistent pair of
+registration indexes and does not change Azure access, tags, progress, reports,
+or test results.
 
 ```bash
-cd Infrastructure
-npm run students:import -- <student-email> <subscription-id>
+scripts/release-student-subscription.sh <student-email>
 ```
-
-The import verifies the `GradingStudentEmail` ownership tag and either direct
-grader RBAC or both deterministic Lighthouse delegations.
 
 ## 5. Test Grading
 

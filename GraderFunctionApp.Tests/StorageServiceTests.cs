@@ -244,71 +244,53 @@ public class StorageServiceTests
     }
 
     [Test]
-    public async Task GetSubscriptionIdAsync_FixedRegistration_ReturnsSubscription()
+    public async Task GetSubscriptionIdAsync_ExactHashedEmailIndex_ReturnsSubscription()
     {
-        tableServiceClient.GetTableClient("Subscription").Returns(tableClient);
-        var registration = new Subscription
-        {
-            PartitionKey = "student@example.com",
-            RowKey = Subscription.RegistrationRowKey,
-            SubscriptionId = Guid.NewGuid().ToString()
-        };
-        tableClient.GetEntityIfExistsAsync<Subscription>(
-                "student@example.com",
-                Subscription.RegistrationRowKey,
+        tableServiceClient.GetTableClient("SubscriptionRegistrations")
+            .Returns(tableClient);
+        var subscriptionId = Guid.NewGuid().ToString("D");
+        var registration = SubscriptionRegistration.CreateEmailIndex(
+            "student@example.com",
+            subscriptionId);
+        tableClient.GetEntityIfExistsAsync<SubscriptionRegistration>(
+                SubscriptionRegistration.Partition,
+                "email:616bb35d31d0a6840d2d5adfeacde5979ea99a18ab5fa7bb633460029e20717e",
                 null,
                 Arg.Any<CancellationToken>())
             .Returns(Response.FromValue(registration, Substitute.For<Response>()));
 
-        var result = await service.GetSubscriptionIdAsync("student@example.com");
+        var result = await service.GetSubscriptionIdAsync(
+            " Student@Example.COM ");
 
-        Assert.That(result, Is.EqualTo(registration.SubscriptionId));
+        Assert.That(result, Is.EqualTo(subscriptionId));
+        tableClient.DidNotReceive().QueryAsync<SubscriptionRegistration>(
+            Arg.Any<string>(),
+            Arg.Any<int?>(),
+            Arg.Any<IEnumerable<string>>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task GetSubscriptionIdAsync_NoRegistration_ReturnsNull()
     {
-        tableServiceClient.GetTableClient("Subscription").Returns(tableClient);
-        var missing = AzureTestResponses.Missing<Subscription>();
-        tableClient.GetEntityIfExistsAsync<Subscription>(
-                Arg.Any<string>(), Arg.Any<string>(), null, Arg.Any<CancellationToken>())
-            .Returns(missing);
-        tableClient.QueryAsync<Subscription>(
-                Arg.Any<System.Linq.Expressions.Expression<Func<Subscription, bool>>>(),
-                1,
+        tableServiceClient.GetTableClient("SubscriptionRegistrations")
+            .Returns(tableClient);
+        var missing = AzureTestResponses.Missing<SubscriptionRegistration>();
+        tableClient.GetEntityIfExistsAsync<SubscriptionRegistration>(
+                SubscriptionRegistration.Partition,
+                SubscriptionRegistration.EmailRowKey("student@example.com"),
                 null,
                 Arg.Any<CancellationToken>())
-            .Returns(AzureTestResponses.AsyncPageable<Subscription>());
+            .Returns(missing);
 
         var result = await service.GetSubscriptionIdAsync("student@example.com");
 
         Assert.That(result, Is.Null);
-    }
-
-    [Test]
-    public async Task GetSubscriptionIdAsync_LegacyRegistration_ReturnsSubscription()
-    {
-        tableServiceClient.GetTableClient("Subscription").Returns(tableClient);
-        var missing = AzureTestResponses.Missing<Subscription>();
-        tableClient.GetEntityIfExistsAsync<Subscription>(
-                Arg.Any<string>(), Arg.Any<string>(), null, Arg.Any<CancellationToken>())
-            .Returns(missing);
-        var legacy = new Subscription
-        {
-            PartitionKey = "student@example.com",
-            RowKey = Guid.NewGuid().ToString(),
-            SubscriptionId = Guid.NewGuid().ToString()
-        };
-        tableClient.QueryAsync<Subscription>(
-                Arg.Any<System.Linq.Expressions.Expression<Func<Subscription, bool>>>(),
-                1,
-                null,
-                Arg.Any<CancellationToken>())
-            .Returns(AzureTestResponses.AsyncPageable(legacy));
-
-        var result = await service.GetSubscriptionIdAsync("student@example.com");
-
-        Assert.That(result, Is.EqualTo(legacy.SubscriptionId));
+        tableClient.DidNotReceive().QueryAsync<SubscriptionRegistration>(
+            Arg.Any<string>(),
+            Arg.Any<int?>(),
+            Arg.Any<IEnumerable<string>>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]

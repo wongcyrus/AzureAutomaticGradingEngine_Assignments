@@ -4,7 +4,7 @@ import { StorageTable } from "cdktf-azure-providers/.gen/providers/azurerm/stora
 import { StorageAccount } from "cdktf-azure-providers/.gen/providers/azurerm/storage-account";
 
 const STORAGE_TABLES = [
-  "Subscription",
+  "SubscriptionRegistrations",
   "PassTests",
   "FailTests",
   "GameStates",

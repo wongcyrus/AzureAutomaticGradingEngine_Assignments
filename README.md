@@ -28,8 +28,8 @@ not created or stored.
    request.
 3. The Function App validates the signature and ignores browser-supplied
    `email`, form-email, and diagnostic `trace` identities.
-4. The Function App resolves the signed email to one explicitly registered
-   subscription in the `Subscription` table.
+4. The Function App resolves the signed email through its exact hashed index
+   in the `SubscriptionRegistrations` table.
 5. `DefaultAzureCredential` selects the Function App's user-assigned managed
    identity through `AZURE_CLIENT_ID`.
 6. The grader runs only the tests for the student's active task against that
@@ -41,6 +41,9 @@ The onboarding script uses direct managed-identity RBAC for same-tenant
 subscriptions and Azure Lighthouse delegation for cross-tenant subscriptions.
 Both modes remain secretless and use the same managed identity at runtime.
 Personal subscriptions are supported; Azure Education Hub is not required.
+The onboarding tag proves control only when the student first registers. The
+atomic database indexes are authoritative afterward, so changing the Azure tag
+does not transfer or duplicate a registration.
 
 ## Quick Start
 
