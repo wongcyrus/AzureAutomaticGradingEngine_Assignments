@@ -281,8 +281,12 @@ scenarios:
   - name: 'Game Task Flow'
     requests:
       - get:
-          url: '/api/game-task?email=test@example.com&npc=Stella&game=azure-learning'
+          url: '/api/game-task?npc=Stella&game=azure-learning'
 ```
+
+Load tests must authenticate through Static Web Apps so the proxy can derive
+and sign the test identity. Do not append an `email` query parameter; the
+backend ignores browser-supplied identities.
 
 ## Performance Optimization
 
@@ -300,7 +304,8 @@ scenarios:
 
 ### Function App Optimization
 
-1. **Cold Start**: Use Premium plan for production
+1. **Cold Start**: Keep the low-cost Consumption plan unless measured classroom
+   load justifies Premium
 2. **Connection Pooling**: Reuse database connections
 3. **Async Operations**: Use async/await throughout
 

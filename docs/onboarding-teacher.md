@@ -16,8 +16,10 @@ is configured for the current deployed identity. A clean destroy and redeploy
 creates a new grading principal ID. Update `grading_principal_id` in
 `cloudshell-onboard.sh`, `cloudshell-offboard.sh`, and
 `cloudshell-verify-access.sh` locally and in the Gist before asking students to
-onboard again. Also update `grading_tenant_id` in all three files if the
-deployment tenant changes.
+onboard again. If the deployment tenant changes, also update
+`grading_tenant_id` in those files and `cloudshell-debug-access.sh`. If the
+configured instructor changes, update `instructor_principal_id` in
+`cloudshell-debug-access.sh` and `cloudshell-offboard.sh`.
 
 Before destroying the old stack, ask every student to run the shared
 `cloudshell-offboard.sh` launcher while it still contains the old principal ID.
@@ -100,6 +102,10 @@ scripts/test-deployed-function.sh \
   <student-subscription-id> \
   <student-email>
 ```
+
+For the current private deployment, success means all eight HTTP integration
+tests pass and the embedded Azure grading result reports 40 of 40 assertions
+passed.
 
 Azure role and Lighthouse changes can take several minutes to propagate.
 If grading still fails, have the student rerun the verifier from the affected
