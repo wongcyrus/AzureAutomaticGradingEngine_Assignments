@@ -103,9 +103,8 @@ scripts/test-deployed-function.sh \
   <student-email>
 ```
 
-For the current private deployment, success means all eight HTTP integration
-tests pass and the embedded Azure grading result reports 40 of 40 assertions
-passed.
+For the current deployment, success means all eight HTTP integration tests pass
+and the embedded Azure grading result reports 40 of 40 assertions passed.
 
 Azure role and Lighthouse changes can take several minutes to propagate.
 If grading still fails, have the student rerun the verifier from the affected

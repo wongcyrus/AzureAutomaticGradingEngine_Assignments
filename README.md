@@ -16,9 +16,6 @@ This project provides automated assessment of student Azure infrastructure deplo
 - **AzureProjectTestLib**: Public Git submodule containing the deployable grading suite
 - **AzureProjectTest**: Hosted NUnit runner for Azure resource validation
 
-Owner deployments can replace the public suite with a private GitHub package;
-see [Public and private grading tests](docs/private-tests.md).
-
 The grader uses one user-assigned managed identity to inspect explicitly
 registered student subscriptions. Student service principals and passwords are
 not created or stored.
@@ -102,10 +99,7 @@ Students must create the following Azure infrastructure:
 3. **Monitoring**: Application Insights and Log Analytics.
 4. **Compute**: A Windows Consumption Function App.
 
-The public suite provides a 28-task, 35-assertion baseline. Owner deployments
-may add private tasks and assertions without publishing their implementation.
-Students receive those task requirements through Azure Isekai at assignment
-time.
+Students receive task requirements through Azure Isekai at assignment time.
 
 ## Game Features
 
@@ -161,10 +155,9 @@ The grading suites define two assignment regions in
 - `Location2 = brazilsouth`: `projProd`, VNet 2, static-web storage, and
   Application Insights.
 
-The private package carries the same constants. Existing `projProd` resource
-groups created in East Asia must be deleted and recreated in Brazil South,
-then onboarded again so the ownership tag and scoped grader permission are
-restored.
+Existing `projProd` resource groups created in East Asia must be deleted and
+recreated in Brazil South, then onboarded again so the ownership tag and scoped
+grader permission are restored.
 
 Validate both onboarding modes without changing Azure resources:
 
