@@ -60,6 +60,25 @@ counts, and Lighthouse authorization counts. Same-tenant verification succeeds
 only when direct `Reader` and `Contributor` assignments exist and no
 grader Lighthouse delegation exists.
 
+## Grant Temporary Teacher Debug Access
+
+Only when the teacher needs to correct or inspect assignment resources, run
+this command from the same student Azure Cloud Shell:
+
+```bash
+curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-debug-access.sh?v=$(date +%s)" \
+  | bash -s -- grant
+```
+
+This adds the configured teacher as subscription `Reader` and `projProd`
+`Contributor`. After debugging is complete, remove that access while retaining
+the grader assignments:
+
+```bash
+curl -fsSL "https://gist.githubusercontent.com/wongcyrus/2550892ef2c43949eaf1ba99cbf5828c/raw/cloudshell-debug-access.sh?v=$(date +%s)" \
+  | bash -s -- revoke
+```
+
 ## Remove Azure Isekai Access
 
 Before the teacher destroys and redeploys the grading stack, select the
