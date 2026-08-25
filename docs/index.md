@@ -15,4 +15,3 @@
 - [Deployment](../DEPLOYMENT.md)
 - [Development](../DEVELOPMENT.md)
 - [API reference](../API.md)
-- [Public and private grading tests](private-tests.md)

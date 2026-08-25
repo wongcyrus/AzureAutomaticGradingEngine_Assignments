@@ -219,15 +219,10 @@ Lighthouse reruns, and both revocation paths without changing Azure resources.
    }
    ```
 
-2. Put hidden tasks and assertions only in the private repository. Update the
-   public repository only for intentionally public baseline behavior or shared
-   compatibility contracts.
-3. Increment the private package version and publish its matching
-   `v<version>` tag.
-4. Update expected task/assertion counts in `GameTaskServiceTests`, deployed
-   integration defaults, and documentation.
-5. Validate public and private modes, deploy both grading artifacts, refresh
-   cached messages, and run the complete live subscription suite.
+2. Update expected task and assertion counts in `GameTaskServiceTests` and the
+   deployed integration defaults.
+3. Refresh cached messages after deploying changed task instructions.
+4. Run the complete live subscription suite.
 
 ### Adding New API Endpoints
 

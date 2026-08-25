@@ -22,9 +22,8 @@ cd AzureAutomaticGradingEngine_Assignments
 cp Infrastructure/.env.template Infrastructure/.env
 ```
 
-The recursive clone includes the public grading-test source. It requires no
-package credentials. For an owner deployment using the private replacement
-suite, follow [Public and private grading tests](docs/private-tests.md).
+The recursive clone includes the public grading-test source and requires no
+package credentials.
 
 Edit `.env` with your Azure OpenAI credentials:
 ```bash
@@ -62,42 +61,8 @@ cp students.example.txt students.txt
 npm run students:invite -- students.txt
 ```
 
-The command above uses the public `AzureProjectTestLib` submodule. Public
-deployments require no package credentials.
-
-For an owner deployment using the private grading package, set a classic GitHub
-token with `read:packages` and `repo` access, then wrap the CDK Terrain
-deployment command:
-
-```bash
-export GITHUB_PACKAGES_TOKEN="<token>"
-export GITHUB_PACKAGES_USER="wongcyrus"
-export GITHUB_PACKAGES_OWNER="wongcyrus"
-
-cd ..
-scripts/with-private-tests.sh \
-  bash -lc 'cd Infrastructure && npx cdktn deploy --auto-approve'
-```
-
-The wrapper sets `UsePrivateTests=true` for every nested Function and hosted
-runner build and deletes its temporary authenticated NuGet configuration on
-exit. A normal `gh auth token` is insufficient unless it explicitly includes
-`read:packages`. See [Public and private grading tests](docs/private-tests.md)
-for package publication and version updates. Owner-only build logs identify the
-selected suite as `Public` or `Private`.
-
-The current owner deployment uses
-`WongCyrus.AzureProjectTestLib.Private` version `1.0.8`. It contains 33 game
-tasks and 40 Azure assertions. After changing task instructions, deploy the new
-package before refreshing pre-generated messages; otherwise the refresh uses
-the previous assembly's task strings.
-
-Fork maintainers can use their own private package by setting
-`PrivateTestPackageId` and `PrivateTestPackageVersion` in
-`Directory.Build.props`, then setting `GITHUB_PACKAGES_OWNER` to the GitHub
-account or organization that owns that package. See
-[Public and private grading tests](docs/private-tests.md) for the complete
-setup.
+The command above uses the public `AzureProjectTestLib` submodule and requires
+no package credentials.
 
 `npx cdktn deploy` creates the Azure tables but does not populate table
 entities. Run `npm run storage:seed` after every clean deployment to import the
