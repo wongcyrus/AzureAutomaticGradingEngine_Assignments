@@ -53,6 +53,9 @@ See the [subscription registration workflow](docs/subscription-registration.md)
 for student and teacher procedures.
 For an architecture walkthrough with trust-boundary, registration, and grading
 diagrams, see [Secretless multi-tenant Azure grading: technical design](docs/technical-design.md).
+For classroom operation, see the
+[teacher dashboard guide](docs/teacher-dashboard.md) and
+[frequently asked questions](docs/faq.md).
 
 ## Quick Start
 

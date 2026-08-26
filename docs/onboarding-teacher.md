@@ -115,6 +115,10 @@ messages, resets hit counters, and looks up or releases one exact registration
 after typed confirmation. The page does not expose credentials, Function keys,
 global student browsing, or a clear-all-messages operation.
 
+See [Teacher class performance dashboard](teacher-dashboard.md) for the full
+CSV format, metric definitions, data-isolation model, support-tool behavior,
+effects of removal, operational verification, and troubleshooting.
+
 If a verified registration must be released for reassignment, use the teacher
 dashboard or the repository command below. Both remove only the consistent pair
 of registration indexes and do not change Azure access, tags, progress,

@@ -3,12 +3,14 @@
 ## Onboarding by Role
 
 - [Teacher onboarding](onboarding-teacher.md)
+- [Teacher class performance dashboard](teacher-dashboard.md)
 - [Student onboarding: same tenant](onboarding-student-same-tenant.md)
 - [Student onboarding: different tenant](onboarding-student-cross-tenant.md)
 - [Manual same-tenant setup and verification](manual-onboarding-direct.md)
 - [Manual cross-tenant setup and verification](manual-onboarding-lighthouse.md)
 - [Verify student grading access](verify-student-grading-access.md)
 - [Subscription registration workflow](subscription-registration.md)
+- [Frequently asked questions](faq.md)
 
 ## Project Guides
 
