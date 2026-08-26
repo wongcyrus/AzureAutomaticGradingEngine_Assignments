@@ -201,8 +201,8 @@ dotnet test GraderFunctionApp.Tests/GraderFunctionApp.Tests.csproj \
     --settings GraderFunctionApp.Tests/coverlet.runsettings
 ```
 
-The current suite contains 257 tests and covers 91.6% of Function App lines
-and 81.2% of branches. Coverage is scoped to the `GraderFunctionApp` assembly
+The current suite contains 277 tests and covers 92.2% of Function App lines
+and 82.4% of branches. Coverage is scoped to the `GraderFunctionApp` assembly
 and excludes only generated Function SDK files
 under `obj`; production source files remain included.
 

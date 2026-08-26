@@ -101,6 +101,21 @@ public class StorageServiceTests
     }
 
     [Test]
+    public async Task SaveTestResultXmlAsync_AnonymousIdentity_IsPreserved()
+    {
+        var container = Substitute.For<BlobContainerClient>();
+        var blob = Substitute.For<BlobClient>();
+        blobServiceClient.GetBlobContainerClient("test-results").Returns(container);
+        container.GetBlobClient(Arg.Any<string>()).Returns(blob);
+
+        var result = await service.SaveTestResultXmlAsync(
+            "Anonymous",
+            "<test-run />");
+
+        Assert.That(result, Does.StartWith("Anonymous_"));
+    }
+
+    [Test]
     public async Task GetCompletedTaskNamesAsync_ReturnsUniqueNonEmptyTasks()
     {
         tableServiceClient.GetTableClient("PassTests").Returns(tableClient);
@@ -459,6 +474,37 @@ public class StorageServiceTests
         await tableClient.Received(1).UpsertEntityAsync(
             Arg.Is<ITableEntity>(entity =>
                 entity.PartitionKey == "noemail" && entity.RowKey == "invalidtest"),
+            TableUpdateMode.Merge,
+            Arg.Any<CancellationToken>());
+    }
+
+    [TestCase("Anonymous", "Namespace.Pass", "Anonymous", "Pass")]
+    [TestCase("   ", "SingleName", "sanitized", "SingleName")]
+    public async Task SavePassTestRecordAsync_UnusualKeys_AreSanitized(
+        string email,
+        string testName,
+        string expectedPartition,
+        string expectedRow)
+    {
+        tableServiceClient.GetTableClient("PassTests").Returns(tableClient);
+        tableClient.GetEntityAsync<PassTestEntity>(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns<Task<Response<PassTestEntity>>>(
+                _ => throw new RequestFailedException(404, "Not found"));
+
+        await service.SavePassTestRecordAsync(
+            email,
+            "Task A",
+            new Dictionary<string, int> { [testName] = 1 },
+            "Stella");
+
+        await tableClient.Received(1).UpsertEntityAsync(
+            Arg.Is<ITableEntity>(entity =>
+                entity.PartitionKey == expectedPartition &&
+                entity.RowKey == expectedRow),
             TableUpdateMode.Merge,
             Arg.Any<CancellationToken>());
     }

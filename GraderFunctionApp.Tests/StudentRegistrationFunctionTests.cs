@@ -55,6 +55,18 @@ public class StudentRegistrationFunctionTests
     }
 
     [Test]
+    public void PublicConstructor_CreatesFunction()
+    {
+        var instance = new StudentRegistrationFunction(
+            NullLogger<StudentRegistrationFunction>.Instance,
+            Substitute.For<TableServiceClient>(),
+            Options.Create(new StorageOptions()),
+            Substitute.For<IRequestAuthenticator>());
+
+        Assert.That(instance, Is.Not.Null);
+    }
+
+    [Test]
     public async Task RunAsync_MissingSignedIdentity_ReturnsUnauthorized()
     {
         requestAuthenticator.GetAuthenticatedEmail(Arg.Any<HttpRequest>())
@@ -210,6 +222,106 @@ public class StudentRegistrationFunctionTests
         Add(SubscriptionRegistration.CreateSubscriptionIndex(
             "other@example.com",
             subscriptionId));
+
+        var result = await function.RunAsync(CreatePostRequest(
+            "ignored@example.com",
+            subscriptionId));
+
+        AssertIntegrityError(result);
+    }
+
+    [TestCase("partition")]
+    [TestCase("row")]
+    [TestCase("kind")]
+    [TestCase("email")]
+    [TestCase("guid")]
+    [TestCase("normalized-guid")]
+    public async Task RunAsync_InvalidEmailIndex_ReturnsIntegrityError(
+        string invalidField)
+    {
+        var subscriptionId = Guid.NewGuid().ToString("D");
+        var expectedRowKey =
+            SubscriptionRegistration.EmailRowKey("student@example.com");
+        var emailIndex = SubscriptionRegistration.CreateEmailIndex(
+            "student@example.com",
+            subscriptionId);
+        switch (invalidField)
+        {
+            case "partition":
+                emailIndex.PartitionKey = "wrong";
+                break;
+            case "row":
+                emailIndex.RowKey = "wrong";
+                break;
+            case "kind":
+                emailIndex.IndexKind =
+                    SubscriptionRegistration.SubscriptionIndexKind;
+                break;
+            case "email":
+                emailIndex.Email = "other@example.com";
+                break;
+            case "guid":
+                emailIndex.SubscriptionId = "not-a-guid";
+                break;
+            case "normalized-guid":
+                emailIndex.SubscriptionId = subscriptionId.ToUpperInvariant();
+                break;
+        }
+        registrations[expectedRowKey] = emailIndex;
+        Add(SubscriptionRegistration.CreateSubscriptionIndex(
+            "student@example.com",
+            subscriptionId));
+
+        var result = await function.RunAsync(CreatePostRequest(
+            "ignored@example.com",
+            subscriptionId));
+
+        AssertIntegrityError(result);
+    }
+
+    [TestCase("partition")]
+    [TestCase("row")]
+    [TestCase("kind")]
+    [TestCase("subscription")]
+    [TestCase("empty-email")]
+    [TestCase("normalized-email")]
+    public async Task RunAsync_InvalidSubscriptionIndex_ReturnsIntegrityError(
+        string invalidField)
+    {
+        var subscriptionId = Guid.NewGuid().ToString("D");
+        var expectedRowKey =
+            SubscriptionRegistration.SubscriptionRowKey(subscriptionId);
+        var subscriptionIndex =
+            SubscriptionRegistration.CreateSubscriptionIndex(
+                "student@example.com",
+                subscriptionId);
+        switch (invalidField)
+        {
+            case "partition":
+                subscriptionIndex.PartitionKey = "wrong";
+                break;
+            case "row":
+                subscriptionIndex.RowKey = "wrong";
+                break;
+            case "kind":
+                subscriptionIndex.IndexKind =
+                    SubscriptionRegistration.EmailIndexKind;
+                break;
+            case "subscription":
+                subscriptionIndex.SubscriptionId =
+                    Guid.NewGuid().ToString("D");
+                break;
+            case "empty-email":
+                subscriptionIndex.Email = " ";
+                break;
+            case "normalized-email":
+                subscriptionIndex.Email = "Student@Example.COM";
+                break;
+        }
+        Add(SubscriptionRegistration.CreateEmailIndex(
+            "student@example.com",
+            subscriptionId));
+        registrations[expectedRowKey] = subscriptionIndex;
 
         var result = await function.RunAsync(CreatePostRequest(
             "ignored@example.com",
