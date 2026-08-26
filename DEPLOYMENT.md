@@ -244,7 +244,7 @@ cookie.
 
 Sign in as every configured operator and open `/admin.html`. Confirm cache
 statistics load and an exact registration lookup works. Sign in as an ordinary
-student and confirm `/api/admin/status` returns `403`.
+student and confirm `/api/teacher/status` returns `403`.
 
 Run the external Function integration suite after every deployment. Include
 the grading subscription so the check executes all 40 Azure resource tests

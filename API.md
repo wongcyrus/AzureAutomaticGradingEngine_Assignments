@@ -170,12 +170,12 @@ student identities receive `403` before any admin service is called.
 
 | Static Web Apps route | Method | Operation |
 | --- | --- | --- |
-| `/api/admin/status` | `GET` | Confirm the current operator session |
-| `/api/admin/cache-stats` | `GET` | Read generated-message cache statistics |
-| `/api/admin/cache-refresh` | `POST` | Regenerate cached messages |
-| `/api/admin/cache-reset` | `POST` | Reset cache hit counters |
-| `/api/admin/registration?email=...` | `GET` | Look up one exact registration |
-| `/api/admin/registration?email=...` | `DELETE` | Atomically release one exact registration |
+| `/api/teacher/status` | `GET` | Confirm the current operator session |
+| `/api/teacher/cache-stats` | `GET` | Read generated-message cache statistics |
+| `/api/teacher/cache-refresh` | `POST` | Regenerate cached messages |
+| `/api/teacher/cache-reset` | `POST` | Reset cache hit counters |
+| `/api/teacher/registration?email=...` | `GET` | Look up one exact registration |
+| `/api/teacher/registration?email=...` | `DELETE` | Atomically release one exact registration |
 
 The direct Function endpoints require a Function key plus valid
 `x-grader-email`, `x-grader-timestamp`, and `x-grader-signature` headers. They
