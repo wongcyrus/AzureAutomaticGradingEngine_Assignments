@@ -221,7 +221,7 @@ public class DeployedFunctionTests
     }
 
     [Test]
-    public async Task RegistrationAdmin_GetUnknownEmailWithOperator_ReturnsNotFound()
+    public async Task RegistrationAdmin_GetUnknownEmailWithOperator_ReturnsUnregistered()
     {
         if (string.IsNullOrWhiteSpace(adminTestEmail))
         {
@@ -234,7 +234,11 @@ public class DeployedFunctionTests
             "api/operator/subscription-registration?email=unknown-live-check@example.com",
             signedEmail: adminTestEmail);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        using var document = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync());
+        var data = document.RootElement.GetProperty("data");
+        Assert.That(data.GetProperty("registered").GetBoolean(), Is.False);
     }
 
     [Test]
