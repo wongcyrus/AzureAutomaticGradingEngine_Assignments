@@ -62,6 +62,7 @@ public static class GraderServiceCollectionExtensions
                 provider.GetRequiredService<IGameTaskService>()));
         services.AddSingleton<IUnifiedMessageService, UnifiedMessageService>();
         services.AddSingleton<IRequestAuthenticator, SignedRequestAuthenticator>();
+        services.AddSingleton<IOperatorRequestAuthorizer, OperatorRequestAuthorizer>();
         services.AddSingleton<ITestResultParser, TestResultParser>();
         services.AddSingleton<ITestRunner, TestRunner>();
         services.AddSingleton<GameTaskFunction>();

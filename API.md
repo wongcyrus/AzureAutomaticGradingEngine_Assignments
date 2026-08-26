@@ -164,8 +164,9 @@ The Static Web Apps proxy supplies the authenticated identity and signs the
 ## Admin Endpoints
 
 Admin endpoints are not routed by the student-facing Static Web Apps API. They
-require the same signed service-to-service headers and are exercised only by
-operator tooling.
+require a Function key, the signed service-to-service headers, and an
+authenticated email listed in the Function App's `ADMIN_EMAILS` allowlist.
+Valid student signatures receive `403` before any admin service is called.
 
 ### GET /api/pregeneratedmessagestats
 
@@ -210,8 +211,8 @@ Reset cache hit counts.
 
 ### POST /api/messages/refresh
 
-Refresh the AI message cache. This admin operation requires the normal
-Function key and signed operator identity headers. The timer-triggered refresh
+Refresh the AI message cache. This admin operation requires the normal Function
+key and an allowlisted signed operator identity. The timer-triggered refresh
 also runs automatically each day at 02:00 UTC.
 
 **Response:**
@@ -255,7 +256,7 @@ registration returns short text or HTML messages:
 
 - NPC interactions: 1 hour cooldown between task assignments
 - Grading: No limit (students can retry failed tasks)
-- Admin endpoints: No limit
+- Admin endpoints: allowlisted operators only; no application-level rate limit
 
 Signed assertions expire after five minutes and bind the identity to the exact
 HTTP method and backend path/query. Replaying a signature for another student,

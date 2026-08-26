@@ -52,6 +52,11 @@ The Function key and HMAC key serve different purposes:
 
 A Function key without a valid identity assertion is insufficient.
 
+Operator HTTP endpoints add another fail-closed decision. The signed email must
+appear in the Function App's `ADMIN_EMAILS` allowlist; an otherwise valid
+student assertion receives `403` before cache, generation, or reset services
+run. This protects the control plane even if a route is exposed accidentally.
+
 ## Secretless Azure Access
 
 The Function App and hosted test process use the same user-assigned managed

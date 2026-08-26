@@ -13,7 +13,7 @@ public class MessageGeneratorFunctionTests
 {
     private IPreGeneratedMessageService preGeneratedService = null!;
     private IUnifiedMessageService messageService = null!;
-    private IRequestAuthenticator requestAuthenticator = null!;
+    private IOperatorRequestAuthorizer operatorRequestAuthorizer = null!;
     private MessageGeneratorFunction function = null!;
 
     [SetUp]
@@ -21,25 +21,44 @@ public class MessageGeneratorFunctionTests
     {
         preGeneratedService = Substitute.For<IPreGeneratedMessageService>();
         messageService = Substitute.For<IUnifiedMessageService>();
-        requestAuthenticator = Substitute.For<IRequestAuthenticator>();
-        requestAuthenticator.GetAuthenticatedEmail(Arg.Any<HttpRequest>())
-            .Returns("operator@example.com");
+        operatorRequestAuthorizer =
+            Substitute.For<IOperatorRequestAuthorizer>();
+        operatorRequestAuthorizer.Authorize(Arg.Any<HttpRequest>())
+            .Returns(OperatorAuthorizationStatus.Authorized);
         function = new MessageGeneratorFunction(
             NullLogger<MessageGeneratorFunction>.Instance,
             preGeneratedService,
             messageService,
-            requestAuthenticator);
+            operatorRequestAuthorizer);
     }
 
     [Test]
     public async Task RefreshAllMessagesAsync_MissingSignedIdentity_ReturnsUnauthorized()
     {
-        requestAuthenticator.GetAuthenticatedEmail(Arg.Any<HttpRequest>())
-            .Returns((string?)null);
+        operatorRequestAuthorizer.Authorize(Arg.Any<HttpRequest>())
+            .Returns(OperatorAuthorizationStatus.Unauthenticated);
 
         var result = await function.RefreshAllMessagesAsync(CreateRequest());
 
         Assert.That(result, Is.TypeOf<UnauthorizedObjectResult>());
+    }
+
+    [Test]
+    public async Task AllEndpoints_SignedStudent_ReturnForbiddenWithoutServiceCalls()
+    {
+        operatorRequestAuthorizer.Authorize(Arg.Any<HttpRequest>())
+            .Returns(OperatorAuthorizationStatus.Forbidden);
+
+        IActionResult[] results =
+        [
+            await function.RefreshAllMessagesAsync(CreateRequest()),
+            await function.GeneratePersonalizedMessageAsync(CreateRequest()),
+            await function.TestMessageGenerationAsync(CreateRequest())
+        ];
+
+        Assert.That(results, Has.All.TypeOf<ForbidResult>());
+        Assert.That(preGeneratedService.ReceivedCalls(), Is.Empty);
+        Assert.That(messageService.ReceivedCalls(), Is.Empty);
     }
 
     [Test]

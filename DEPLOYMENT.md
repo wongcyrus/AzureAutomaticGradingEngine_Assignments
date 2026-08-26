@@ -30,7 +30,13 @@ Edit `.env` with your Azure OpenAI credentials:
 AZURE_OPENAI_ENDPOINT=https://your-region.api.cognitive.microsoft.com/
 AZURE_OPENAI_API_KEY=your-api-key
 DEPLOYMENT_OR_MODEL_NAME=gpt-35-turbo
+ADMIN_EMAILS=operator@example.com
 ```
+
+`ADMIN_EMAILS` is a comma-, semicolon-, or newline-separated allowlist for
+operator HTTP endpoints. Use normalized teacher/operator sign-in addresses;
+never add the student roster. A valid signed student identity receives `403`
+from every operator endpoint.
 
 ### 2. Azure Login
 
@@ -178,6 +184,9 @@ curl -fsS \
     '
 unset profile publish_user publish_password
 ```
+
+Confirm the deployed Function App also has a non-empty `ADMIN_EMAILS` setting.
+The operator authorization layer fails closed when it is absent.
 
 Before opening registration, verify Storage contains
 `SubscriptionRegistrations` and no obsolete registration table. The current

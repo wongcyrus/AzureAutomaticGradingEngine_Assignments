@@ -268,6 +268,8 @@ as their Azure Table partition key. Assignment atomically adds
 - Short-lived HMAC-signed SWA-to-Function identity assertions
 - Function keys are forwarded in headers and are insufficient without a valid
   signed identity
+- Operator endpoints additionally require the signed email to appear in the
+  `ADMIN_EMAILS` allowlist; ordinary students receive `403`
 - User-assigned managed identity with student-delegated, least-privilege RBAC
 - No student application secrets are stored
 - SAS URLs for secure test result access

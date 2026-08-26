@@ -180,27 +180,14 @@ public class DeployedFunctionTests
     }
 
     [Test]
-    public async Task MessageStats_Get_ReturnsExpectedJsonShape()
+    public async Task MessageStats_GetWithSignedStudent_ReturnsForbidden()
     {
         using var response = await SendAsync(
             HttpMethod.Get,
-            "api/pregeneratedmessagestats");
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            "api/pregeneratedmessagestats",
+            signedEmail: "ordinary-student@example.com");
 
-        using var document = await JsonDocument.ParseAsync(
-            await response.Content.ReadAsStreamAsync());
-
-        var root = document.RootElement;
-        using (Assert.EnterMultipleScope())
-        {
-            Assert.That(root.TryGetProperty("timestamp", out _), Is.True);
-            Assert.That(
-                root.GetProperty("statistics")
-                    .GetProperty("total")
-                    .GetProperty("messages")
-                    .ValueKind,
-                Is.EqualTo(JsonValueKind.Number));
-        }
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
     }
 
     [Test]
@@ -214,9 +201,11 @@ public class DeployedFunctionTests
     private async Task<HttpResponseMessage> SendAsync(
         HttpMethod method,
         string relativeUrl,
-        HttpContent? content = null)
+        HttpContent? content = null,
+        string? signedEmail = null)
     {
         var absoluteUrl = new Uri(client.BaseAddress!, relativeUrl);
+        signedEmail ??= testEmail;
         var timestamp = DateTimeOffset.UtcNow
             .ToUnixTimeMilliseconds()
             .ToString();
@@ -225,7 +214,7 @@ public class DeployedFunctionTests
             method.Method.ToUpperInvariant(),
             absoluteUrl.PathAndQuery,
             timestamp,
-            testEmail);
+            signedEmail);
         var signature = Convert.ToHexString(
             HMACSHA256.HashData(
                 signingKey,
@@ -235,7 +224,7 @@ public class DeployedFunctionTests
         {
             Content = content
         };
-        request.Headers.Add("x-grader-email", testEmail);
+        request.Headers.Add("x-grader-email", signedEmail);
         request.Headers.Add("x-grader-timestamp", timestamp);
         request.Headers.Add("x-grader-signature", signature);
         return await client.SendAsync(request);

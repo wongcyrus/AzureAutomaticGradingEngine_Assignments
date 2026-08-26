@@ -12,18 +12,18 @@ namespace GraderFunctionApp.Functions
         private readonly ILogger<MessageGeneratorFunction> _logger;
         private readonly IPreGeneratedMessageService _preGeneratedMessageService;
         private readonly IUnifiedMessageService _unifiedMessageService;
-        private readonly IRequestAuthenticator _requestAuthenticator;
+        private readonly IOperatorRequestAuthorizer _operatorRequestAuthorizer;
 
         public MessageGeneratorFunction(
             ILogger<MessageGeneratorFunction> logger,
             IPreGeneratedMessageService preGeneratedMessageService,
             IUnifiedMessageService unifiedMessageService,
-            IRequestAuthenticator requestAuthenticator)
+            IOperatorRequestAuthorizer operatorRequestAuthorizer)
         {
             _logger = logger;
             _preGeneratedMessageService = preGeneratedMessageService;
             _unifiedMessageService = unifiedMessageService;
-            _requestAuthenticator = requestAuthenticator;
+            _operatorRequestAuthorizer = operatorRequestAuthorizer;
         }
 
         /// <summary>
@@ -281,9 +281,14 @@ namespace GraderFunctionApp.Functions
 
         private IActionResult? Authenticate(HttpRequest request)
         {
-            return _requestAuthenticator.GetAuthenticatedEmail(request) == null
-                ? new UnauthorizedObjectResult("Authentication required.")
-                : null;
+            return _operatorRequestAuthorizer.Authorize(request) switch
+            {
+                OperatorAuthorizationStatus.Authorized => null,
+                OperatorAuthorizationStatus.Unauthenticated =>
+                    new UnauthorizedObjectResult("Authentication required."),
+                OperatorAuthorizationStatus.Forbidden => new ForbidResult(),
+                _ => new ForbidResult()
+            };
         }
     }
 

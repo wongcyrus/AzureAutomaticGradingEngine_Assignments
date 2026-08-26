@@ -86,6 +86,12 @@ SWA server proxy signs the normalized Entra email, HTTP method, exact backend
 path/query, and timestamp with `GRADER_PROXY_SIGNING_KEY`; backend assertions
 expire after five minutes.
 
+Admin HTTP Functions add `OperatorRequestAuthorizer` above that identity
+boundary. It permits only normalized addresses in `ADMIN_EMAILS`; all other
+valid signed identities receive `403` before service logic executes. Never
+authorize admin behavior merely because a request has a valid student
+signature or Function key.
+
 ### Service Layer Pattern
 
 - **Controllers**: HTTP trigger functions handle requests

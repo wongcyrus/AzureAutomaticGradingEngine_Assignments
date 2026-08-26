@@ -150,6 +150,7 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       AZURE_CLIENT_ID: gradingIdentity.clientId,
       ASSIGNMENT_RESOURCE_GROUP: "projProd",
       GRADER_PROXY_SIGNING_KEY: proxySigningKey,
+      ADMIN_EMAILS: process.env.ADMIN_EMAILS!,
     };
 
     const azureFunctionConstruct = new AzureFunctionWindowsConstruct(

@@ -11,31 +11,50 @@ namespace GraderFunctionApp.Tests;
 public class PreGeneratedMessageStatsFunctionTests
 {
     private IPreGeneratedMessageService service = null!;
-    private IRequestAuthenticator requestAuthenticator = null!;
+    private IOperatorRequestAuthorizer operatorRequestAuthorizer = null!;
     private PreGeneratedMessageStatsFunction function = null!;
 
     [SetUp]
     public void SetUp()
     {
         service = Substitute.For<IPreGeneratedMessageService>();
-        requestAuthenticator = Substitute.For<IRequestAuthenticator>();
-        requestAuthenticator.GetAuthenticatedEmail(Arg.Any<HttpRequest>())
-            .Returns("operator@example.com");
+        operatorRequestAuthorizer =
+            Substitute.For<IOperatorRequestAuthorizer>();
+        operatorRequestAuthorizer.Authorize(Arg.Any<HttpRequest>())
+            .Returns(OperatorAuthorizationStatus.Authorized);
         function = new PreGeneratedMessageStatsFunction(
             NullLogger<PreGeneratedMessageStatsFunction>.Instance,
             service,
-            requestAuthenticator);
+            operatorRequestAuthorizer);
     }
 
     [Test]
     public async Task Run_MissingSignedIdentity_ReturnsUnauthorized()
     {
-        requestAuthenticator.GetAuthenticatedEmail(Arg.Any<HttpRequest>())
-            .Returns((string?)null);
+        operatorRequestAuthorizer.Authorize(Arg.Any<HttpRequest>())
+            .Returns(OperatorAuthorizationStatus.Unauthenticated);
 
         var result = await function.Run(CreateRequest());
 
         Assert.That(result, Is.TypeOf<UnauthorizedObjectResult>());
+    }
+
+    [Test]
+    public async Task AllEndpoints_SignedStudent_ReturnForbiddenWithoutServiceCalls()
+    {
+        operatorRequestAuthorizer.Authorize(Arg.Any<HttpRequest>())
+            .Returns(OperatorAuthorizationStatus.Forbidden);
+
+        IActionResult[] results =
+        [
+            await function.Run(CreateRequest()),
+            await function.ResetHitCounts(CreateRequest()),
+            await function.TestCacheLookup(CreateRequest()),
+            await function.ClearAllMessages(CreateRequest())
+        ];
+
+        Assert.That(results, Has.All.TypeOf<ForbidResult>());
+        Assert.That(service.ReceivedCalls(), Is.Empty);
     }
 
     [Test]
