@@ -89,6 +89,8 @@ path. It verifies grader access to `projProd` and requires its
 Registration atomically reserves both the student email and subscription ID.
 Afterward the database is authoritative: changing the Azure tag does not
 transfer the registration or allow another student to claim the subscription.
+See [Subscription registration workflow](subscription-registration.md) for the
+index guarantees, student-visible outcomes, and full reassignment sequence.
 
 If a verified registration must be released for reassignment, an administrator
 can run the repository command below. It removes only the consistent pair of
@@ -98,6 +100,11 @@ or test results.
 ```bash
 scripts/release-student-subscription.sh <student-email>
 ```
+
+For reassignment, first offboard the current student, then release the database
+registration, onboard the new student, verify access, and have the new student
+register through Azure Isekai. Changing only the tag does not transfer a
+registration.
 
 ## 5. Test Grading
 

@@ -34,9 +34,9 @@ the grader `Reader` on the subscription and `Contributor` on
 teacher access to the subscription. Brazil South is fixed by the grading suite
 and cannot be overridden.
 
-The first successful onboarding claims `projProd` with the
-`GradingStudentEmail` tag. Repeated runs by the same Cloud Shell email are
-safe. A different email is rejected before any grader role or tag is changed.
+The first successful onboarding sets the `GradingStudentEmail` initialization
+tag on `projProd`. Repeated runs by the same Cloud Shell email are safe. A
+different email is rejected before any grader role or tag is changed.
 
 If the launcher cannot be used, follow the
 [manual same-tenant setup and verification guide](manual-onboarding-direct.md).
@@ -45,6 +45,10 @@ After permissions propagate, sign in to Azure Isekai with the same email and
 register the subscription ID printed by the launcher. Registration reserves
 both your email and subscription ID; changing the Azure tag later does not
 transfer that registration.
+
+Follow the complete
+[subscription registration workflow](subscription-registration.md) for web
+registration outcomes, resets, and subscription replacement.
 
 ## Verify Access
 
