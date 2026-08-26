@@ -46,8 +46,7 @@ public class StudentRegistrationAdminFunction
         [HttpTrigger(
             AuthorizationLevel.Function,
             "get",
-            "delete",
-            Route = "operator/subscription-registration")]
+            "delete")]
         HttpRequest request)
     {
         var authorizationResult = Authorize(request);

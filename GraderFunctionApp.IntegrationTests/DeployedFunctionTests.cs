@@ -189,8 +189,8 @@ public class DeployedFunctionTests
     [TestCase("POST", "api/messages/refresh")]
     [TestCase("POST", "api/messages/personalize")]
     [TestCase("GET", "api/messages/test")]
-    [TestCase("GET", "api/operator/subscription-registration")]
-    [TestCase("DELETE", "api/operator/subscription-registration")]
+    [TestCase("GET", "api/StudentRegistrationAdminFunction")]
+    [TestCase("DELETE", "api/StudentRegistrationAdminFunction")]
     public async Task AdminEndpoint_WithSignedStudent_ReturnsForbidden(
         string method,
         string relativeUrl)
@@ -231,7 +231,7 @@ public class DeployedFunctionTests
 
         using var response = await SendAsync(
             HttpMethod.Get,
-            "api/operator/subscription-registration?email=unknown-live-check@example.com",
+            "api/StudentRegistrationAdminFunction?email=unknown-live-check@example.com",
             signedEmail: adminTestEmail);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
