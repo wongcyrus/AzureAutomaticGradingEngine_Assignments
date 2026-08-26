@@ -19,6 +19,15 @@ stores them only in server-side application settings. The proxy removes
 `?code=` from configured backend URLs before forwarding and never logs
 key-bearing URLs.
 
+The proxy is the **managed Node API** deployed from `azure-isekai/api`, not a
+Bring Your Own API mapping to the grading Function App. The Azure Portal linked
+API/backend list is intentionally empty. Linking the Function App directly
+would bypass the principal-to-HMAC proxy contract and is not a supported
+deployment mode.
+
+`GET /api/health` is the anonymous deployment probe for the managed API. It
+returns only the service identity and no configuration or dependency details.
+
 ## Core Endpoints
 
 ### GET /api/game-task

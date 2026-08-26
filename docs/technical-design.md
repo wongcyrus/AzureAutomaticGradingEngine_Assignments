@@ -21,7 +21,7 @@ flowchart LR
     Student[Student browser]
     Teacher[Teacher browser]
     Entra[Microsoft Entra ID]
-    SWA[Azure Static Web Apps<br/>game and API proxy]
+    SWA[Azure Static Web Apps<br/>frontend and managed Node API]
     Function[Azure Functions<br/>game, registration, grading]
     Identity[User-assigned<br/>managed identity]
     Storage[(Azure Storage<br/>registrations, state, results)]
@@ -47,6 +47,12 @@ trusted Entra principal, normalizes the email, and signs the email, HTTP
 method, exact backend path/query, and timestamp. The Function rejects missing,
 expired, malformed, or replayed assertions. Browser-supplied `email`, form
 email, and diagnostic values never select another student's data.
+
+The Node proxy is deployed as the Static Web Apps **managed API**. The Static
+Web App has no linked Bring Your Own API backend, so an empty portal API mapping
+is the intended state. Backend Function URLs and keys exist only in server-side
+Static Web Apps settings. Linking the grading Function App directly would
+replace the proxy boundary and invalidate the identity flow shown above.
 
 The Function key and HMAC key serve different purposes:
 
@@ -241,6 +247,9 @@ is reauthorized and membership-checked by the backend.
 CDK Terrain provisions deterministic Azure resources and uploads the Function
 and hosted test runner. Static Web Apps deployment is separate because it
 refreshes runtime Function URLs, keys, Entra settings, and the shared HMAC key.
+That deployment packages both the frontend and managed Node API; it does not
+create an Azure linked-backend mapping. A post-deploy `/api/health` check proves
+the managed API is executing in the production environment.
 
 The Function uses `WEBSITE_RUN_FROM_PACKAGE`. After publishing a new package,
 restart the Function App and verify the mounted `appsettings.json` declares

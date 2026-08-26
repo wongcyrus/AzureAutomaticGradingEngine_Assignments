@@ -35,6 +35,11 @@ not created or stored.
 6. The grader runs only the tests for the student's active task against that
    subscription.
 
+The Static Web Apps API is the managed Node API in the `azure-isekai`
+submodule. Azure Portal API mapping/linked backends intentionally remains
+empty; the grading Function App must not be linked directly because that would
+bypass the signed proxy identity boundary.
+
 Frontend sign-in, subscription registration, and Azure RBAC are separate:
 membership in the student sign-in group does not grant subscription access.
 The onboarding script uses direct managed-identity RBAC for same-tenant

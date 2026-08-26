@@ -115,6 +115,44 @@ creation, including:
 - `GRADER_PROXY_SIGNING_KEY`
 - `ADMIN_EMAILS`
 
+### Static Web Apps API Mapping
+
+This deployment uses the **managed Static Web Apps Node API** from
+`azure-isekai/api`. It does not use a portal-linked Bring Your Own API backend.
+Therefore, Azure Portal **Static Web App > Settings > APIs** and the ARM
+`linkedBackends` collection are expected to be empty. An empty API mapping does
+not mean the API is disabled.
+
+Do not link the `azureisekai2026` Function App directly to the Static Web App.
+The managed Node API is the public `/api/*` boundary that:
+
+1. reads the trusted Static Web Apps authenticated principal;
+2. prevents the browser from selecting another student's identity;
+3. removes Function keys from configured URLs;
+4. signs the exact backend method, path, query, timestamp, and normalized email;
+5. applies the teacher allowlist before forwarding operator requests.
+
+The Function App remains a separate protected backend reached through
+server-side `*FunctionUrl` application settings. Directly linking it as the
+Static Web Apps API would replace this proxy routing and break that identity
+and signing design.
+
+Expected production checks:
+
+```bash
+# Managed API package is deployed and executing.
+curl -fsS \
+  "https://<static-web-app-host>/api/health" |
+  jq -e '.status == "ok" and .service == "azure-isekai-api"'
+
+# Bring Your Own API mappings are intentionally absent.
+subscription_id="$(az account show --query id --output tsv)"
+az rest --method GET --url \
+  "https://management.azure.com/subscriptions/$subscription_id/resourceGroups/GradingEngineAssignmentResourceGroup/providers/Microsoft.Web/staticSites/azure-isekai-grading-web/builds/default/linkedBackends?api-version=2023-12-01" \
+  --query 'length(value)'
+# Expected: 0
+```
+
 All Azure resources owned by the stack use
 `GradingEngineAssignmentResourceGroup` and deterministic names:
 
@@ -403,11 +441,11 @@ then refresh so new messages are generated from the active assembly.
 3. **Game not loading**
    - Confirm the user belongs to `GradingEngineAssignmentStudents`
    - Check `/.auth/me` shows the expected authenticated email
+   - Verify `/api/health` returns the managed API service identity
    - Rerun `npm run frontend:deploy` to restore API dependencies and all proxy
-     settings
-   - A `404` from `/api/game-task` usually means the Static Web Apps API was
-     deployed without its npm dependencies, not that the backend Function is
-     missing
+     settings; the command now fails if the health check does not pass
+   - Do not add a portal API mapping to the Function App as a workaround; a
+     `404` means the managed API deployment or route must be corrected
 
 4. **Student can sign in but grading cannot access the subscription**
    - Confirm registration maps the same sign-in email to the subscription
