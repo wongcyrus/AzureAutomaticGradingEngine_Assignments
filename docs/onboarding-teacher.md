@@ -45,6 +45,12 @@ External students must accept that invitation before signing in to Azure
 Isekai. This group grants game sign-in only; it does not grant access to student
 Azure subscriptions.
 
+The deployment grants tenant-wide admin consent for the application's delegated
+Microsoft Graph `User.Read` permission. Group membership and consent solve
+different checks: membership authorizes the student to use the application,
+while admin consent prevents invited users from being blocked by a
+`Need admin approval` prompt.
+
 ## 3. Give Students the Correct Guide
 
 - [Student in the same tenant](onboarding-student-same-tenant.md)
