@@ -189,6 +189,8 @@ public class DeployedFunctionTests
     [TestCase("POST", "api/messages/refresh")]
     [TestCase("POST", "api/messages/personalize")]
     [TestCase("GET", "api/messages/test")]
+    [TestCase("GET", "api/operator/subscription-registration")]
+    [TestCase("DELETE", "api/operator/subscription-registration")]
     public async Task AdminEndpoint_WithSignedStudent_ReturnsForbidden(
         string method,
         string relativeUrl)
@@ -216,6 +218,23 @@ public class DeployedFunctionTests
             signedEmail: adminTestEmail);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    [Test]
+    public async Task RegistrationAdmin_GetUnknownEmailWithOperator_ReturnsNotFound()
+    {
+        if (string.IsNullOrWhiteSpace(adminTestEmail))
+        {
+            Assert.Ignore("Set GRADER_ADMIN_TEST_EMAIL to verify operator access.");
+            return;
+        }
+
+        using var response = await SendAsync(
+            HttpMethod.Get,
+            "api/operator/subscription-registration?email=unknown-live-check@example.com",
+            signedEmail: adminTestEmail);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 
     [Test]

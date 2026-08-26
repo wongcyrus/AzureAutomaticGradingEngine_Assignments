@@ -47,7 +47,7 @@ public class StudentRegistrationAdminFunction
             AuthorizationLevel.Function,
             "get",
             "delete",
-            Route = "admin/subscription-registration")]
+            Route = "operator/subscription-registration")]
         HttpRequest request)
     {
         var authorizationResult = Authorize(request);

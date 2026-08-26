@@ -242,7 +242,7 @@ also runs automatically each day at 02:00 UTC.
 }
 ```
 
-### GET, DELETE /api/admin/subscription-registration
+### GET, DELETE /api/operator/subscription-registration
 
 Look up or atomically release the two registration indexes for one exact
 student email. Release succeeds only when the email and subscription index
