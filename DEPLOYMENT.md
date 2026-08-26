@@ -64,6 +64,11 @@ npm run students:invite -- students.txt
 The command above uses the public `AzureProjectTestLib` submodule and requires
 no package credentials.
 
+CDK Terrain declares Microsoft Graph `User.Read` delegated permission and
+tenant-wide admin consent for the Static Web Apps Entra application. The
+student-group assignment limits who may sign in; the consent grant prevents
+invited users from receiving a `Need admin approval` prompt. Both are required.
+
 `npx cdktn deploy` creates the Azure tables but does not populate table
 entities. Run `npm run storage:seed` after every clean deployment to import the
 version-controlled NPC personalities and Easter egg links from
