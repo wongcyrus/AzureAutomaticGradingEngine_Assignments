@@ -253,7 +253,7 @@ The runner retrieves a host key with the current Azure CLI identity and passes
 it through the `x-functions-key` header. It also retrieves the proxy-signing
 key and creates the same short-lived identity signatures as Static Web Apps.
 Keys are never written to source, command output, or test-result files. The
-subscription argument adds one full grading test to the seven non-destructive
+subscription argument adds one full grading test to the eight non-destructive
 HTTP checks and writes its NUnit result through the normal grading storage
 path. The optional fourth argument runs those checks with the registered
 student's signed identity. Omit the subscription when only endpoint and

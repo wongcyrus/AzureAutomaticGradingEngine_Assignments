@@ -286,8 +286,9 @@ namespace GraderFunctionApp.Functions
                 OperatorAuthorizationStatus.Authorized => null,
                 OperatorAuthorizationStatus.Unauthenticated =>
                     new UnauthorizedObjectResult("Authentication required."),
-                OperatorAuthorizationStatus.Forbidden => new ForbidResult(),
-                _ => new ForbidResult()
+                OperatorAuthorizationStatus.Forbidden =>
+                    new StatusCodeResult(StatusCodes.Status403Forbidden),
+                _ => new StatusCodeResult(StatusCodes.Status403Forbidden)
             };
         }
     }

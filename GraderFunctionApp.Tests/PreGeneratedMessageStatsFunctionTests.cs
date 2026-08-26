@@ -53,7 +53,13 @@ public class PreGeneratedMessageStatsFunctionTests
             await function.ClearAllMessages(CreateRequest())
         ];
 
-        Assert.That(results, Has.All.TypeOf<ForbidResult>());
+        Assert.That(
+            results,
+            Has.All.Matches<IActionResult>(result =>
+                result is StatusCodeResult
+                {
+                    StatusCode: StatusCodes.Status403Forbidden
+                }));
         Assert.That(service.ReceivedCalls(), Is.Empty);
     }
 

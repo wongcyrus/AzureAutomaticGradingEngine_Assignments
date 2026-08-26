@@ -14,6 +14,7 @@ public class DeployedFunctionTests
     private HttpClient client = null!;
     private byte[] signingKey = null!;
     private string testEmail = null!;
+    private string? adminTestEmail;
 
     [OneTimeSetUp]
     public void OneTimeSetUp()
@@ -37,6 +38,8 @@ public class DeployedFunctionTests
         testEmail = string.IsNullOrWhiteSpace(configuredTestEmail)
             ? DefaultTestEmail
             : configuredTestEmail.Trim().ToLowerInvariant();
+        adminTestEmail = Environment.GetEnvironmentVariable(
+            "GRADER_ADMIN_TEST_EMAIL")?.Trim().ToLowerInvariant();
         client = new HttpClient
         {
             BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/", UriKind.Absolute),
@@ -188,6 +191,23 @@ public class DeployedFunctionTests
             signedEmail: "ordinary-student@example.com");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+    }
+
+    [Test]
+    public async Task MessageStats_GetWithConfiguredOperator_ReturnsOk()
+    {
+        if (string.IsNullOrWhiteSpace(adminTestEmail))
+        {
+            Assert.Ignore("Set GRADER_ADMIN_TEST_EMAIL to verify operator access.");
+            return;
+        }
+
+        using var response = await SendAsync(
+            HttpMethod.Get,
+            "api/pregeneratedmessagestats",
+            signedEmail: adminTestEmail);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
 
     [Test]

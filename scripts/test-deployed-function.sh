@@ -12,6 +12,7 @@ repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 function_key="${AZURE_FUNCTION_KEY:-}"
 proxy_signing_key="${GRADER_PROXY_SIGNING_KEY:-}"
+admin_test_email="${GRADER_ADMIN_TEST_EMAIL:-}"
 if [[ -z "$function_key" ]]; then
   function_key="$(
     az functionapp keys list \
@@ -32,6 +33,21 @@ if [[ -z "$proxy_signing_key" ]]; then
   )"
 fi
 
+if [[ -z "$admin_test_email" ]]; then
+  admin_emails="$(
+    az functionapp config appsettings list \
+      --resource-group "$resource_group" \
+      --name "$function_app_name" \
+      --query "[?name=='ADMIN_EMAILS'].value | [0]" \
+      --output tsv
+  )"
+  admin_test_email="$(
+    printf '%s' "$admin_emails" |
+      tr ';,' '\n' |
+      sed -n '/[^[:space:]]/ { s/^[[:space:]]*//; s/[[:space:]]*$//; p; q; }'
+  )"
+fi
+
 if [[ -z "$function_key" ]]; then
   echo "No host-level Function key was found for $function_app_name." >&2
   exit 1
@@ -45,6 +61,7 @@ fi
 export FUNCTION_APP_BASE_URL="${FUNCTION_APP_BASE_URL:-https://${function_app_name}.azurewebsites.net/}"
 export AZURE_FUNCTION_KEY="$function_key"
 export GRADER_PROXY_SIGNING_KEY="$proxy_signing_key"
+export GRADER_ADMIN_TEST_EMAIL="$admin_test_email"
 export AZURE_TEST_SUBSCRIPTION_ID="$test_subscription_id"
 export GRADER_TEST_EMAIL="$test_email"
 export AZURE_TEST_FILTER="$test_filter"

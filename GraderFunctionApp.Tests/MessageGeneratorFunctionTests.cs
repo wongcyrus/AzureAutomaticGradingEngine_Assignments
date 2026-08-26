@@ -56,7 +56,13 @@ public class MessageGeneratorFunctionTests
             await function.TestMessageGenerationAsync(CreateRequest())
         ];
 
-        Assert.That(results, Has.All.TypeOf<ForbidResult>());
+        Assert.That(
+            results,
+            Has.All.Matches<IActionResult>(result =>
+                result is StatusCodeResult
+                {
+                    StatusCode: StatusCodes.Status403Forbidden
+                }));
         Assert.That(preGeneratedService.ReceivedCalls(), Is.Empty);
         Assert.That(messageService.ReceivedCalls(), Is.Empty);
     }
