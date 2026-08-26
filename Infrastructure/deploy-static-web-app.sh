@@ -36,13 +36,21 @@ game_task_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignme
 grader_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentGraderFunctionUrl // empty' "$outputs_file")"
 pass_task_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentPassTaskFunctionUrl // empty' "$outputs_file")"
 registration_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentStudentRegistrationFunctionUrl // empty' "$outputs_file")"
+message_stats_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentPreGeneratedMessageStatsUrl // empty' "$outputs_file")"
+message_refresh_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentRefreshPreGeneratedMessagesUrl // empty' "$outputs_file")"
+message_reset_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentResetPreGeneratedMessageHitCountsUrl // empty' "$outputs_file")"
+registration_admin_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentStudentRegistrationAdminFunctionUrl // empty' "$outputs_file")"
 proxy_signing_key="$(jq -r '.AzureAutomaticGradingEngineGrader.grader_proxy_signing_key // empty' "$outputs_file")"
+admin_emails="$(jq -r '.AzureAutomaticGradingEngineGrader.admin_emails // empty' "$outputs_file")"
 tenant_id="$(az account show --query tenantId --output tsv)"
 
 if [[ -z "$static_web_apps_token" || -z "$client_id" || -z "$client_secret" ||
       -z "$static_web_app_name" || -z "$resource_group_name" ||
       -z "$game_task_url" || -z "$grader_url" || -z "$pass_task_url" ||
-      -z "$registration_url" || -z "$proxy_signing_key" ||
+      -z "$registration_url" || -z "$message_stats_url" ||
+      -z "$message_refresh_url" || -z "$message_reset_url" ||
+      -z "$registration_admin_url" || -z "$proxy_signing_key" ||
+      -z "$admin_emails" ||
       -z "$tenant_id" ]]; then
   echo "Error: missing required CDKTN output or Azure tenant ID." >&2
   exit 1
@@ -58,7 +66,12 @@ az staticwebapp appsettings set \
     "GraderFunctionUrl=$grader_url" \
     "PassTaskFunctionUrl=$pass_task_url" \
     "StudentRegistrationFunctionUrl=$registration_url" \
+    "PreGeneratedMessageStatsFunctionUrl=$message_stats_url" \
+    "RefreshPreGeneratedMessagesFunctionUrl=$message_refresh_url" \
+    "ResetPreGeneratedMessageHitCountsFunctionUrl=$message_reset_url" \
+    "StudentRegistrationAdminFunctionUrl=$registration_admin_url" \
     "GRADER_PROXY_SIGNING_KEY=$proxy_signing_key" \
+    "ADMIN_EMAILS=$admin_emails" \
   --output none
 
 jq --arg issuer "https://login.microsoftonline.com/$tenant_id/v2.0" \

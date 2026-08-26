@@ -98,10 +98,16 @@ transfer the registration or allow another student to claim the subscription.
 See [Subscription registration workflow](subscription-registration.md) for the
 index guarantees, student-visible outcomes, and full reassignment sequence.
 
-If a verified registration must be released for reassignment, an administrator
-can run the repository command below. It removes only the consistent pair of
-registration indexes and does not change Azure access, tags, progress, reports,
-or test results.
+Configured operators can open `/admin.html` on the deployed Azure Isekai site
+to inspect message-cache health, refresh generated messages, reset hit
+counters, look up one exact student registration, or release that registration
+after typing the email again. The page does not expose student browsing,
+credentials, Function keys, or a clear-all-messages operation.
+
+If a verified registration must be released for reassignment, use the teacher
+dashboard or the repository command below. Both remove only the consistent pair
+of registration indexes and do not change Azure access, tags, progress,
+reports, or test results.
 
 ```bash
 scripts/release-student-subscription.sh <student-email>

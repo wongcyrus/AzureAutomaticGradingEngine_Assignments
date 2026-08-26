@@ -107,7 +107,12 @@ creation, including:
 - `GraderFunctionUrl`
 - `PassTaskFunctionUrl`
 - `StudentRegistrationFunctionUrl`
+- `PreGeneratedMessageStatsFunctionUrl`
+- `RefreshPreGeneratedMessagesFunctionUrl`
+- `ResetPreGeneratedMessageHitCountsFunctionUrl`
+- `StudentRegistrationAdminFunctionUrl`
 - `GRADER_PROXY_SIGNING_KEY`
+- `ADMIN_EMAILS`
 
 All Azure resources owned by the stack use
 `GradingEngineAssignmentResourceGroup` and deterministic names:
@@ -186,7 +191,8 @@ unset profile publish_user publish_password
 ```
 
 Confirm the deployed Function App also has a non-empty `ADMIN_EMAILS` setting.
-The operator authorization layer fails closed when it is absent.
+The same allowlist is installed as a server-side Static Web Apps setting for
+the admin proxy. Both authorization layers fail closed when it is absent.
 
 Before opening registration, verify Storage contains
 `SubscriptionRegistrations` and no obsolete registration table. The current
@@ -235,6 +241,10 @@ Then sign in through a browser and verify
 `/api/game-task?npc=Stella&game=azure-learning`. A plain anonymous `curl` cannot
 exercise the student API because it has no Static Web Apps authentication
 cookie.
+
+Sign in as every configured operator and open `/admin.html`. Confirm cache
+statistics load and an exact registration lookup works. Sign in as an ordinary
+student and confirm `/api/admin/status` returns `403`.
 
 Run the external Function integration suite after every deployment. Include
 the grading subscription so the check executes all 40 Azure resource tests

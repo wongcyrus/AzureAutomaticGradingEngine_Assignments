@@ -163,10 +163,23 @@ The Static Web Apps proxy supplies the authenticated identity and signs the
 
 ## Admin Endpoints
 
-Admin endpoints are not routed by the student-facing Static Web Apps API. They
-require a Function key, the signed service-to-service headers, and an
-authenticated email listed in the Function App's `ADMIN_EMAILS` allowlist.
-Valid student signatures receive `403` before any admin service is called.
+The teacher dashboard at `/admin.html` calls the operator-only Static Web Apps
+routes below. Both the proxy and Function App require the authenticated email
+to appear in `ADMIN_EMAILS`; the backend check remains authoritative. Valid
+student identities receive `403` before any admin service is called.
+
+| Static Web Apps route | Method | Operation |
+| --- | --- | --- |
+| `/api/admin/status` | `GET` | Confirm the current operator session |
+| `/api/admin/cache-stats` | `GET` | Read generated-message cache statistics |
+| `/api/admin/cache-refresh` | `POST` | Regenerate cached messages |
+| `/api/admin/cache-reset` | `POST` | Reset cache hit counters |
+| `/api/admin/registration?email=...` | `GET` | Look up one exact registration |
+| `/api/admin/registration?email=...` | `DELETE` | Atomically release one exact registration |
+
+The direct Function endpoints require a Function key plus valid
+`x-grader-email`, `x-grader-timestamp`, and `x-grader-signature` headers. They
+are for the server-side proxy and diagnostics, not browser use.
 
 ### GET /api/pregeneratedmessagestats
 
@@ -228,6 +241,19 @@ also runs automatically each day at 02:00 UTC.
   "timestamp": "2026-08-24T12:00:00Z"
 }
 ```
+
+### GET, DELETE /api/admin/subscription-registration
+
+Look up or atomically release the two registration indexes for one exact
+student email. Release succeeds only when the email and subscription index
+rows form a consistent pair; missing or inconsistent data is never guessed or
+partially deleted.
+
+**Parameters:**
+- `email` (required): Exact student sign-in email
+
+`DELETE` preserves Azure access, the ownership tag, game progress, failed
+attempts, reports, and test results.
 
 ## Error Responses
 

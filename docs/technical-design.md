@@ -19,6 +19,7 @@ student owns a subscription in the application database.
 ```mermaid
 flowchart LR
     Student[Student browser]
+    Teacher[Teacher browser]
     Entra[Microsoft Entra ID]
     SWA[Azure Static Web Apps<br/>game and API proxy]
     Function[Azure Functions<br/>game, registration, grading]
@@ -29,8 +30,10 @@ flowchart LR
     Runner[Hosted NUnit runner]
 
     Student -->|sign in| Entra
+    Teacher -->|sign in| Entra
     Entra -->|authenticated principal| SWA
     SWA -->|HMAC-signed identity assertion| Function
+    Teacher -->|operator-only dashboard| SWA
     Function --> Storage
     Function --> Runner
     Function --> Identity
@@ -55,7 +58,9 @@ A Function key without a valid identity assertion is insufficient.
 Operator HTTP endpoints add another fail-closed decision. The signed email must
 appear in the Function App's `ADMIN_EMAILS` allowlist; an otherwise valid
 student assertion receives `403` before cache, generation, or reset services
-run. This protects the control plane even if a route is exposed accidentally.
+run. The Static Web Apps admin proxy applies the same allowlist before
+forwarding, while the Function remains authoritative. This protects the
+control plane even if either route layer is exposed accidentally.
 
 ## Secretless Azure Access
 
@@ -183,6 +188,13 @@ These operations intentionally have different scopes:
 
 A safe reassignment runs Azure offboarding, atomic registration release, new
 student onboarding, verification, and new web registration in that order.
+
+The operator-only `/admin.html` dashboard deliberately exposes exact
+registration lookup rather than unrestricted student browsing. Release
+requires typed email confirmation and uses an ETag-conditional two-row table
+transaction, so concurrent or inconsistent state fails without partial
+deletion. Cache controls are limited to statistics, regeneration, and hit
+counter reset; destructive cache clearing is not exposed.
 
 ## Deployment Safety
 

@@ -39,7 +39,11 @@ const FUNCTION_NAMES = [
   "GraderFunction",
   "GameTaskFunction",
   "PassTaskFunction",
-  "StudentRegistrationFunction"
+  "StudentRegistrationFunction",
+  "PreGeneratedMessageStats",
+  "RefreshPreGeneratedMessages",
+  "ResetPreGeneratedMessageHitCounts",
+  "StudentRegistrationAdminFunction"
 ];
 
 // Main stack using constructs
@@ -77,7 +81,8 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
       proxySigningKey,
       monitoringWorkspace.id,
       RESOURCE_NAMES.staticWebAppInsights,
-      RESOURCE_NAMES.staticWebApp
+      RESOURCE_NAMES.staticWebApp,
+      process.env.ADMIN_EMAILS!
     );
 
     const azureADConstruct = new AzureADApplicationConstruct(
@@ -206,6 +211,11 @@ class AzureAutomaticGradingEngineGraderStack extends TerraformStack {
 
     new TerraformOutput(this, "grader_proxy_signing_key", {
       value: proxySigningKey,
+      sensitive: true,
+    });
+
+    new TerraformOutput(this, "admin_emails", {
+      value: process.env.ADMIN_EMAILS!,
       sensitive: true,
     });
 

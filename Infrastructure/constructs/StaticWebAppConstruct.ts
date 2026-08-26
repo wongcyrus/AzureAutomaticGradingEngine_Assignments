@@ -16,7 +16,8 @@ export class StaticWebAppConstruct extends Construct {
     proxySigningKey: string,
     workspaceId: string,
     appInsightsName: string,
-    staticWebAppName: string
+    staticWebAppName: string,
+    adminEmails: string
   ) {
     super(scope, id);
 
@@ -36,6 +37,7 @@ export class StaticWebAppConstruct extends Construct {
       APPLICATIONINSIGHTS_CONNECTION_STRING: this.appInsights.connectionString,
       APPINSIGHTS_INSTRUMENTATIONKEY: this.appInsights.instrumentationKey,
       GRADER_PROXY_SIGNING_KEY: proxySigningKey,
+      ADMIN_EMAILS: adminEmails,
     };
 
     this.staticWebApp = new StaticWebApp(this, "StaticWebApp", {
