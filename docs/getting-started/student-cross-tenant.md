@@ -45,7 +45,7 @@ different email is rejected before any Lighthouse deployment or tag is
 changed.
 
 If the launcher cannot be used, follow the
-[manual cross-tenant setup and verification guide](manual-onboarding-lighthouse.md).
+[manual cross-tenant setup and verification guide](../manual/lighthouse.md).
 
 After Lighthouse permissions propagate, sign in to Azure Isekai with the same
 email and register the subscription ID printed by the launcher. Registration
@@ -53,13 +53,13 @@ reserves both your email and subscription ID; changing the Azure tag later does
 not transfer that registration.
 
 Follow the complete
-[subscription registration workflow](subscription-registration.md) for web
+[subscription registration workflow](../guides/subscription-registration.md) for web
 registration outcomes, resets, and subscription replacement.
 
 ## Verify Access
 
 Follow the complete
-[student grading-access verification guide](verify-student-grading-access.md).
+[student grading-access verification guide](../guides/verify-grading-access.md).
 From the same Cloud Shell subscription, run:
 
 ```bash

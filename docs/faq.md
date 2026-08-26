@@ -110,7 +110,7 @@ atomically deletes the email/subscription index pair.
 
 No. It preserves RBAC, Lighthouse delegation, tags, resources, progress, and
 reports. Follow the complete offboarding/reassignment workflow when ownership
-changes.
+changes. See [Subscription reassignment](operations/subscription-reassignment.md).
 
 ### Does progress reset release a subscription?
 
@@ -157,6 +157,8 @@ operators but does not provide global browsing.
 The project uses the Static Web Apps managed Node API. Portal API mapping is
 for Bring Your Own API backends. An empty `linkedBackends` collection is
 expected and does not mean the API is disabled.
+
+See [Static Web Apps API topology](architecture/static-web-apps-api.md).
 
 ### Should I link `azureisekai2026` as the Static Web Apps API?
 
@@ -227,6 +229,10 @@ The restart ensures the newest run-from-package artifact is mounted.
 6. A teacher can complete the temporary class lifecycle.
 7. An ordinary student receives `403`.
 
+Use the [deployment guide](operations/deployment.md) and centralized
+[troubleshooting runbook](operations/troubleshooting.md) for commands and
+failure recovery.
+
 ### Where is the detailed dashboard guide?
 
-See [Teacher class performance dashboard](teacher-dashboard.md).
+See [Teacher class performance dashboard](guides/teacher-dashboard.md).

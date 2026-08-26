@@ -53,8 +53,8 @@ while admin consent prevents invited users from being blocked by a
 
 ## 3. Give Students the Correct Guide
 
-- [Student in the same tenant](onboarding-student-same-tenant.md)
-- [Student in a different tenant](onboarding-student-cross-tenant.md)
+- [Student in the same tenant](student-same-tenant.md)
+- [Student in a different tenant](student-cross-tenant.md)
 
 Both students use Azure Cloud Shell without cloning this repository or entering
 a subscription ID or email address. Same-tenant students use
@@ -77,7 +77,7 @@ It must report the expected mode and finish with `Verification passed`.
 Same-tenant subscriptions require direct RBAC and reject grader Lighthouse
 delegation; cross-tenant subscriptions require both Lighthouse delegations and
 reject direct grader RBAC.
-See [Verify student grading access](verify-student-grading-access.md) for the
+See [Verify student grading access](../guides/verify-grading-access.md) for the
 required output, failure handling, and student-run end-to-end grading check.
 
 The onboarding script will not replace a non-empty `GradingStudentEmail` tag
@@ -95,7 +95,7 @@ path. It verifies grader access to `projProd` and requires its
 Registration atomically reserves both the student email and subscription ID.
 Afterward the database is authoritative: changing the Azure tag does not
 transfer the registration or allow another student to claim the subscription.
-See [Subscription registration workflow](subscription-registration.md) for the
+See [Subscription registration workflow](../guides/subscription-registration.md) for the
 index guarantees, student-visible outcomes, and full reassignment sequence.
 
 Configured operators can open `/admin.html` on the deployed Azure Isekai site
@@ -115,7 +115,7 @@ messages, resets hit counters, and looks up or releases one exact registration
 after typed confirmation. The page does not expose credentials, Function keys,
 global student browsing, or a clear-all-messages operation.
 
-See [Teacher class performance dashboard](teacher-dashboard.md) for the full
+See [Teacher class performance dashboard](../guides/teacher-dashboard.md) for the full
 CSV format, metric definitions, data-isolation model, support-tool behavior,
 effects of removal, operational verification, and troubleshooting.
 

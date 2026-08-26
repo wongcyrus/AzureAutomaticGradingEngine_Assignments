@@ -183,7 +183,7 @@ Registration release:
 - preserves progress, reports, Azure resources, tags, and access.
 
 For subscription reassignment, follow the complete
-[registration reassignment workflow](subscription-registration.md#reassignment-workflow).
+[subscription reassignment runbook](../operations/subscription-reassignment.md).
 Do not use roster removal as a substitute for registration release or Azure
 offboarding.
 
@@ -229,16 +229,10 @@ It never scans all registrations or all student progress.
 Browser requests use `/api/teacher/*` on Azure Static Web Apps. These routes
 run in the managed Node API deployed from `azure-isekai/api`.
 
-The Azure Portal API mapping/linked-backend list is intentionally empty. The
-managed API calls the separate `azureisekai2026` Function App through
-server-side Function URLs and signed headers. Do not link the Function App
-directly as a Bring Your Own API backend.
-
-See:
-
-- [API reference](../API.md)
-- [Technical design](technical-design.md)
-- [Deployment guide](../DEPLOYMENT.md#static-web-apps-api-mapping)
+The grading Function remains a separate protected backend. See
+[Static Web Apps API topology](../architecture/static-web-apps-api.md) for the
+request path and portal mapping rules, and the
+[deployment guide](../operations/deployment.md) for configuration.
 
 ## Troubleshooting
 

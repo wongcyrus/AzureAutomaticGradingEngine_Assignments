@@ -15,9 +15,9 @@ import path.
 1. Sign in to Azure Cloud Shell with the same email used for Azure Isekai.
 2. Select the assignment subscription.
 3. Run the correct onboarding launcher:
-   - [Same tenant](onboarding-student-same-tenant.md)
-   - [Different tenant](onboarding-student-cross-tenant.md)
-4. Run the [read-only access verifier](verify-student-grading-access.md).
+   - [Same tenant](../getting-started/student-same-tenant.md)
+   - [Different tenant](../getting-started/student-cross-tenant.md)
+4. Run the [read-only access verifier](verify-grading-access.md).
 5. Sign in to Azure Isekai with the same email.
 6. Open the registration page and submit the subscription ID printed by the
    onboarding launcher.
@@ -58,7 +58,7 @@ RowKey: subscription:<normalized-subscription-guid>
 ```
 
 Both rows contain the normalized email, normalized subscription ID, and index
-kind. See the [technical design](technical-design.md) for architecture,
+kind. See the [technical design](../architecture/technical-design.md) for architecture,
 sequence, and storage diagrams.
 
 | Situation | Result |

@@ -48,11 +48,10 @@ method, exact backend path/query, and timestamp. The Function rejects missing,
 expired, malformed, or replayed assertions. Browser-supplied `email`, form
 email, and diagnostic values never select another student's data.
 
-The Node proxy is deployed as the Static Web Apps **managed API**. The Static
-Web App has no linked Bring Your Own API backend, so an empty portal API mapping
-is the intended state. Backend Function URLs and keys exist only in server-side
-Static Web Apps settings. Linking the grading Function App directly would
-replace the proxy boundary and invalidate the identity flow shown above.
+The Node proxy is deployed as the Static Web Apps managed API. Backend Function
+URLs and keys exist only in server-side settings. See
+[Static Web Apps API topology](static-web-apps-api.md) for the linked-backend
+rules and production verification.
 
 The Function key and HMAC key serve different purposes:
 
@@ -245,11 +244,9 @@ is reauthorized and membership-checked by the backend.
 ## Deployment Safety
 
 CDK Terrain provisions deterministic Azure resources and uploads the Function
-and hosted test runner. Static Web Apps deployment is separate because it
-refreshes runtime Function URLs, keys, Entra settings, and the shared HMAC key.
-That deployment packages both the frontend and managed Node API; it does not
-create an Azure linked-backend mapping. A post-deploy `/api/health` check proves
-the managed API is executing in the production environment.
+and hosted test runner. Static Web Apps deployment separately refreshes runtime
+Function URLs, keys, Entra settings, and the shared HMAC key. It also verifies
+the managed API through `/api/health`.
 
 The Function uses `WEBSITE_RUN_FROM_PACKAGE`. After publishing a new package,
 restart the Function App and verify the mounted `appsettings.json` declares
@@ -273,6 +270,6 @@ already been uploaded.
    status.**
 
 For operational procedures, see the
-[subscription registration workflow](subscription-registration.md),
-[deployment guide](../DEPLOYMENT.md), and
-[student grading-access verifier](verify-student-grading-access.md).
+[subscription registration workflow](../guides/subscription-registration.md),
+[deployment guide](../operations/deployment.md), and
+[student grading-access verifier](../guides/verify-grading-access.md).

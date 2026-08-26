@@ -136,7 +136,7 @@ These commands are safe to repeat. Existing role assignments are skipped.
 ## 4. Verify
 
 Follow the complete
-[student grading-access verification guide](verify-student-grading-access.md).
+[student grading-access verification guide](../guides/verify-grading-access.md).
 Run:
 
 ```bash

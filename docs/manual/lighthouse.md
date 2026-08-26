@@ -191,7 +191,7 @@ Deterministic IDs make these deployments safe to repeat.
 ## 5. Verify
 
 Follow the complete
-[student grading-access verification guide](verify-student-grading-access.md).
+[student grading-access verification guide](../guides/verify-grading-access.md).
 Run:
 
 ```bash
