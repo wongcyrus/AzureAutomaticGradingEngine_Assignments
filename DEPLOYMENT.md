@@ -139,6 +139,11 @@ Apps settings map so a later infrastructure deployment does not erase these
 values. Always rerun `npm run frontend:deploy` after Function URLs, keys, or
 Entra credentials change.
 
+The frontend deployment includes the managed Node API and fails unless the
+production `/api/health` endpoint returns the expected service identity. This
+post-deploy gate prevents a frontend-only Static Web Apps deployment from being
+reported as successful.
+
 The account running `students:invite` needs permission to invite external
 users and update group membership (for example, an appropriate Entra directory
 role). Group assignment to an Enterprise Application may require Microsoft
