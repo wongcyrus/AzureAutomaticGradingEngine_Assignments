@@ -182,12 +182,20 @@ public class DeployedFunctionTests
         }
     }
 
-    [Test]
-    public async Task MessageStats_GetWithSignedStudent_ReturnsForbidden()
+    [TestCase("GET", "api/pregeneratedmessagestats")]
+    [TestCase("POST", "api/pregeneratedmessagestats/reset")]
+    [TestCase("GET", "api/pregeneratedmessagestats/test")]
+    [TestCase("DELETE", "api/pregeneratedmessagestats/clear")]
+    [TestCase("POST", "api/messages/refresh")]
+    [TestCase("POST", "api/messages/personalize")]
+    [TestCase("GET", "api/messages/test")]
+    public async Task AdminEndpoint_WithSignedStudent_ReturnsForbidden(
+        string method,
+        string relativeUrl)
     {
         using var response = await SendAsync(
-            HttpMethod.Get,
-            "api/pregeneratedmessagestats",
+            new HttpMethod(method),
+            relativeUrl,
             signedEmail: "ordinary-student@example.com");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
