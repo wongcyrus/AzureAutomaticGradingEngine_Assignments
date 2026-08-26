@@ -44,6 +44,8 @@ Personal subscriptions are supported; Azure Education Hub is not required.
 The onboarding tag proves control only when the student first registers. The
 atomic database indexes are authoritative afterward, so changing the Azure tag
 does not transfer or duplicate a registration.
+See the [subscription registration workflow](docs/subscription-registration.md)
+for student and teacher procedures.
 
 ## Quick Start
 

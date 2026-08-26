@@ -91,6 +91,11 @@ complete the end-to-end check:
    registration, or runner error. Because onboarding creates `projProd` in
    `brazilsouth`, its existence and location checks should pass.
 
+Registration is web-only and atomically reserves both the authenticated email
+and subscription ID. See the
+[subscription registration workflow](subscription-registration.md) for
+conflicts, progress resets, and reassignment.
+
 The student performs both stages. Do not consider onboarding complete until the
 Cloud Shell verifier passes and Azure Isekai successfully grades the student's
 resource-group task.

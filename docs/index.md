@@ -8,6 +8,7 @@
 - [Manual same-tenant setup and verification](manual-onboarding-direct.md)
 - [Manual cross-tenant setup and verification](manual-onboarding-lighthouse.md)
 - [Verify student grading access](verify-student-grading-access.md)
+- [Subscription registration workflow](subscription-registration.md)
 
 ## Project Guides
 

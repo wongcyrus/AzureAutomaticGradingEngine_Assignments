@@ -232,6 +232,11 @@ and before the Gist is changed to the new principal ID. The same launcher
 automatically removes same-tenant direct RBAC or different-tenant Azure
 Lighthouse access while preserving `projProd`.
 
+The registration schema has no legacy migration. The first deployment using
+`SubscriptionRegistrations` removes the old registration table, so every
+student must register again through Azure Isekai after access verification.
+See the [subscription registration workflow](docs/subscription-registration.md).
+
 ### Resetting One Student
 
 Use the reset script from the repository root:
