@@ -46,6 +46,8 @@ atomic database indexes are authoritative afterward, so changing the Azure tag
 does not transfer or duplicate a registration.
 See the [subscription registration workflow](docs/subscription-registration.md)
 for student and teacher procedures.
+For an architecture walkthrough with trust-boundary, registration, and grading
+diagrams, see [Secretless multi-tenant Azure grading: technical design](docs/technical-design.md).
 
 ## Quick Start
 
@@ -86,12 +88,10 @@ for student and teacher procedures.
    security group; the invitation script idempotently invites guests and adds
    existing or new users to that group.
 
-3. **Build and Deploy Tests**
-   ```bash
-   cd AzureProjectTest
-   dotnet publish -r win-x64 -c Release
-   # Upload to Azure Function storage using provided azcopy command
-   ```
+`npx cdktn deploy` builds and deploys the Function App and hosted test runner.
+After deployment, restart the Function App as described in
+[DEPLOYMENT.md](DEPLOYMENT.md) so the newest run-from-package artifact is
+mounted before students register.
 
 ## Student Assignment Tasks
 
@@ -121,6 +121,7 @@ Students receive task requirements through Azure Isekai at assignment time.
 - `GET /api/grader` - Submit work for grading
 - `GET /api/pass-task` - View player identity, progress, and failure history
 - `POST /api/pass-task` - Reset progress while preserving failure history
+- `POST /api/registration` - Atomically register one student and subscription
 
 ### Admin Functions
 - `GET /api/pregeneratedmessagestats` - View message cache statistics

@@ -9,16 +9,16 @@
 │   ├── Models/                 # Data models
 │   └── Interfaces/             # Service interfaces
 ├── GraderFunctionApp.Tests/    # NUnit tests and Coverlet settings
+├── GraderFunctionApp.IntegrationTests/ # Deployed Function HTTP checks
 ├── azure-isekai/              # RPG Maker game frontend
 │   ├── js/plugins/             # Game plugins
 │   ├── data/                   # Game data files
 │   └── img/                    # Game assets
-├── AzureProjectTest/           # Unit test library
-│   ├── Tests/                  # Test implementations
-│   └── Models/                 # Test models
+├── AzureProjectTest/           # Hosted NUnit runner executable
+├── AzureProjectTestLib/        # Public grading-test submodule
 ├── Infrastructure/             # CDK Terrain application
-    ├── stacks/                 # Infrastructure stacks
-    └── constructs/             # Reusable constructs
+│   ├── constructs/             # Infrastructure components
+│   └── data/                   # Version-controlled seed data
 └── packages/                   # Shared libraries (Git submodules/npm workspaces)
 ```
 
@@ -39,7 +39,7 @@
    git clone --recurse-submodules <repository-url>
    cd AzureAutomaticGradingEngine_Assignments
    npm run bootstrap
-   cp .env.template .env
+   cp Infrastructure/.env.template Infrastructure/.env
    # Edit .env with development credentials
    ```
 
@@ -57,7 +57,7 @@
    npm run dev
    ```
 
-4. **Test Library Development**
+4. **Hosted Test Runner Development**
    ```bash
    cd AzureProjectTest
    dotnet build
@@ -293,9 +293,12 @@ backend ignores browser-supplied identities.
 
 ### Database Optimization
 
-1. **Partitioning**: Use email as partition key
-2. **Indexing**: Index frequently queried fields
-3. **Batch Operations**: Use batch writes for bulk operations
+1. **Game partitioning**: Keep each student's state and lock in one email
+   partition so assignment/completion can transact atomically.
+2. **Registration indexes**: Keep both hashed-email and subscription indexes in
+   the shared `registrations` partition so uniqueness is enforced atomically.
+3. **Point reads**: Resolve registrations by exact row key; never scan or fall
+   back to mutable Azure tags.
 
 ### Function App Optimization
 
@@ -368,6 +371,9 @@ npm run synth
 terraform -chdir=Infrastructure/cdktf.out/stacks/AzureAutomaticGradingEngineGrader validate
 cd Infrastructure
 PATH="$HOME/.dotnet:$PATH" npx cdktn deploy
+az functionapp restart \
+  --resource-group GradingEngineAssignmentResourceGroup \
+  --name azureisekai2026
 ```
 
 Do not replace this with a direct `func publish` pipeline: that bypasses

@@ -48,6 +48,11 @@ cd Infrastructure/
 # Deploy infrastructure
 npx cdktn deploy
 
+# Force the Function host to mount the package uploaded by CDK Terrain.
+az functionapp restart \
+  --resource-group GradingEngineAssignmentResourceGroup \
+  --name azureisekai2026
+
 # Seed idempotent NPC and Easter egg baseline data.
 npm run storage:seed
 
@@ -137,6 +142,47 @@ is on `PATH`; in environments using the local installer:
 ```bash
 PATH="$HOME/.dotnet:$PATH" npx cdktn deploy
 ```
+
+The Function uses `WEBSITE_RUN_FROM_PACKAGE`. A successful package upload does
+not prove that an already-running host has remounted it. Restart the Function
+after every backend deployment, then confirm the mounted configuration:
+
+```bash
+az functionapp restart \
+  --resource-group GradingEngineAssignmentResourceGroup \
+  --name azureisekai2026
+
+az functionapp function show \
+  --resource-group GradingEngineAssignmentResourceGroup \
+  --name azureisekai2026 \
+  --function-name StudentRegistrationFunction \
+  --query name \
+  --output tsv
+
+profile="$(
+  az functionapp deployment list-publishing-profiles \
+    --resource-group GradingEngineAssignmentResourceGroup \
+    --name azureisekai2026 \
+    --query "[?publishMethod=='MSDeploy'] | [0]" \
+    --output json
+)"
+publish_user="$(jq -r .userName <<<"$profile")"
+publish_password="$(jq -r .userPWD <<<"$profile")"
+curl -fsS \
+  --user "$publish_user:$publish_password" \
+  "https://azureisekai2026.scm.azurewebsites.net/api/vfs/site/wwwroot/appsettings.json" \
+  | jq -e '
+      .Storage.SubscriptionRegistrationsTableName ==
+        "SubscriptionRegistrations" and
+      (.Storage | has("SubscriptionTableName") | not)
+    '
+unset profile publish_user publish_password
+```
+
+Before opening registration, verify Storage contains
+`SubscriptionRegistrations` and no obsolete registration table. The current
+Function package declares `Storage:SubscriptionRegistrationsTableName`; it has
+no legacy lookup or write path.
 
 Before deployment, validate every deployment surface:
 
@@ -237,9 +283,10 @@ and before the Gist is changed to the new principal ID. The same launcher
 automatically removes same-tenant direct RBAC or different-tenant Azure
 Lighthouse access while preserving `projProd`.
 
-The registration schema has no legacy migration. The first deployment using
-`SubscriptionRegistrations` removes the old registration table, so every
-student must register again through Azure Isekai after access verification.
+The registration schema has no legacy migration. The stack declares only
+`SubscriptionRegistrations`; remove any obsolete registration table during
+cutover, restart the Function onto the new package, and have every student
+register again through Azure Isekai after access verification.
 See the [subscription registration workflow](docs/subscription-registration.md).
 
 ### Resetting One Student

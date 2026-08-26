@@ -228,20 +228,12 @@ also runs automatically each day at 02:00 UTC.
 }
 ```
 
-### GET /api/test-result-xml/{blobName}
-
-Retrieve test result XML with proper content-type.
-
-**Parameters:**
-- `blobName` (path): Name of the XML blob
-
-**Response:**
-- Content-Type: `text/xml`
-- Body: XML test results
-
 ## Error Responses
 
-All endpoints return errors in this format:
+The student proxy preserves each backend's response contract. Game endpoints
+use `GameResponse`, progress endpoints use the following envelope, and
+registration returns short text or HTML messages:
+
 ```json
 {
   "success": false,
@@ -254,6 +246,8 @@ All endpoints return errors in this format:
 - `200`: Success
 - `400`: Bad Request (missing parameters)
 - `401`: Missing, expired, or invalid signed identity
+- `403`: Grader access or initial ownership proof is missing
+- `409`: Email or subscription is already registered
 - `404`: Not Found (resource doesn't exist)
 - `500`: Internal Server Error
 
@@ -283,11 +277,17 @@ The backend validates that:
 - the grading identity can read the subscription;
 - the assignment resource group exists;
 - `projProd` has `GradingStudentEmail` equal to the authenticated email; and
-- the email has no conflicting fixed-row registration.
+- neither the email nor subscription has a conflicting registration.
 
-Registration stores no Azure credential. It writes one entity with the student
-email as `PartitionKey`, `registration` as `RowKey`, and the explicit
-subscription ID.
+Registration stores no Azure credential. It writes two entities: one with the
+student email's SHA-256 hash in its row key and one keyed by subscription ID.
+Both use partition `registrations` and are added in one Azure Table transaction.
+Grading resolves the authenticated student with an exact email-index point
+read; the subscription index prevents another student from claiming the same
+subscription.
+
+The same pair is idempotent. Partial or disagreeing indexes produce an explicit
+integrity error rather than falling back to a tag or obsolete table.
 
 ## Data Models
 

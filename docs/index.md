@@ -13,6 +13,7 @@
 ## Project Guides
 
 - [Project overview](../README.md)
+- [Technical design and architecture diagrams](technical-design.md)
 - [Deployment](../DEPLOYMENT.md)
 - [Development](../DEVELOPMENT.md)
 - [API reference](../API.md)

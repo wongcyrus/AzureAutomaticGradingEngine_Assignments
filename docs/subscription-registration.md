@@ -51,6 +51,16 @@ student to claim the subscription.
 
 Both indexes are created or deleted together. Registration outcomes are:
 
+```text
+PartitionKey: registrations
+RowKey: email:<SHA-256(normalized-email)>
+RowKey: subscription:<normalized-subscription-guid>
+```
+
+Both rows contain the normalized email, normalized subscription ID, and index
+kind. See the [technical design](technical-design.md) for architecture,
+sequence, and storage diagrams.
+
 | Situation | Result |
 | --- | --- |
 | Neither email nor subscription is registered | Registration succeeds. |
@@ -94,7 +104,8 @@ will remain in force.
 
 ## Clean Registration Reset
 
-The registration redesign intentionally has no legacy migration. Deploying the
-new storage schema replaces the old registration table with
-`SubscriptionRegistrations`. Existing students must register again through the
-web page after deployment and successful onboarding verification.
+The registration redesign intentionally has no legacy migration or fallback.
+The current stack declares only `SubscriptionRegistrations`; operators must
+delete any obsolete registration table during cutover and verify that the
+current Function package is mounted. Existing students then register again
+through the web page after successful onboarding verification.
