@@ -268,6 +268,81 @@ public class DeployedFunctionTests
     }
 
     [Test]
+    public async Task ClassPerformance_OperatorCanManageTemporaryClass()
+    {
+        if (string.IsNullOrWhiteSpace(adminTestEmail))
+        {
+            Assert.Ignore("Set GRADER_ADMIN_TEST_EMAIL to verify operator access.");
+            return;
+        }
+
+        string? classId = null;
+        try
+        {
+            var className = $"Deployment check {Guid.NewGuid():N}";
+            using var createResponse = await SendAsync(
+                HttpMethod.Post,
+                $"api/ClassPerformanceAdminFunction?action=class&name={Uri.EscapeDataString(className)}",
+                signedEmail: adminTestEmail);
+            Assert.That(createResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            using (var createDocument = JsonDocument.Parse(
+                       await createResponse.Content.ReadAsStringAsync()))
+            {
+                classId = createDocument.RootElement
+                    .GetProperty("data")
+                    .GetProperty("id")
+                    .GetString();
+            }
+
+            Assert.That(classId, Is.Not.Null.And.Not.Empty);
+            const string studentEmail = "dashboard-live-check@example.com";
+            using var importResponse = await SendAsync(
+                HttpMethod.Post,
+                $"api/ClassPerformanceAdminFunction?action=roster&classId={classId}&emails={Uri.EscapeDataString(studentEmail)}",
+                signedEmail: adminTestEmail);
+            Assert.That(importResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+            using var performanceResponse = await SendAsync(
+                HttpMethod.Get,
+                $"api/ClassPerformanceAdminFunction?action=performance&classId={classId}",
+                signedEmail: adminTestEmail);
+            Assert.That(
+                performanceResponse.StatusCode,
+                Is.EqualTo(HttpStatusCode.OK));
+            using (var performanceDocument = JsonDocument.Parse(
+                       await performanceResponse.Content.ReadAsStringAsync()))
+            {
+                Assert.That(
+                    performanceDocument.RootElement
+                        .GetProperty("data")
+                        .GetProperty("overview")
+                        .GetProperty("totalStudents")
+                        .GetInt32(),
+                    Is.EqualTo(1));
+            }
+
+            using var detailResponse = await SendAsync(
+                HttpMethod.Get,
+                $"api/ClassPerformanceAdminFunction?action=student&classId={classId}&email={Uri.EscapeDataString(studentEmail)}",
+                signedEmail: adminTestEmail);
+            Assert.That(detailResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        }
+        finally
+        {
+            if (!string.IsNullOrWhiteSpace(classId))
+            {
+                using var deleteResponse = await SendAsync(
+                    HttpMethod.Delete,
+                    $"api/ClassPerformanceAdminFunction?action=class&classId={classId}",
+                    signedEmail: adminTestEmail);
+                Assert.That(
+                    deleteResponse.StatusCode,
+                    Is.EqualTo(HttpStatusCode.OK));
+            }
+        }
+    }
+
+    [Test]
     public async Task FunctionKeyWithoutSignedIdentity_ReturnsUnauthorized()
     {
         using var response = await client.GetAsync("api/PassTaskFunction");

@@ -230,8 +230,8 @@ scripts/test-deployed-function.sh \
 
 The script obtains the host-level Function key through Azure CLI without
 printing it and signs every request with the proxy-signing key. Without the
-third argument, it runs nineteen non-destructive endpoint and authentication
-tests. With a subscription, it also runs the complete Azure resource suite
+third argument, it runs twenty endpoint, authentication, and self-cleaning
+lifecycle tests. With a subscription, it also runs the complete Azure resource suite
 through the Function and persists that grading result under the integration
 test identity. The optional fourth argument signs requests as a registered
 student instead of `deployment-test@example.com`.
