@@ -43,7 +43,8 @@ const FUNCTION_NAMES = [
   "PreGeneratedMessageStats",
   "RefreshPreGeneratedMessages",
   "ResetPreGeneratedMessageHitCounts",
-  "StudentRegistrationAdminFunction"
+  "StudentRegistrationAdminFunction",
+  "ClassPerformanceAdminFunction"
 ];
 
 // Main stack using constructs

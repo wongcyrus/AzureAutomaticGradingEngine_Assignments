@@ -111,6 +111,7 @@ creation, including:
 - `RefreshPreGeneratedMessagesFunctionUrl`
 - `ResetPreGeneratedMessageHitCountsFunctionUrl`
 - `StudentRegistrationAdminFunctionUrl`
+- `ClassPerformanceAdminFunctionUrl`
 - `GRADER_PROXY_SIGNING_KEY`
 - `ADMIN_EMAILS`
 
@@ -195,7 +196,8 @@ The same allowlist is installed as a server-side Static Web Apps setting for
 the admin proxy. Both authorization layers fail closed when it is absent.
 
 Before opening registration, verify Storage contains
-`SubscriptionRegistrations` and no obsolete registration table. The current
+`SubscriptionRegistrations`, `Classes`, and `ClassMemberships` and no obsolete
+registration table. The current
 Function package declares `Storage:SubscriptionRegistrationsTableName`; it has
 no legacy lookup or write path.
 
@@ -263,7 +265,7 @@ The runner retrieves a host key with the current Azure CLI identity and passes
 it through the `x-functions-key` header. It also retrieves the proxy-signing
 key and creates the same short-lived identity signatures as Static Web Apps.
 Keys are never written to source, command output, or test-result files. The
-subscription argument adds one full grading test to the seventeen non-destructive
+subscription argument adds one full grading test to the nineteen non-destructive
 HTTP checks and writes its NUnit result through the normal grading storage
 path. The optional fourth argument runs those checks with the registered
 student's signed identity. Omit the subscription when only endpoint and

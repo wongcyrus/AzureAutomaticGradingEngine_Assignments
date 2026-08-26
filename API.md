@@ -176,6 +176,13 @@ student identities receive `403` before any admin service is called.
 | `/api/teacher/cache-reset` | `POST` | Reset cache hit counters |
 | `/api/teacher/registration?email=...` | `GET` | Look up one exact registration |
 | `/api/teacher/registration?email=...` | `DELETE` | Atomically release one exact registration |
+| `/api/teacher/classes` | `GET` | List classes owned by the operator |
+| `/api/teacher/classes?name=...` | `POST` | Create a class |
+| `/api/teacher/classes?classId=...` | `DELETE` | Delete a class and its roster |
+| `/api/teacher/roster?classId=...&emails=...` | `POST` | Import up to 100 roster emails |
+| `/api/teacher/roster?classId=...&email=...` | `DELETE` | Remove one class member |
+| `/api/teacher/performance?classId=...` | `GET` | Read overview, tasks, and student summaries |
+| `/api/teacher/student?classId=...&email=...` | `GET` | Read one member's detailed progress |
 
 The direct Function endpoints require a Function key plus valid
 `x-grader-email`, `x-grader-timestamp`, and `x-grader-signature` headers. They
@@ -254,6 +261,22 @@ partially deleted.
 
 `DELETE` preserves Azure access, the ownership tag, game progress, failed
 attempts, reports, and test results.
+
+### GET, POST, DELETE /api/ClassPerformanceAdminFunction
+
+Operator-only backend for teacher-owned classes. The `action` query parameter
+selects `classes`, `class`, `roster`, `member`, `performance`, or `student`.
+Class IDs are random identifiers and every read/write verifies that the signed
+operator owns the class.
+
+Performance responses are calculated from authoritative registration,
+`GameStates`, `PassTests`, and `FailTests` rows. The dashboard does not copy
+marks into a cache that could become stale. A class roster controls which exact
+student partitions may be read; the endpoint never scans all students.
+
+Roster import is idempotent and limited to 100 normalized email addresses per
+request. The browser chunks larger CSV files. Removing a member or deleting a
+class preserves registration, progress, reports, and Azure access.
 
 ## Error Responses
 

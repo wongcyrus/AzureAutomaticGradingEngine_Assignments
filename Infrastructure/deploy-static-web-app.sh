@@ -40,6 +40,7 @@ message_stats_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssi
 message_refresh_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentRefreshPreGeneratedMessagesUrl // empty' "$outputs_file")"
 message_reset_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentResetPreGeneratedMessageHitCountsUrl // empty' "$outputs_file")"
 registration_admin_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentStudentRegistrationAdminFunctionUrl // empty' "$outputs_file")"
+class_performance_admin_url="$(jq -r '.AzureAutomaticGradingEngineGrader.GradingEngineAssignmentClassPerformanceAdminFunctionUrl // empty' "$outputs_file")"
 proxy_signing_key="$(jq -r '.AzureAutomaticGradingEngineGrader.grader_proxy_signing_key // empty' "$outputs_file")"
 admin_emails="$(jq -r '.AzureAutomaticGradingEngineGrader.admin_emails // empty' "$outputs_file")"
 tenant_id="$(az account show --query tenantId --output tsv)"
@@ -49,7 +50,8 @@ if [[ -z "$static_web_apps_token" || -z "$client_id" || -z "$client_secret" ||
       -z "$game_task_url" || -z "$grader_url" || -z "$pass_task_url" ||
       -z "$registration_url" || -z "$message_stats_url" ||
       -z "$message_refresh_url" || -z "$message_reset_url" ||
-      -z "$registration_admin_url" || -z "$proxy_signing_key" ||
+      -z "$registration_admin_url" || -z "$class_performance_admin_url" ||
+      -z "$proxy_signing_key" ||
       -z "$admin_emails" ||
       -z "$tenant_id" ]]; then
   echo "Error: missing required CDKTN output or Azure tenant ID." >&2
@@ -70,6 +72,7 @@ az staticwebapp appsettings set \
     "RefreshPreGeneratedMessagesFunctionUrl=$message_refresh_url" \
     "ResetPreGeneratedMessageHitCountsFunctionUrl=$message_reset_url" \
     "StudentRegistrationAdminFunctionUrl=$registration_admin_url" \
+    "ClassPerformanceAdminFunctionUrl=$class_performance_admin_url" \
     "GRADER_PROXY_SIGNING_KEY=$proxy_signing_key" \
     "ADMIN_EMAILS=$admin_emails" \
   --output none

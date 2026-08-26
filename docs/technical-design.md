@@ -196,6 +196,46 @@ transaction, so concurrent or inconsistent state fails without partial
 deletion. Cache controls are limited to statistics, regeneration, and hit
 counter reset; destructive cache clearing is not exposed.
 
+## Teacher-Owned Class Performance
+
+Class performance is roster-scoped rather than discovered by scanning student
+storage:
+
+```mermaid
+flowchart LR
+    Teacher[Signed teacher]
+    Classes[(Classes<br/>partition: owner hash)]
+    Members[(ClassMemberships<br/>partition: class ID)]
+    Registration[(SubscriptionRegistrations)]
+    State[(GameStates)]
+    Pass[(PassTests)]
+    Fail[(FailTests)]
+    Dashboard[Overview, task analytics,<br/>student detail, CSV export]
+
+    Teacher -->|owns| Classes
+    Classes --> Members
+    Members -->|exact student partitions| Registration
+    Members --> State
+    Members --> Pass
+    Members --> Fail
+    Registration --> Dashboard
+    State --> Dashboard
+    Pass --> Dashboard
+    Fail --> Dashboard
+```
+
+The signed operator email determines the `Classes` partition. Every class
+operation checks that ownership before reading the class-partitioned roster.
+For each roster member, the backend performs bounded concurrent point or
+partition reads against the authoritative tables. Marks and activity are not
+copied into a summary table, avoiding stale results after grading or progress
+reset.
+
+Roster imports are idempotent table upserts in batches of at most 100. Removing
+a member or class deletes only roster metadata. The browser performs search,
+sorting, filtering, and CSV export over the authorized response; student detail
+is reauthorized and membership-checked by the backend.
+
 ## Deployment Safety
 
 CDK Terrain provisions deterministic Azure resources and uploads the Function

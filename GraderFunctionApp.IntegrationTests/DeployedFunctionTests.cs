@@ -191,6 +191,7 @@ public class DeployedFunctionTests
     [TestCase("GET", "api/messages/test")]
     [TestCase("GET", "api/StudentRegistrationAdminFunction")]
     [TestCase("DELETE", "api/StudentRegistrationAdminFunction")]
+    [TestCase("GET", "api/ClassPerformanceAdminFunction?action=classes")]
     public async Task AdminEndpoint_WithSignedStudent_ReturnsForbidden(
         string method,
         string relativeUrl)
@@ -239,6 +240,31 @@ public class DeployedFunctionTests
             await response.Content.ReadAsStringAsync());
         var data = document.RootElement.GetProperty("data");
         Assert.That(data.GetProperty("registered").GetBoolean(), Is.False);
+    }
+
+    [Test]
+    public async Task ClassPerformance_GetClassesWithOperator_ReturnsOk()
+    {
+        if (string.IsNullOrWhiteSpace(adminTestEmail))
+        {
+            Assert.Ignore("Set GRADER_ADMIN_TEST_EMAIL to verify operator access.");
+            return;
+        }
+
+        using var response = await SendAsync(
+            HttpMethod.Get,
+            "api/ClassPerformanceAdminFunction?action=classes",
+            signedEmail: adminTestEmail);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        using var document = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync());
+        Assert.That(
+            document.RootElement
+                .GetProperty("data")
+                .GetProperty("classes")
+                .ValueKind,
+            Is.EqualTo(JsonValueKind.Array));
     }
 
     [Test]

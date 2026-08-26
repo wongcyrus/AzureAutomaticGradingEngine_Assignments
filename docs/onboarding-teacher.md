@@ -99,10 +99,21 @@ See [Subscription registration workflow](subscription-registration.md) for the
 index guarantees, student-visible outcomes, and full reassignment sequence.
 
 Configured operators can open `/admin.html` on the deployed Azure Isekai site
-to inspect message-cache health, refresh generated messages, reset hit
-counters, look up one exact student registration, or release that registration
-after typing the email again. The page does not expose student browsing,
-credentials, Function keys, or a clear-all-messages operation.
+to create their own classes and import a CSV roster. The dashboard shows
+registration coverage, active tasks, marks, completed tasks, failed attempts,
+task-level completion rates, searchable student summaries, detailed pass/fail
+history, and CSV export. Class ownership prevents one configured operator from
+opening another operator's roster.
+
+CSV import accepts email values in any column, normalizes duplicates, and sends
+the roster in bounded batches. Removing a student from a class or deleting the
+class changes only the teacher roster; it preserves registration, progress,
+reports, results, tags, and Azure access.
+
+The support section also shows message-cache health, refreshes generated
+messages, resets hit counters, and looks up or releases one exact registration
+after typed confirmation. The page does not expose credentials, Function keys,
+global student browsing, or a clear-all-messages operation.
 
 If a verified registration must be released for reassignment, use the teacher
 dashboard or the repository command below. Both remove only the consistent pair
@@ -128,7 +139,7 @@ scripts/test-deployed-function.sh \
   <student-email>
 ```
 
-For the current deployment, success means all eighteen HTTP integration tests pass
+For the current deployment, success means all twenty HTTP integration tests pass
 and the embedded Azure grading result reports 40 of 40 assertions passed.
 
 Azure role and Lighthouse changes can take several minutes to propagate.
